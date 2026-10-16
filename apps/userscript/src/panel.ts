@@ -1,0 +1,120 @@
+import { ATTR_UI, type CurrentMatch, type ShieldController } from '@sff/core/dom';
+
+/**
+ * 手机上没有插件弹窗，所以在页面右下角放一个小按钮「防」，点开是迷你面板：
+ * 临时显示 / 恢复、在此站点停用、正在看的比赛「看完了，显示比分」。
+ * 面板放在 shadow root 里并带 data-sff-ui 标记，遮挡逻辑不会处理它，页面样式也不会影响它。
+ */
+export interface PanelActions {
+  controller: () => ShieldController;
+  currentMatch: () => CurrentMatch | null;
+  isWatched: (id: string) => boolean;
+  revealScore: (match: CurrentMatch) => Promise<string>;
+  disableSite: () => Promise<void>;
+  webUrl: () => string;
+}
+
+const STYLE = `
+:host { all: initial; }
+.fab { position: fixed; right: 14px; bottom: 84px; z-index: 2147483647; width: 40px; height: 40px; border-radius: 20px;
+  background: #1f8a4c; color: #fff; border: 0; font: 600 16px/40px sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,.3); cursor: pointer; opacity: .85; }
+.panel { position: fixed; right: 12px; bottom: 132px; z-index: 2147483647; width: min(300px, calc(100vw - 24px));
+  background: #fff; color: #13241a; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.3); padding: 12px; font: 14px/1.5 -apple-system, sans-serif; }
+.panel[hidden] { display: none; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+button.b { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid #c9d8ce; background: #f3f7f4; color: inherit; }
+button.p { background: #1f8a4c; color: #fff; border-color: transparent; }
+.muted { color: #557161; font-size: 12px; }
+.score { font-weight: 700; font-size: 16px; margin-top: 6px; }
+@media (prefers-color-scheme: dark) { .panel { background: #16291e; color: #e8f3ec; } button.b { background: #1d3426; border-color: #2a4535; } .muted { color: #9db8a7; } }
+`;
+
+export function mountPanel(actions: PanelActions) {
+  const host = document.createElement('sff-panel');
+  host.setAttribute(ATTR_UI, '');
+  host.setAttribute('data-testid', 'sff-userscript-panel');
+  const root = host.attachShadow({ mode: 'open' });
+  root.innerHTML = `<style>${STYLE}</style>
+    <button class="fab" part="fab" data-testid="sff-fab" aria-label="防剧透">防</button>
+    <div class="panel" hidden data-testid="sff-panel">
+      <div><strong>防剧透看球</strong> <span class="muted" data-id="status"></span></div>
+      <div class="row">
+        <button class="b" data-id="pause" data-testid="sff-pause">临时显示 5 分钟</button>
+        <button class="b" data-id="resume" data-testid="sff-resume" hidden>恢复遮挡</button>
+        <button class="b" data-id="disable">在此站点停用</button>
+      </div>
+      <div data-id="match" hidden data-testid="sff-match">
+        <div class="muted" style="margin-top:10px">正在看</div>
+        <div data-id="title"></div>
+        <div class="row">
+          <button class="b p" data-id="reveal" data-testid="sff-reveal">看完了，显示比分</button>
+          <button class="b p" data-id="confirm" data-testid="sff-reveal-yes" hidden>确定显示</button>
+        </div>
+        <div class="score" data-id="score" data-testid="sff-score"></div>
+      </div>
+      <div class="row"><a data-id="web" target="_blank" rel="noopener">打开防剧透网页</a></div>
+    </div>`;
+  const $ = (id: string) => root.querySelector(`[data-id="${id}"]`) as HTMLElement;
+  const fab = root.querySelector('.fab') as HTMLButtonElement;
+  const panel = root.querySelector('.panel') as HTMLElement;
+
+  const refresh = () => {
+    const c = actions.controller();
+    const stats = c.shield?.stats;
+    $('status').textContent = !c.active
+      ? (c.reason ?? '未启用')
+      : stats?.paused
+        ? '已临时显示'
+        : `已遮挡 ${(stats?.texts ?? 0) + (stats?.blocks ?? 0)} 处`;
+    $('pause').hidden = !c.active || Boolean(stats?.paused);
+    $('resume').hidden = !c.active || !stats?.paused;
+    const m = actions.currentMatch();
+    $('match').hidden = !m;
+    if (m) {
+      $('title').textContent = m.title;
+      ($('reveal') as HTMLButtonElement).textContent = actions.isWatched(m.id)
+        ? '查看比分'
+        : '看完了，显示比分';
+    }
+    ($('web') as HTMLAnchorElement).href = actions.webUrl();
+  };
+
+  fab.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    refresh();
+  });
+  $('pause').addEventListener('click', () => {
+    actions.controller().pause(5 * 60 * 1000);
+    refresh();
+  });
+  $('resume').addEventListener('click', () => {
+    actions.controller().resume();
+    refresh();
+  });
+  $('disable').addEventListener('click', async () => {
+    await actions.disableSite();
+    refresh();
+  });
+  const show = async () => {
+    const m = actions.currentMatch();
+    if (!m) return;
+    $('reveal').hidden = true;
+    $('confirm').hidden = true;
+    $('score').textContent = '加载中…';
+    $('score').textContent = await actions.revealScore(m);
+  };
+  $('reveal').addEventListener('click', () => {
+    const m = actions.currentMatch();
+    if (m && actions.isWatched(m.id)) void show();
+    else {
+      $('reveal').hidden = true;
+      $('confirm').hidden = false;
+    }
+  });
+  $('confirm').addEventListener('click', () => void show());
+
+  const attach = () => (document.body ?? document.documentElement).appendChild(host);
+  if (document.body) attach();
+  else document.addEventListener('DOMContentLoaded', attach, { once: true });
+  return { refresh, host };
+}
