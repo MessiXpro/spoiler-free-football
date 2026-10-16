@@ -403,13 +403,28 @@ export function SettingsView({ state }: { state: UserState }) {
       </div>
       <SyncCodePanel state={state} />
       <SyncServerPanel state={state} />
-      <div className="settings-block">
+      <div className="settings-block" data-testid="install-block">
         <h3>安装插件/脚本</h3>
-        <p className="muted small">
-          电脑：Chrome、Microsoft Edge、Firefox 安装「防剧透看球」插件；Android：Via、X
-          浏览器、狐猴等装用户脚本；iPhone/iPad：Safari 配合 Userscripts App。详细步骤见项目
-          README。
-        </p>
+        <ul className="plain-list small">
+          <li>
+            电脑（Chrome、Microsoft Edge）：下载
+            <a href="./downloads/spoiler-free-football-chrome.zip">插件 zip</a>
+            ，解压后在扩展程序页面打开「开发者模式」，点「加载已解压的扩展程序」。
+          </li>
+          <li>
+            Firefox：下载 <a href="./downloads/spoiler-free-football-firefox.zip">Firefox 版 zip</a>
+            ，在 about:debugging 里临时加载。
+          </li>
+          <li>
+            Android（Via、X 浏览器、狐猴等）和电脑上的 Tampermonkey / Violentmonkey：安装
+            <a href="./userscript/spoiler-free-football.user.js">用户脚本</a>
+            ；想在所有网站生效可以装{' '}
+            <a href="./userscript/spoiler-free-football-global.user.js">全网版</a>。
+          </li>
+          <li>iPhone / iPad：在 Safari 里装 Userscripts App，再添加上面的用户脚本。</li>
+          <li>把本页「添加到主屏幕」，用起来像 App。</li>
+        </ul>
+        <p className="muted small">每一步的详细说明见项目 README。</p>
       </div>
       <div className="settings-block">
         <button type="button" className="btn btn-danger" onClick={() => setAskReset(true)}>

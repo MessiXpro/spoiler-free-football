@@ -1,0 +1,35 @@
+name: 发布插件和用户脚本
+
+# 打 v* 标签时把插件 zip 和 .user.js 附到 GitHub Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 构建
+        run: |
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          export SFF_WEB_URL="${{ vars.SFF_WEB_URL || '' }}"
+          [ -z "$SFF_WEB_URL" ] && export SFF_WEB_URL="https://${owner}.github.io/${{ github.event.repository.name }}/"
+          pnpm --filter @sff/extension build
+          pnpm --filter @sff/userscript build
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            apps/extension/dist/*.zip
+            apps/userscript/dist/*.user.js

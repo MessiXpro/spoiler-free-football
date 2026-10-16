@@ -1,0 +1,13 @@
+# 可选：部署方法见 README「可选：同步服务器」
+name = "spoiler-free-football-sync"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+# 先运行 npx wrangler kv namespace create SYNC_KV，把输出的 id 填到下面
+[[kv_namespaces]]
+binding = "SYNC_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+# 允许哪些网页来源访问（逗号分隔）；留空表示允许所有来源
+ALLOWED_ORIGINS = ""

@@ -1,0 +1,93 @@
+name: 数据更新与部署
+
+# 每天北京时间 06:20、08:20、10:20、14:20、20:20 跑一次数据管线（欧洲比赛大多在北京时间凌晨结束）
+on:
+  schedule:
+    - cron: '20 22 * * *'
+    - cron: '20 0 * * *'
+    - cron: '20 2 * * *'
+    - cron: '20 6 * * *'
+    - cron: '20 12 * * *'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # 仓库 Settings → Secrets and variables → Actions 里设置；不设也能跑（只用免 Key 的数据源）
+      FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+      THESPORTSDB_KEY: ${{ secrets.THESPORTSDB_KEY }}
+      APIFOOTBALL_KEY: ${{ secrets.APIFOOTBALL_KEY }}
+      FOOTBALL_DATA_COMPETITIONS: ${{ vars.FOOTBALL_DATA_COMPETITIONS }}
+      SFF_HTTP_CACHE: ${{ github.workspace }}/.http-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: 确定网页地址
+        run: |
+          if [ -n "${{ vars.SFF_WEB_URL }}" ]; then
+            url="${{ vars.SFF_WEB_URL }}"
+          else
+            owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+            url="https://${owner}.github.io/${{ github.event.repository.name }}/"
+          fi
+          echo "SFF_WEB_URL=$url" >> "$GITHUB_ENV"
+          echo "网页地址：$url"
+
+      - name: 恢复数据源缓存（减少 API 请求）
+        uses: actions/cache@v4
+        with:
+          path: .http-cache
+          key: http-cache-${{ github.run_id }}
+          restore-keys: http-cache-
+
+      - name: 运行数据管线（公开数据含防泄露检查，不通过则不部署）
+        run: pnpm data:build
+
+      - name: 构建网页、插件、用户脚本
+        run: |
+          pnpm --filter @sff/web build
+          pnpm --filter @sff/extension build
+          pnpm --filter @sff/userscript build
+          node scripts/assemble-site.mjs
+
+      - uses: actions/upload-pages-artifact@v3
+        if: vars.DEPLOY_TARGET != 'cloudflare'
+        with:
+          path: apps/web/dist
+
+      - name: 部署到 Cloudflare Pages（可选）
+        if: vars.DEPLOY_TARGET == 'cloudflare' || vars.DEPLOY_TARGET == 'both'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 pages deploy apps/web/dist --project-name "${{ vars.CLOUDFLARE_PROJECT || 'spoiler-free-football' }}" --branch main
+
+  deploy-pages:
+    needs: build
+    if: vars.DEPLOY_TARGET != 'cloudflare'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
