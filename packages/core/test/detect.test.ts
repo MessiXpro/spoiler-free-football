@@ -239,6 +239,8 @@ describe('不误伤：中性写法', () => {
     'v1.2-3',
     '2026世界杯',
     'FIFA 26',
+    '电脑：Chrome / Edge / Firefox 安装插件',
+    'Microsoft Edge 加载已解压的扩展',
   ];
   it.each(cases)('不遮挡：%s', (text) => {
     expect(findSpoilers(text), text).toEqual([]);

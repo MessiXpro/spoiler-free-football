@@ -14,6 +14,8 @@ export interface Settings {
   upcomingDays: number;
   /** 可选的同步服务器地址（Cloudflare Worker），留空表示不用 */
   syncEndpoint?: string;
+  /** 同步服务器上的存储 key（随机生成，相当于密码；随同步码一起带到其他设备） */
+  syncKey?: string;
 }
 
 export interface UserState {
@@ -85,6 +87,9 @@ export function sanitizeUserState(input: unknown): UserState {
   }
   if (typeof rs.syncEndpoint === 'string' && /^https:\/\//.test(rs.syncEndpoint)) {
     settings.syncEndpoint = rs.syncEndpoint;
+  }
+  if (typeof rs.syncKey === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(rs.syncKey)) {
+    settings.syncKey = rs.syncKey;
   }
   return {
     v: 1,

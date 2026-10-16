@@ -195,6 +195,14 @@ export const ZH_SAFE = [
   '加时赛规则',
   '红牌规则',
   '天下足球',
+  // 浏览器/软件名里的英文词
+  'Microsoft Edge',
+  'Edge 浏览器',
+  'Edge浏览器',
+  'Chrome / Edge',
+  'Chrome/Edge',
+  'Edge / Firefox',
+  'Edge/Firefox',
 ];
 
 /** 英文：强结果词（不区分大小写） */

@@ -33,6 +33,12 @@ export default tseslint.config(
     },
   },
   {
+    files: ['apps/web/src/sw-template.js'],
+    languageOptions: {
+      globals: { ...globals.serviceworker, __SFF_PRECACHE__: 'readonly' },
+    },
+  },
+  {
     files: ['apps/web/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: reactHooks.configs.recommended.rules,
