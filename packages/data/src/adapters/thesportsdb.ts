@@ -1,0 +1,214 @@
+import type { AdapterContext, AdapterResult, FixtureAdapter, RawFixture } from '../types.ts';
+import { isNationalCompetition, pair, stageFromTheSportsDb, teamRef } from '../normalize.ts';
+
+/**
+ * TheSportsDB v1：补齐 football-data 免费档没有的杯赛和国家队赛事
+ * （足总杯、联赛杯、社区盾、国王杯、西超杯、欧联、欧协联、欧国联、友谊赛、预选赛、世俱杯…）。
+ *
+ * 不设置 THESPORTSDB_KEY 时使用官方公开的免费测试 Key "123"：
+ *   - eventsnextleague / eventspastleague 只返回 1 场，用来确定当前赛季和轮次
+ *   - eventsround（按轮次）能拿到整轮比赛
+ * 付费 Key 用 eventsseason 一次拿整个赛季（付费 Key 调 eventsround 会返回 404）。
+ * 限速：免费 30 次/分钟。
+ */
+
+const BASE = 'https://www.thesportsdb.com/api/v1/json';
+export const FREE_KEY = '123';
+
+/** TheSportsDB 联赛 id → 本项目赛事 id（id 已在官方 all_leagues 数据中核实） */
+export const THESPORTSDB_LEAGUES: Record<string, string> = {
+  '4480': 'ucl',
+  '4481': 'uel',
+  '5071': 'uecl',
+  '4482': 'fa-cup',
+  '4570': 'efl-cup',
+  '4571': 'community-shield',
+  '4483': 'copa-del-rey',
+  '4511': 'supercopa',
+  '4512': 'uefa-super-cup',
+  '4503': 'club-world-cup',
+  '5696': 'intercontinental-cup',
+  '4490': 'nations-league',
+  '4562': 'friendlies',
+  '5518': 'wc-qualifiers',
+  '5515': 'wc-qualifiers',
+  '5519': 'euro-qualifiers',
+  '4502': 'euro',
+  '4499': 'copa-america',
+  '4429': 'world-cup',
+  // 联赛默认由 openfootball / football-data 提供，可通过 THESPORTSDB_LEAGUES 环境变量加入
+  '4328': 'epl',
+  '4335': 'laliga',
+};
+
+export const DEFAULT_THESPORTSDB_LEAGUES = Object.keys(THESPORTSDB_LEAGUES).filter(
+  (id) => id !== '4328' && id !== '4335',
+);
+
+export interface TsdbEvent {
+  idEvent: string;
+  strTimestamp?: string | null;
+  dateEvent?: string | null;
+  strTime?: string | null;
+  idLeague: string;
+  strSeason?: string | null;
+  strHomeTeam?: string | null;
+  strAwayTeam?: string | null;
+  intHomeScore?: string | null;
+  intAwayScore?: string | null;
+  intRound?: string | null;
+  strGroup?: string | null;
+  strStatus?: string | null;
+  strPostponed?: string | null;
+}
+
+const FINISHED = new Set(['FT', 'AET', 'PEN', 'AWD', 'WO', 'MATCH FINISHED']);
+const POSTPONED = new Set(['PST', 'SUSP', 'INT', 'POSTPONED']);
+const CANCELLED = new Set(['CANC', 'ABD', 'CANCELLED', 'ABANDONED']);
+
+function seasonLabel(strSeason: string | null | undefined, kickoff: string): string {
+  const s = strSeason ?? '';
+  const m = s.match(/^(\d{4})-(\d{4})$/);
+  if (m) return `${m[1]}-${m[2]!.slice(2)}`;
+  if (/^\d{4}$/.test(s)) return s;
+  return kickoff.slice(0, 4);
+}
+
+export function parseTheSportsDbEvent(e: TsdbEvent, now: Date): RawFixture | null {
+  const competition = THESPORTSDB_LEAGUES[e.idLeague];
+  if (!competition || !e.strHomeTeam || !e.strAwayTeam) return null;
+  let kickoff: string | null = null;
+  let timeTbd = false;
+  if (e.strTimestamp) {
+    kickoff = new Date(`${e.strTimestamp.replace(/Z$/, '')}Z`).toISOString();
+  } else if (e.dateEvent) {
+    timeTbd = !e.strTime;
+    kickoff = new Date(`${e.dateEvent}T${e.strTime || '19:00:00'}Z`).toISOString();
+  }
+  if (!kickoff || Number.isNaN(Date.parse(kickoff))) return null;
+  const status = (e.strStatus ?? '').toUpperCase();
+  const scores = pair(e.intHomeScore, e.intAwayScore);
+  // 旧数据没有 strStatus：开球已过且有比分视为完赛。注意 strPostponed 不可靠，以 strStatus 为准
+  const finished =
+    FINISHED.has(status) || (!status && Boolean(scores) && Date.parse(kickoff) < now.getTime());
+  const national = isNationalCompetition(competition);
+  const { stage, matchday } = stageFromTheSportsDb(e.intRound, competition);
+  const fixture: RawFixture = {
+    source: 'thesportsdb',
+    sourceId: e.idEvent,
+    competition,
+    season: seasonLabel(e.strSeason, kickoff),
+    stage,
+    ...(matchday ? { matchday } : {}),
+    kickoff,
+    ...(timeTbd ? { timeTbd } : {}),
+    home: teamRef(e.strHomeTeam, national),
+    away: teamRef(e.strAwayTeam, national),
+    status: POSTPONED.has(status) ? 'postponed' : CANCELLED.has(status) ? 'cancelled' : 'scheduled',
+    finished,
+  };
+  const group = e.strGroup?.replace(/^Group\s+/i, '').trim();
+  if (group && group.length <= 2) fixture.group = group;
+  if (finished && scores) {
+    fixture.score = {
+      home: scores[0],
+      away: scores[1],
+      ...(status === 'AET' || status === 'PEN' ? { extraTime: true } : {}),
+      ...(status === 'PEN' ? { note: '点球大战决出胜负（数据源未提供点球比分）' } : {}),
+    };
+  }
+  return fixture;
+}
+
+type EventsResponse = { events?: TsdbEvent[] | string | null };
+
+const eventsOf = (r: EventsResponse): TsdbEvent[] => (Array.isArray(r.events) ? r.events : []);
+
+/** 根据最近一场/下一场推出需要拉取的轮次 */
+export function roundsAround(rounds: number[]): number[] {
+  const out = new Set<number>();
+  for (const r of rounds) {
+    out.add(r);
+    if (r >= 1 && r < 100) {
+      out.add(r - 1);
+      out.add(r + 1);
+    }
+  }
+  // 杯赛淘汰阶段编码：附近的阶段一起拉
+  const codes = [16, 32, 64, 125, 150, 160, 200];
+  for (const r of rounds) {
+    const idx = codes.indexOf(r);
+    if (idx >= 0) {
+      if (idx > 0) out.add(codes[idx - 1]!);
+      if (idx < codes.length - 1) out.add(codes[idx + 1]!);
+    }
+  }
+  return [...out].filter((r) => r >= 0).sort((a, b) => a - b);
+}
+
+export function createTheSportsDbAdapter(): FixtureAdapter {
+  return {
+    id: 'thesportsdb',
+    name: 'TheSportsDB',
+    priority: 20,
+    async fetch(ctx: AdapterContext): Promise<AdapterResult> {
+      const key = ctx.env.THESPORTSDB_KEY || FREE_KEY;
+      const premium = key !== FREE_KEY && key !== '3';
+      const leagues = (ctx.env.THESPORTSDB_LEAGUES ?? DEFAULT_THESPORTSDB_LEAGUES.join(','))
+        .split(',')
+        .map((x) => x.trim())
+        .filter((id) => THESPORTSDB_LEAGUES[id]);
+      const fixtures = new Map<string, RawFixture>();
+      const notes: string[] = [];
+      const add = (events: TsdbEvent[]) => {
+        for (const e of events) {
+          const f = parseTheSportsDbEvent(e, ctx.now);
+          if (!f) continue;
+          const t = Date.parse(f.kickoff);
+          if (t < ctx.windowStart.getTime() || t > ctx.windowEnd.getTime()) continue;
+          fixtures.set(f.sourceId, f);
+        }
+      };
+      const get = (path: string) =>
+        ctx.fetcher.getJson<EventsResponse>(`${BASE}/${key}/${path}`, {
+          kind: 'api',
+          ttlMs: 3 * 60 * 60 * 1000,
+        });
+
+      for (const id of leagues) {
+        try {
+          const [next, past] = await Promise.all([
+            get(`eventsnextleague.php?id=${id}`),
+            get(`eventspastleague.php?id=${id}`),
+          ]);
+          const seed = [...eventsOf(next), ...eventsOf(past)];
+          add(seed);
+          const seasons = [
+            ...new Set(seed.map((e) => e.strSeason).filter((s): s is string => Boolean(s))),
+          ];
+          if (!seasons.length) continue;
+          if (premium) {
+            for (const s of seasons)
+              add(eventsOf(await get(`eventsseason.php?id=${id}&s=${encodeURIComponent(s)}`)));
+            continue;
+          }
+          const rounds = roundsAround(
+            seed.map((e) => Number(e.intRound)).filter((n) => Number.isFinite(n)),
+          );
+          for (const s of seasons) {
+            for (const r of rounds) {
+              add(
+                eventsOf(await get(`eventsround.php?id=${id}&r=${r}&s=${encodeURIComponent(s)}`)),
+              );
+            }
+          }
+        } catch (err) {
+          notes.push(`联赛 ${id}（${THESPORTSDB_LEAGUES[id]}）失败：${(err as Error).message}`);
+        }
+      }
+      if (!premium) notes.push('使用免费测试 Key：只拉取当前前后几轮');
+      ctx.log(`thesportsdb: ${fixtures.size} 场`);
+      return { fixtures: [...fixtures.values()], notes };
+    },
+  };
+}

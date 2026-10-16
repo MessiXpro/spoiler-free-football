@@ -1,0 +1,13 @@
+{
+  "$comment": "仅用于示例数据：演示「集锦在页面内嵌播放」。bvid 是占位值，不对应真实视频。",
+  "links": {
+    "epl-2026-27-man-city-sunderland": [
+      {
+        "kind": "highlights",
+        "platform": "bilibili",
+        "bvid": "BV1sffSample",
+        "label": "哔哩哔哩 · 集锦（示例）"
+      }
+    ]
+  }
+}

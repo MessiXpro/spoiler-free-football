@@ -1,0 +1,14 @@
+{
+  "eventsday_no_results__eventsday.php?d=2026-10-04&l=4328": {
+    "events": null
+  },
+  "eventsround_bad_param__eventsround.php?l=4328&r=1&s=2026-2027": {
+    "events": "Invalid League ID or no round passed"
+  },
+  "invalid_key__/api/v1/json/1/lookupleague.php?id=4328": {
+    "Message": "Invalid Premium API key: Signup here: https://www.thesportsdb.com/pricing"
+  },
+  "highlights_none__eventshighlights.php?d=2026-10-04&l=4328": {
+    "tvhighlights": null
+  }
+}

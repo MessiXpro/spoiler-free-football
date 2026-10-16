@@ -50,6 +50,8 @@ export interface MatchLink {
   vip?: boolean;
   /** 深链（直达本场）还是入口页 */
   deep?: boolean;
+  /** 版权信息可信度；unverified 会在页面上标「待核实」 */
+  confidence?: 'high' | 'medium' | 'low' | 'unverified';
 }
 
 export interface PublicMatch {
@@ -74,14 +76,17 @@ export interface PublicMatch {
 
 export interface ScoreRecord {
   id: string;
+  /** 比赛结束时的比分（含加时，不含点球大战） */
   home: number;
   away: number;
   halfTime?: [number, number];
-  /** 加时赛后比分（含常规时间） */
-  extraTime?: [number, number];
+  /** 打了加时：这里是 90 分钟时的比分（数据源提供时） */
+  regularTime?: [number, number];
+  extraTime?: boolean;
   penalties?: [number, number];
   /** 两回合总比分（次回合才有） */
   aggregate?: [number, number];
+  note?: string;
   source: string;
   updatedAt: string;
 }
