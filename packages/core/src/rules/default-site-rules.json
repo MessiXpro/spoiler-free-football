@@ -1,0 +1,446 @@
+{
+  "schema": 1,
+  "version": "2026-10-16",
+  "sites": [
+    {
+      "id": "bilibili",
+      "name": "哔哩哔哩",
+      "hosts": ["bilibili.com"],
+      "context": "detect",
+      "confidence": "high",
+      "contextSelectors": [
+        "h1.video-title",
+        ".video-info-title",
+        ".video-tag-container",
+        ".tag-panel",
+        ".bpx-player-top-left-title"
+      ],
+      "titleSelectors": [
+        "h1.video-title",
+        ".video-info-title .video-title",
+        ".video-title-href",
+        ".bili-video-card__info--tit",
+        ".bili-video-card__title",
+        ".video-page-card-small .info .title",
+        ".video-pod__item .title-txt",
+        ".bpx-player-top-left-title",
+        ".bpx-player-top-title",
+        ".bili-dyn-card-video__title",
+        ".rank-item .info .title"
+      ],
+      "cardSelectors": [
+        ".bili-video-card",
+        ".bili-feed-card",
+        ".feed-card",
+        ".video-page-card-small",
+        ".video-page-operator-card-small",
+        ".bili-dyn-card-video",
+        ".video-pod__item",
+        ".rank-item",
+        ".small-item",
+        ".v-card"
+      ],
+      "coverSelectors": [
+        ".bili-video-card__cover",
+        ".bili-video-card__image",
+        ".bili-video-card__image--wrap",
+        ".bili-cover-card__thumbnail",
+        ".pic-box",
+        ".b-img",
+        ".bili-dyn-card-video__cover",
+        ".v-recommend-inline-player",
+        "[class*='VideoCover_']"
+      ],
+      "hide": {
+        "duration": [
+          ".bili-video-card__stats__duration",
+          ".bili-cover-card__stats .bili-cover-card__stat:last-child",
+          ".pic-box .duration",
+          ".card-box .duration",
+          ".video-pod__item .stats",
+          "span.length",
+          ".bpx-player-ctrl-time-duration",
+          ".bpx-player-ctrl-time-seperate",
+          "[class*='mplayer-time-total']"
+        ],
+        "progress": [
+          ".bpx-player-progress-wrap",
+          ".bpx-player-progress-area",
+          ".bpx-player-progress-popup",
+          ".bpx-player-progress-preview",
+          ".bpx-player-progress-preview-time",
+          ".bpx-player-progress-hotspot",
+          ".bpx-player-shadow-progress-area",
+          ".bpx-player-mini-progress",
+          ".bpx-player-pbp",
+          ".bpx-player-ctrl-viewpoint",
+          ".bili-cover-card__progress",
+          "[class*='mplayer-progress']"
+        ],
+        "danmaku": [
+          ".bpx-player-row-dm-wrap",
+          ".bpx-player-bas-dm-wrap",
+          ".bpx-player-adv-dm-wrap",
+          ".bpx-player-cmd-dm-wrap",
+          ".bpx-player-dm-wrap",
+          ".bili-danmaku-x-dm",
+          "#danmukuBox",
+          ".danmaku-wrap"
+        ],
+        "comments": [
+          "#commentapp",
+          "bili-comments",
+          "#comment",
+          "#comment-module",
+          ".bili-comment-container",
+          "[class*='commentArea']"
+        ],
+        "recommend": [
+          ".right-container .rec-list",
+          ".rec-list",
+          ".rec-footer",
+          ".recommend-list-v1",
+          "#reco_list",
+          ".next-play",
+          ".recommend-list-container",
+          ".bpx-player-ending-panel",
+          ".bpx-player-ending-wrap",
+          ".bpx-player-ending-related",
+          ".pop-live-small-mode",
+          "[class*='related2Col']"
+        ]
+      }
+    },
+    {
+      "id": "miguvideo",
+      "name": "咪咕视频",
+      "hosts": ["miguvideo.com", "migu.cn"],
+      "context": "detect",
+      "confidence": "low",
+      "footballUrlParts": ["/sports", "sports", "football", "zuqiu"],
+      "contextSelectors": ["h1", "[class*='title' i]", "[class*='match' i]"],
+      "titleSelectors": [
+        "h1",
+        "[class*='video-title' i]",
+        "[class*='videoTitle']",
+        "[class*='program-title' i]",
+        "[class*='programName']",
+        "[class*='match-title' i]",
+        "[class*='card-title' i]",
+        "[class*='item-title' i]"
+      ],
+      "cardSelectors": ["[class*='card' i]", "[class*='item' i]"],
+      "coverSelectors": ["[class*='cover' i]", "[class*='poster' i]", "[class*='pic' i]"],
+      "hide": {
+        "duration": [
+          "[class*='duration' i]",
+          "[class*='total-time' i]",
+          "[class*='totalTime']",
+          "[class*='time-total' i]"
+        ],
+        "progress": [
+          "[class*='player' i] [class*='progress' i]",
+          "[class*='player' i] [class*='preview' i]",
+          "[class*='player' i] [class*='thumb' i]"
+        ],
+        "danmaku": [
+          "[class*='danmu' i]",
+          "[class*='danmaku' i]",
+          "[class*='barrage' i]",
+          "[class*='bullet' i]"
+        ],
+        "comments": ["[class*='comment' i]", "[class*='chat-room' i]", "[class*='chatroom' i]"],
+        "recommend": ["[class*='recommend' i]", "[class*='related' i]", "[class*='guess' i]"],
+        "scoreboard": ["[class*='score' i]", "[class*='bifen' i]", "[class*='scoreboard' i]"]
+      }
+    },
+    {
+      "id": "yangshipin",
+      "name": "央视频",
+      "hosts": ["yangshipin.cn"],
+      "context": "detect",
+      "confidence": "low",
+      "contextSelectors": ["h1", "[class*='video-title' i]", "[class*='title' i]"],
+      "titleSelectors": [
+        "h1",
+        "[class*='video-title' i]",
+        "[class*='videoTitle']",
+        "[class*='item-title' i]",
+        "[class*='card-title' i]"
+      ],
+      "cardSelectors": ["[class*='card' i]", "[class*='item' i]"],
+      "coverSelectors": ["[class*='cover' i]", "[class*='poster' i]"],
+      "hide": {
+        "duration": ["[class*='duration' i]", ".txp_time_duration", "[class*='time_duration' i]"],
+        "progress": [
+          ".txp_progress",
+          "txpdiv[class*='progress']",
+          "[class*='player' i] [class*='progress' i]",
+          "[class*='player' i] [class*='preview' i]"
+        ],
+        "danmaku": ["[class*='barrage' i]", "[class*='danmu' i]", "[class*='danmaku' i]"],
+        "comments": ["[class*='comment' i]", "[class*='chat' i]"],
+        "recommend": ["[class*='recommend' i]", "[class*='related' i]"],
+        "scoreboard": ["[class*='score' i]"]
+      }
+    },
+    {
+      "id": "cctv",
+      "name": "央视网 / CCTV",
+      "hosts": ["cctv.com", "cctv.cn", "cntv.cn"],
+      "context": "detect",
+      "confidence": "low",
+      "footballUrlParts": ["sports.cctv.com", "/lm/txzq", "/lm/gjoz", "/lm/zqzy", "/cctv5"],
+      "contextSelectors": ["h1", ".title_area", ".playingVideo .tit", ".video_brief"],
+      "titleSelectors": [
+        ".playingVideo .tit",
+        ".video_brief .tit",
+        ".title_area h1",
+        "h1",
+        ".text_box h3",
+        ".text h3",
+        ".tit"
+      ],
+      "cardSelectors": ["li", ".item", "[class*='list' i] > div"],
+      "coverSelectors": [".image", "[class*='img' i]", "[class*='pic' i]"],
+      "hide": {
+        "duration": ["[class*='duration' i]", ".image .time", "span.time", ".video_time"],
+        "progress": [
+          "#player [class*='progress' i]",
+          "#player [id*='progress' i]",
+          "#player [class*='time' i]",
+          "#player [id*='time' i]",
+          "#myFlash [class*='progress' i]"
+        ],
+        "danmaku": ["[class*='danmu' i]", "[class*='barrage' i]"],
+        "comments": ["[class*='comment' i]"],
+        "recommend": [
+          ".right_list",
+          "[class*='videoList' i]",
+          "[class*='tuijian' i]",
+          "[class*='xgsp' i]",
+          "[class*='recommend' i]",
+          "[class*='related' i]"
+        ],
+        "scoreboard": ["[class*='score' i]", "[class*='bifen' i]"]
+      }
+    },
+    {
+      "id": "iqiyi",
+      "name": "爱奇艺",
+      "hosts": ["iqiyi.com"],
+      "context": "detect",
+      "confidence": "medium",
+      "footballUrlParts": ["sports.iqiyi.com", "/sports", "uefa", "ucl"],
+      "contextSelectors": [
+        "[data-ai-entity*='主标题']",
+        ".album-head-title",
+        "[class*='meta_title']",
+        "h1"
+      ],
+      "titleSelectors": [
+        "[data-ai-entity*='主标题']",
+        ".album-head-title",
+        "[class*='meta_title']",
+        "div[class^='video-list-item_'] [class*='title']",
+        "div[class^='video-slide_'] [class*='title']",
+        ".search-item-box [class*='title']",
+        ".qy-mod-li .link-txt"
+      ],
+      "cardSelectors": [
+        "div[class^='video-list-item_']",
+        "div[class^='video-slide_']",
+        ".qy-mod-li",
+        ".search-item-box"
+      ],
+      "coverSelectors": [
+        "div[class^='video-list-item_'] [class*='img']",
+        "div[class^='video-slide_'] [class*='img']",
+        "[class*='cover' i]",
+        ".qy-mod-link-wrap"
+      ],
+      "hide": {
+        "duration": [
+          "[class*='duration' i]",
+          ".iqp-time-dur",
+          "[class*='time-dur']",
+          ".qy-mod-label"
+        ],
+        "progress": [
+          ".iqp-progress",
+          ".iqp-player [class*='progress']",
+          "iqpdiv[class*='progress']",
+          ".iqp-player [class*='preview' i]",
+          ".iqp-player [class*='thumb' i]"
+        ],
+        "danmaku": [
+          ".iqp-player [class*='barrage' i]",
+          "iqpdiv[class*='barrage']",
+          "[class*='barrage' i]",
+          "[class*='danmu' i]"
+        ],
+        "comments": ["[class*='comment' i]"],
+        "recommend": [
+          "[class*='recommend' i]",
+          "div[class^='list_list__']",
+          ".m-box[name='m-recList']",
+          "[class*='rec-list' i]"
+        ],
+        "scoreboard": ["[class*='score' i]"]
+      }
+    },
+    {
+      "id": "tencent",
+      "name": "腾讯视频",
+      "hosts": ["v.qq.com", "sports.qq.com", "kbs.sports.qq.com", "vm.gtimg.cn"],
+      "context": "detect",
+      "confidence": "medium",
+      "footballUrlParts": ["sports.qq.com", "kbs.sports.qq.com"],
+      "contextSelectors": [".intro-title", ".video-title", ".player-title", "h1"],
+      "titleSelectors": [
+        ".intro-title",
+        ".video-title",
+        ".player-title",
+        ".video_title",
+        ".player_title",
+        ".video-card-wrap [class*='title']",
+        ".figure_title"
+      ],
+      "cardSelectors": [
+        ".video-card-wrap",
+        ".list_item",
+        ".figure",
+        "[class*='episode' i] [class*='item' i]"
+      ],
+      "coverSelectors": [
+        ".video-card-wrap [class*='img']",
+        ".figure_pic",
+        ".figure",
+        "[class*='poster' i]",
+        "[class*='cover' i]"
+      ],
+      "hide": {
+        "duration": [
+          ".txp_time_duration",
+          "txpdiv[class*='time_duration']",
+          "[class*='duration' i]",
+          ".figure_caption"
+        ],
+        "progress": [
+          ".txp_progress",
+          ".txp_progress_list",
+          "txpdiv[class*='progress']",
+          "#player-container [class*='progress' i]",
+          "#player-container [class*='preview' i]",
+          "#player-container [class*='thumb' i]"
+        ],
+        "danmaku": [
+          "txpdiv[data-report*='barrage']",
+          "txpdiv[data-report*='danmu']",
+          "[class*='barrage' i]",
+          "[class*='danmu' i]",
+          "#barrageBase"
+        ],
+        "comments": ["[class*='comment' i]", ".mod_comment"],
+        "recommend": ["[class*='recommend' i]", ".mod_rec", ".mod_more"],
+        "scoreboard": ["[class*='score' i]"]
+      }
+    },
+    {
+      "id": "dongqiudi",
+      "name": "懂球帝",
+      "hosts": ["dongqiudi.com"],
+      "context": "always",
+      "confidence": "low",
+      "titleSelectors": [
+        "h1",
+        ".article-title",
+        "[class*='news' i] [class*='title' i]",
+        "[class*='article' i] [class*='title' i]"
+      ],
+      "cardSelectors": ["[class*='news' i] li", "[class*='list' i] > li", "[class*='item' i]"],
+      "coverSelectors": ["[class*='news' i] img", "[class*='cover' i]", "[class*='pic' i]"],
+      "hide": {
+        "duration": ["[class*='duration' i]"],
+        "comments": ["[class*='comment' i]", "[class*='reply' i]"],
+        "recommend": ["[class*='recommend' i]", "[class*='related' i]"],
+        "scoreboard": [
+          "[class*='score' i]",
+          "[class*='match-item' i] [class*='result' i]",
+          "[class*='bifen' i]"
+        ]
+      }
+    },
+    {
+      "id": "zhibo8",
+      "name": "直播吧",
+      "hosts": ["zhibo8.com", "zhibo8.cc"],
+      "context": "always",
+      "confidence": "low",
+      "titleSelectors": [
+        ".title h1",
+        "h1",
+        ".articleList li a",
+        ".dataList li a",
+        "li[label] a",
+        "[class*='title' i] a"
+      ],
+      "cardSelectors": ["li[label]", ".articleList li", ".dataList li", "[class*='video' i] li"],
+      "coverSelectors": [
+        "[class*='video' i] [class*='pic' i]",
+        "[class*='pic' i]",
+        "[class*='cover' i]"
+      ],
+      "hide": {
+        "duration": ["[class*='duration' i]"],
+        "comments": ["[class*='comment' i]", "#comment", "[class*='reply' i]"],
+        "recommend": ["[class*='recommend' i]", "[class*='related' i]"],
+        "scoreboard": ["[class*='bifen' i]", "[class*='score' i]"]
+      }
+    },
+    {
+      "id": "hupu",
+      "name": "虎扑",
+      "hosts": ["hupu.com"],
+      "context": "detect",
+      "confidence": "low",
+      "footballUrlParts": [
+        "soccer.hupu.com",
+        "/soccer",
+        "topic-soccer",
+        "/all-soccer",
+        "/zuqiu",
+        "/epl",
+        "/laliga"
+      ],
+      "contextSelectors": ["h1", "[class*='bbs-post-wrapper-title']", "[class*='post-title' i]"],
+      "titleSelectors": [
+        "[class^='post-wrapper_bbs-post-wrapper-title']",
+        "[class*='bbs-post-wrapper-title']",
+        ".bbs-sl-web-post-body .post-title",
+        "a.p-title",
+        "[class*='post-title' i]",
+        "[class*='list-item' i] [class*='title' i]",
+        "h1"
+      ],
+      "cardSelectors": [
+        "[class*='list-item' i]",
+        ".bbs-sl-web-post-body li",
+        "[class*='thread' i] li"
+      ],
+      "coverSelectors": ["[class*='thread-content-detail'] img", "[class*='cover' i]"],
+      "hide": {
+        "duration": ["[class*='duration' i]"],
+        "comments": [
+          "[class*='post-reply-list']",
+          "[class*='post-reply']",
+          "[class*='reply-list' i]"
+        ],
+        "recommend": [".bbs-post-web-body-right-wrapper", "[class*='recommend' i]"],
+        "scoreboard": ["[class*='score' i]"]
+      }
+    }
+  ],
+  "extraWords": [],
+  "safePhrases": []
+}

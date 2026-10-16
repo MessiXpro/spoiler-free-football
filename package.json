@@ -1,0 +1,35 @@
+{
+  "name": "spoiler-free-football",
+  "private": true,
+  "version": "0.1.0",
+  "description": "防剧透看球：录像/集锦/节目汇总 + 浏览器插件 + 用户脚本，自动隐藏比分",
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build",
+    "data:build": "pnpm --filter @sff/data run build:live",
+    "data:sample": "pnpm --filter @sff/data run build:sample",
+    "dev": "pnpm data:sample && pnpm --filter @sff/web dev",
+    "e2e": "playwright test",
+    "ci": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm e2e"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "1.56.1",
+    "@types/node": "^22.20.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.5.0",
+    "prettier": "^3.6.2",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^3.2.7"
+  }
+}
