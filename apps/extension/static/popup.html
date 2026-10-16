@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>防剧透看球</title>
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body class="popup">
+    <header class="row">
+      <img src="icons/icon-32.png" width="24" height="24" alt="" />
+      <strong>防剧透看球</strong>
+      <label class="switch" title="总开关">
+        <input type="checkbox" id="enabled" data-testid="enabled" />
+        <span>总开关</span>
+      </label>
+    </header>
+
+    <section class="card" id="site-card">
+      <div id="site-status" data-testid="site-status">读取中…</div>
+      <div class="row gap">
+        <button id="pause" data-testid="pause">临时显示 5 分钟</button>
+        <button id="resume" data-testid="resume" hidden>恢复遮挡</button>
+        <button id="toggle-site" class="ghost" data-testid="toggle-site">在此站点停用</button>
+      </div>
+    </section>
+
+    <section class="card" id="match-card" hidden data-testid="current-match">
+      <div class="muted small">正在看</div>
+      <div id="match-title" class="title"></div>
+      <div id="match-score" data-testid="popup-score"></div>
+      <button id="reveal" class="primary" data-testid="popup-reveal">看完了，显示比分</button>
+      <div id="reveal-confirm" hidden class="row gap">
+        <span class="small">确定显示吗？会记为已看。</span>
+        <button id="reveal-yes" class="primary" data-testid="popup-reveal-yes">显示</button>
+        <button id="reveal-no" class="ghost">取消</button>
+      </div>
+    </section>
+
+    <footer class="row gap small">
+      <a href="#" id="open-web" data-testid="open-web">打开防剧透网页</a>
+      <a href="options.html" target="_blank">设置</a>
+    </footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -52,5 +52,6 @@ export default defineConfig({
     sourcemap: false,
   },
   server: { port: 5173 },
-  preview: { port: 4173 },
+  // 和 GitHub Pages 一样允许跨域读取数据（插件/用户脚本要从视频网站页面读取比分和规则）
+  preview: { port: 4173, cors: true },
 });

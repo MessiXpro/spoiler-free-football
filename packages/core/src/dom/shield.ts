@@ -51,14 +51,44 @@ interface Rec {
   masked: string;
 }
 
-/** 在页面最早期插入整页遮罩（用户脚本用；插件由 manifest 注入同样的 CSS） */
+const isIgnored = (el: Element) => IGNORE_TAGS.has(el.tagName) || el.hasAttribute('data-sff-ui');
+
+/**
+ * 在页面最早期插入整页遮罩（用户脚本用；插件由 manifest 注入同样的 CSS）。
+ * document-start 时 <html> 可能还没创建，这时等它出现再插入（MutationObserver 回调在绘制前执行）。
+ */
 export function installCloak(doc: Document): void {
-  if (doc.getElementById(CLOAK_ID)) return;
-  const style = doc.createElement('style');
-  style.id = CLOAK_ID;
-  style.textContent = CLOAK_CSS;
-  (doc.head ?? doc.documentElement).appendChild(style);
+  const insert = () => {
+    const root = doc.documentElement;
+    if (!root) return false;
+    if (doc.getElementById(CLOAK_ID)) return true;
+    const style = doc.createElement('style');
+    style.id = CLOAK_ID;
+    style.textContent = CLOAK_CSS;
+    (doc.head ?? root).appendChild(style);
+    return true;
+  };
+  if (insert()) return;
+  new MutationObserver((_, observer) => {
+    if (insert()) observer.disconnect();
+  }).observe(doc, { childList: true });
 }
+
+/** 等到 <html> 元素存在 */
+export function whenDocumentElement(doc: Document): Promise<HTMLElement> {
+  if (doc.documentElement) return Promise.resolve(doc.documentElement);
+  return new Promise((resolve) => {
+    new MutationObserver((_, observer) => {
+      if (doc.documentElement) {
+        observer.disconnect();
+        resolve(doc.documentElement);
+      }
+    }).observe(doc, { childList: true });
+  });
+}
+
+/** 带这个属性的元素（用户脚本自己的悬浮面板）不处理 */
+export const ATTR_UI = 'data-sff-ui';
 
 export function revealPage(doc: Document): void {
   doc.documentElement.classList.add(CLASS_READY);
@@ -85,7 +115,7 @@ export class SpoilerShield {
   private contextSelector: string | null = null;
   private readonly onShadow = (e: Event) => {
     const host = e.target as Element | null;
-    if (host?.shadowRoot) this.attachShadowRoot(host.shadowRoot);
+    if (host?.shadowRoot && !host.closest(`[${ATTR_UI}]`)) this.attachShadowRoot(host.shadowRoot);
   };
   private readonly onMessage = (e: MessageEvent) => {
     const data = e.data as { type?: string; football?: boolean } | null;
@@ -342,10 +372,10 @@ export class SpoilerShield {
   private pendingScoreCheck = new Set<Element>();
 
   private processSubtree(root: Node) {
-    if (root.nodeType === 1 && IGNORE_TAGS.has((root as Element).tagName)) return;
+    if (root.nodeType === 1 && isIgnored(root as Element)) return;
     const walker = this.doc.createTreeWalker(root, 1 /* SHOW_ELEMENT */ | 4 /* SHOW_TEXT */, {
       acceptNode: (node) =>
-        node.nodeType === 1 && IGNORE_TAGS.has((node as Element).tagName)
+        node.nodeType === 1 && isIgnored(node as Element)
           ? 2 /* FILTER_REJECT */
           : 1 /* FILTER_ACCEPT */,
     });
@@ -426,7 +456,7 @@ export class SpoilerShield {
   private processText(node: Text) {
     if (this.paused) return;
     const parent = node.parentElement;
-    if (!parent || IGNORE_TAGS.has(parent.tagName)) return;
+    if (!parent || IGNORE_TAGS.has(parent.tagName) || parent.closest(`[${ATTR_UI}]`)) return;
     if (parent.tagName === 'TITLE' && !this.prefs.title) return;
     if ((parent as HTMLElement).isContentEditable) return;
     const data = node.data;

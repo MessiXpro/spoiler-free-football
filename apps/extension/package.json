@@ -1,0 +1,20 @@
+{
+  "name": "@sff/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "防剧透看球浏览器插件（Chrome/Edge MV3，兼容 Firefox）",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sff/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.24",
+    "esbuild": "^0.25.11",
+    "jsdom": "^27.4.0"
+  }
+}
