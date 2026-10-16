@@ -55,6 +55,8 @@ importers:
         specifier: ^27.4.0
         version: 27.4.0
 
+  apps/sync-worker: {}
+
   apps/userscript:
     dependencies:
       '@sff/core':
