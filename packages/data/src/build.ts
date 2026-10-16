@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_SITE_RULES_JSON, type DataMeta, type PublicMatch } from '@sff/core';
+import { DEFAULT_SITE_RULES_JSON, redact, type DataMeta, type PublicMatch } from '@sff/core';
 import { createApiFootballAdapter } from './adapters/api-football.ts';
 import { createFootballDataAdapter } from './adapters/football-data.ts';
 import { createManualAdapter, type ManualConfig } from './adapters/manual.ts';
@@ -123,6 +123,11 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
 
   const programs = opts.config.programs.programs.map(publicProgram);
   const episodes = scheduledEpisodes(opts.config.programs.programs, opts.now);
+
+  // 数据源的诊断说明（报错信息等）不是我们写的文字，先遮挡再公开，避免因为偶然像比分而导致构建失败
+  for (const s of sources) {
+    if (s.note) s.note = redact(s.note, { football: true }).slice(0, 500);
+  }
 
   const meta: DataMeta = {
     generatedAt,

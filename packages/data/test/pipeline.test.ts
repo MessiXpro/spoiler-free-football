@@ -105,6 +105,27 @@ describe('完整管线（示例数据）', () => {
     expect(matches.matches.length).toBe(out.matches.length);
   });
 
+  it('数据源的报错说明即使碰巧像比分，也会先遮挡，不导致构建失败', async () => {
+    const config = await loadConfig(CONFIG_DIR, { links: join(SAMPLE_DIR, 'links.sample.json') });
+    const out = await buildData({
+      now: SAMPLE_NOW,
+      fetcher: sampleFetcher(),
+      env: SAMPLE_ENV,
+      config,
+      adapters: [
+        {
+          id: 'weird',
+          name: '奇怪的数据源',
+          priority: 1,
+          fetch: async () => ({ fixtures: [], notes: ['上游返回：Arsenal 2-1 Chelsea 绝杀'] }),
+        },
+      ],
+    });
+    const note = out.meta.sources[0]!.note!;
+    expect(note.startsWith('上游返回：Arsenal ■-■')).toBe(true);
+    expect(findSpoilers(note, { football: true })).toEqual([]);
+  });
+
   it('meta 记录每个来源的情况（缺 Key 的标为跳过）', async () => {
     const out = await sampleBuild();
     const byId = Object.fromEntries(out.meta.sources.map((s) => [s.id, s]));
