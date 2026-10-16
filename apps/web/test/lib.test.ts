@@ -12,6 +12,12 @@ describe('路由', () => {
     expect(parseHash('#/import/SFF1.abc_-')).toEqual({ name: 'import', code: 'SFF1.abc_-' });
     expect(parseHash('#/nonsense')).toEqual({ name: 'today', offset: 0 });
   });
+  it('手改/截断的链接里有不完整的 %xx 时不崩溃', () => {
+    expect(() => parseHash('#/match/100%')).not.toThrow();
+    expect(parseHash('#/match/100%')).toEqual({ name: 'match', id: '100%' });
+    expect(parseHash('#/match/abc%E0%A4%A')).toEqual({ name: 'match', id: 'abc%E0%A4%A' });
+    expect(parseHash('#/match/a%25b')).toEqual({ name: 'match', id: 'a%b' });
+  });
   it('生成链接', () => {
     expect(href({ name: 'today', offset: 0 })).toBe('#/today');
     expect(href({ name: 'today', offset: -1 })).toBe('#/today/-1');

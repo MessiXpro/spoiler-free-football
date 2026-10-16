@@ -3,10 +3,12 @@ import {
   competitionName,
   formatKickoff,
   isFixtureLocked,
+  isPostponedCleared,
   isWatched,
   LIVE_STATUS_LABELS,
   liveStatus,
   neutralTitle,
+  postponedClearKey,
   stageLabel,
   teamName,
   type PublicMatch,
@@ -31,9 +33,12 @@ interface Props {
 export function MatchCard({ match, all, state, now, expanded = false }: Props) {
   const status = liveStatus(match, now);
   const watched = isWatched(state, match.id);
+  // 延期/取消的比赛手动标记过（按原定开球时间记，改期后的那场不算）
+  const cleared = isPostponedCleared(state, match);
   const locked = isFixtureLocked(match, all, state, now);
   const [open, setOpen] = useState(expanded);
   const [askUnlock, setAskUnlock] = useState(false);
+  const [askMark, setAskMark] = useState(false);
   const [player, setPlayer] = useState<'none' | 'highlights' | 'live'>('none');
   const [liveOpen, setLiveOpen] = useState(false);
 
@@ -45,7 +50,7 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
 
   return (
     <article
-      className={`match-card status-${status}${watched ? ' is-watched' : ''}`}
+      className={`match-card status-${status}${watched || cleared ? ' is-watched' : ''}`}
       data-testid="match-card"
       data-match-id={match.id}
       aria-label={neutralTitle(match, { lockedTeams: locked })}
@@ -56,7 +61,7 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
         <span className={`status status-${status}`} data-testid="match-status">
           {LIVE_STATUS_LABELS[status]}
         </span>
-        {watched && (
+        {(watched || cleared) && (
           <span className="tag tag-watched" data-testid="watched-badge">
             已看
           </span>
@@ -161,6 +166,33 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
 
           {status === 'finished' && <RevealScore match={match} watched={watched} />}
           {status === 'live' && <p className="muted">比赛进行中，结束后可以在这里显示比分。</p>}
+          {/*
+            延期/取消的比赛没有"显示比分"，开球时间过后让用户手动标记，解除相关节目和下一轮对阵的折叠。
+            不记进 watched：id 不含日期，改期后重新安排的那场会被当成已看。
+          */}
+          {status === 'postponed' && Date.parse(match.kickoff) <= now.getTime() && (
+            <div className="reveal">
+              {cleared ? (
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  data-testid="unmark-watched"
+                  onClick={() => actions.relock(postponedClearKey(match))}
+                >
+                  改回没看
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  data-testid="mark-watched"
+                  onClick={() => setAskMark(true)}
+                >
+                  标记为已看
+                </button>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -211,6 +243,20 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {askMark && (
+        <ConfirmDialog
+          title="把这场标记为已看？"
+          confirmText="标记为已看"
+          onCancel={() => setAskMark(false)}
+          onConfirm={() => {
+            actions.unlock(postponedClearKey(match));
+            setAskMark(false);
+          }}
+        >
+          <p>相关的节目和下一轮对阵不会再因为这场先折叠起来。改期重赛的那场还是按没看处理。</p>
+        </ConfirmDialog>
       )}
 
       {askUnlock && (

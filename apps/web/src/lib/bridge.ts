@@ -1,12 +1,15 @@
 import { neutralTitle, type PublicMatch } from '@sff/core';
 import { dataUrl } from './data.ts';
-import { getState, mergeWatched, subscribe } from './store.ts';
+import { getState, mergeWatched, removedWatched, subscribe } from './store.ts';
 
 /**
  * 网页 ↔ 防剧透插件/用户脚本 的联动（window.postMessage）：
  * - 插件/脚本在页面最早期给 <html> 加 data-sff-shield="extension|userscript"，网页据此判断是否已安装
- * - 网页 → 插件：hello（带数据地址和已看记录）、open-match（即将跳转去看哪一场）、state（已看记录有变化）
+ * - 网页 → 插件：hello（带数据地址、已看记录和本机删掉过的已看记录 unwatched）、
+ *   open-match（即将跳转去看哪一场）、state（已看记录有变化）、
+ *   unwatch（"藏起比分并标记为没看"或清空本机数据后被删掉的已看记录 id）
  * - 插件 → 网页：watched（在插件里点了"显示比分"的比赛）
+ * 插件/脚本发回来的已看记录如果早于本机删除的时间，网页不会再加回来（见 store.ts 的 mergeWatched）。
  */
 export type ShieldKind = 'extension' | 'userscript';
 
@@ -39,13 +42,23 @@ export function initBridge(): () => void {
     }
   };
   window.addEventListener('message', onMessage);
-  post({ type: 'hello', dataBase: dataUrl(''), watched: getState().watched });
-  let last = JSON.stringify(getState().watched);
+  post({
+    type: 'hello',
+    dataBase: dataUrl(''),
+    watched: getState().watched,
+    unwatched: removedWatched(),
+  });
+  let lastWatched = getState().watched;
+  let last = JSON.stringify(lastWatched);
   const unsubscribe = subscribe(() => {
-    const now = JSON.stringify(getState().watched);
+    const watched = getState().watched;
+    const now = JSON.stringify(watched);
     if (now !== last) {
+      const removed = Object.keys(lastWatched).filter((id) => !watched[id]);
+      lastWatched = watched;
       last = now;
-      post({ type: 'state', watched: getState().watched });
+      if (removed.length) post({ type: 'unwatch', ids: removed });
+      post({ type: 'state', watched });
     }
   });
   return () => {

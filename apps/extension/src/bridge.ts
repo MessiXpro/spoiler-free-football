@@ -1,3 +1,4 @@
+import { applyWebWatched } from '@sff/core/dom';
 import { ext, loadSettings, onSettingsChanged, saveSettings } from './api.ts';
 
 /**
@@ -26,6 +27,8 @@ interface WebMessage {
   type?: string;
   dataBase?: string;
   watched?: Record<string, number>;
+  unwatched?: Record<string, number>;
+  ids?: string[];
   url?: string;
   liveMode?: boolean;
   match?: {
@@ -36,18 +39,6 @@ interface WebMessage {
     home: { id: string; name: string };
     away: { id: string; name: string };
   };
-}
-
-function mergeWatched(a: Record<string, number>, b: Record<string, number> | undefined) {
-  const out = { ...a };
-  let changed = false;
-  for (const [id, t] of Object.entries(b ?? {})) {
-    if (typeof t === 'number' && !out[id]) {
-      out[id] = t;
-      changed = true;
-    }
-  }
-  return { out, changed };
 }
 
 window.addEventListener('message', async (e: MessageEvent) => {
@@ -63,13 +54,13 @@ window.addEventListener('message', async (e: MessageEvent) => {
     ) {
       patch.dataBase = data.dataBase;
     }
-    const { out, changed } = mergeWatched(settings.watched, data.watched);
-    if (changed) patch.watched = out;
+    const { watched, changed } = applyWebWatched(settings.watched, data);
+    if (changed) patch.watched = watched;
     if (Object.keys(patch).length) await saveSettings(patch);
-    postWatched(out);
-  } else if (data.type === 'state') {
-    const { out, changed } = mergeWatched(settings.watched, data.watched);
-    if (changed) await saveSettings({ watched: out });
+    postWatched(watched);
+  } else if (data.type === 'state' || data.type === 'unwatch') {
+    const { watched, changed } = applyWebWatched(settings.watched, data);
+    if (changed) await saveSettings({ watched });
   } else if (data.type === 'open-match' && data.match && data.url) {
     let host = '';
     try {

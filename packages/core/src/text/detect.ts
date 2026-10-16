@@ -4,6 +4,7 @@ import {
   CONTEXT_NAME_DENY,
   EN_CONTEXTUAL,
   EN_FOOTBALL_HINTS,
+  EN_SAFE_PATTERNS,
   EN_SCORER_VERBS,
   EN_STRONG,
   ZH_CONTEXTUAL,
@@ -36,25 +37,45 @@ export interface DetectOptions {
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const byLengthDesc = (a: string, b: string) => b.length - a.length;
+/** 词表一律先归一化（"–"→"-"、"’"→"'"、"（"→"("），因为匹配的对象是归一化后的文字 */
 const alt = (words: Iterable<string>) =>
-  [...new Set(words)].filter(Boolean).sort(byLengthDesc).map(escapeRe).join('|');
+  [...new Set([...words].filter(Boolean).map(normalizeText))]
+    .sort(byLengthDesc)
+    .map(escapeRe)
+    .join('|');
 
 const CN_NUM = '[零〇一二两三四五六七八九十]';
 const NUM_ANY = `(?:\\d{1,2}|${CN_NUM}{1,3})`;
 
-/** 跟在 "a-b" 后面就说明这是范围/数量，而不是比分 */
+/**
+ * 跟在 "a-b" 后面就说明这是范围/数量，而不是比分。
+ * 单个汉字的单位要排除常见的词头/队名（"2-0米兰""0-7日本""2-1 集锦""3-0强势""2-1名列第一"）；
+ * 英文序数词 st/nd/rd/th 不算（紧贴数字的 "2-3rd" 已被主规则排除，隔空格的多半是 "St. Pauli"）。
+ */
 const RANGE_UNIT = new RegExp(
-  '^\\s*(?:个?月|日|号|天|周|星期|年|岁|人|名|个|场|轮|分钟|小时|秒|期|集|章|节|话|倍|次|位|座|届|强|级|档|层|楼|款|种|套|件|元|块|万|亿|千|百|米|公里|公斤|斤|码|%|‰|' +
-    'weeks?\\b|days?\\b|months?\\b|years?\\b|yrs?\\b|mins?\\b|minutes?\\b|hours?\\b|hrs?\\b|seconds?\\b|games?\\b|matches\\b|points?\\b|pts\\b|players?\\b|times\\b|' +
-    '度|℃|°|km\\b|kg\\b|cm\\b|mm\\b|st\\b|nd\\b|rd\\b|th\\b|阵型|阵容|体系|站位|打法|formation)',
+  '^\\s*(?:个?月|日(?!本)|号|天(?!津)|周|星期|年(?!轻)|岁|人|名(?!古屋|列)|个|场|轮|分钟|小时|秒|期|集(?!锦|合)|章|节|话|倍|次|位(?!列|居)|座|届|强(?!势|攻|队)|级|档|层|楼|款|种|套|件|元|块|万|亿|千(?!叶)|百|' +
+    // "米"只在后面不接汉字（"1-2米"）或接 高/长/远/以内/开外/范围/距离/射门 这类搭配时才算单位，
+    // "米兰""米堡""米特罗维奇""米内罗竞技"都不是
+    '米(?![\\u4e00-\\u9fff])|米(?=[高长宽远深处的外左以开范距射之]|内(?!罗))|公里|公斤|斤|码|%|‰|' +
+    'weeks?\\b|days?\\b|months?\\b|years?\\b|yrs?\\b|mins?\\b|minutes?\\b|hours?\\b|hrs?\\b|seconds?\\b|games?\\b|matches\\b|points?\\b|pts\\b|players?\\b(?!\\s+rat)|times\\b|' +
+    '度(?!过)|℃|°|km\\b|kg\\b|cm\\b|mm\\b|阵型|阵容|体系|站位|打法|formation)',
   'i',
 );
 /** 跟在 "1比1" "1:1" 后面说明是比例，不是比分 */
 const RATIO_FOLLOW =
   /^\s*(?:还原|复刻|复原|比例|尺寸|模型|大小|等比|兑换|配比|打造|重现|再现|高仿|手办)/;
-/** 紧挨在前面说明是范围："第1-3轮" */
+/** 紧挨在前面说明是比例："画面比例：4:3" */
+const RATIO_PRECEDE = /(?:比例|画幅|宽高比|长宽比|aspect ratio|ratio)\s*:?\s*$/i;
+/**
+ * 紧挨在前面说明是范围："第1-3轮" "前2-3名"。
+ * "前""后"只在单独出现或跟在 榜/名/排/位 后面时才算（"积分榜前1-3"），词尾里的不算：
+ * 落后0-2、最后2-1、随后1-1、目前2-1领先、此前2-1、"0-1后2-1"；"近"排除 最近/接近/附近；
+ * 英文前缀要求左边是词边界（Torino、Lugano、Rayo Vallecano 不是 "no"）；
+ * top 只认紧贴数字的 "TOP1-3"，"Arsenal go top 2-1" 不算；
+ * 单独的 week 不算（"this week 2-1 win" 是比分），只认 matchday/gameweek/matchweek/md/gw/mw。
+ */
 const RANGE_PRECEDE =
-  /(?:第|前|后|共|约|近|每|vol\.?|ep\.?|no\.?|chapter|part|episode|season)\s*$/i;
+  /(?:第|(?:(?<=[榜名排位])|(?<![\u4e00-\u9fff\dA-Za-z■]))[前后]|共|约|(?<![最接附])近|每|(?<![A-Za-z])(?:vol\.?|ep\.?|no\.?|chapter|part|episode|season|md|gw|mw|matchday|gameweek|matchweek|top(?!\s)))\s*$/i;
 /** 双位数比分（10-0 这种）需要的语境 */
 const SCORE_CONTEXT = /(?:比分|总比分|score|agg|ft|全场|半场|ht|最终)\s*[:：]?\s*$/i;
 
@@ -80,8 +101,9 @@ function validateNumericScore(m: RegExpExecArray, norm: string): boolean {
   if (sep === ':' && b.length === 2) return false;
   if (isLeadingZeroPair(a) || isLeadingZeroPair(b)) return false;
   if (RANGE_PRECEDE.test(before)) return false;
-  if (RANGE_UNIT.test(after)) return false;
-  if (sep === ':' && RATIO_FOLLOW.test(after)) return false;
+  // 后面紧跟球队名/赛事名（"国米2-0米兰" "国足0-7日本"）就是 "A 2-1 B"，不看单位
+  if (!getCache().teamStartRe.test(after) && RANGE_UNIT.test(after)) return false;
+  if (sep === ':' && (RATIO_FOLLOW.test(after) || RATIO_PRECEDE.test(before))) return false;
   if (Number(a) > 9 || Number(b) > 9) {
     // 两位数比分少见，日期（10-17）、时间（20:00）多见，必须有明确的比分语境
     return SCORE_CONTEXT.test(before);
@@ -104,12 +126,23 @@ function validateZhScorer(m: RegExpExecArray, norm: string): boolean {
     const after = norm.slice(m.index + text.length, m.index + text.length + 4);
     const prevChar = text.at(-3) ?? '';
     if (/^(?:集锦|合集|盘点|回顾|瞬间|TOP|top|大全|数据|榜|锦集|视角)/.test(after)) return false;
-    if (/[轮场赛周季杯部有佳彩]/.test(prevChar)) return false;
+    // "A组进球" "B站进球" 不是人名
+    if (/[轮场赛周季杯部有佳彩组站]/.test(prevChar)) return false;
   }
   return true;
 }
 
-type Cache = { rules: Rule[]; contextRe: RegExp; safeRe: RegExp };
+/** 紧跟比分的拉丁字母若是这些单位，就不是队名缩写（"内存2-4GB"） */
+const LATIN_UNIT_AFTER = /^(?:GB|MB|KB|TB|HZ|FPS|PM|AM|CM|MM|KM|KG|MP|HP|PS)(?![A-Za-z])/;
+
+type Cache = {
+  rules: Rule[];
+  contextRe: RegExp;
+  safeRe: RegExp;
+  /** 带边界的英文保护写法（抽签仪式的 draw），单独匹配，免得和字面量保护词抢同一位置 */
+  safePatternRe: RegExp;
+  teamStartRe: RegExp;
+};
 let cached: Cache | null = null;
 
 function teamNames(): string[] {
@@ -149,8 +182,9 @@ function contextPattern(): RegExp {
   return new RegExp(`(?:${alt(zh)})|(?<![A-Za-z])(?:${alt(en)})(?![A-Za-z])`);
 }
 
-function safePattern(): RegExp {
-  const names = new Set<string>(ZH_SAFE);
+/** 目录里所有球队名、赛事名（至少两个字） */
+function catalogNames(): string[] {
+  const names = new Set<string>();
   for (const team of TEAMS) {
     [team.zh, team.zhFull, team.en, ...(team.aliases ?? []), ...(team.zhAliases ?? [])]
       .filter((n): n is string => Boolean(n) && (n as string).length >= 2)
@@ -161,7 +195,17 @@ function safePattern(): RegExp {
       .filter((n): n is string => Boolean(n) && (n as string).length >= 2)
       .forEach((n) => names.add(n));
   }
-  return new RegExp(alt(names), 'gi');
+  return [...names];
+}
+
+function safePattern(): RegExp {
+  // alt() 会把名字归一化，否则 "CONMEBOL–UEFA Cup of Champions" 这类名字永远匹配不上归一化后的文字
+  return new RegExp(alt([...ZH_SAFE, ...catalogNames()]), 'gi');
+}
+
+/** 文字开头就是球队名/赛事名（用于判断比分后面紧跟的是不是对手） */
+function teamStartPattern(): RegExp {
+  return new RegExp(`^\\s*(?:${alt(catalogNames())})`);
 }
 
 const ZH_MARGIN_SUFFIX = [
@@ -217,14 +261,18 @@ function buildRules(): Rule[] {
       group: 1,
       validate: (m) => !/^\d{1,2}:\d{2}$/.test((m[1] ?? '').replace(/\s/g, '')),
     },
-    // 4-3 PK / 2-1 aet：数字后面紧跟英文标记
+    // 4-3 PK / 2-1 aet：数字后面紧跟英文标记（"时间：19:30 PK" "开球：20:00 ft" 是时间，不算）
     {
-      re: /(?<![\w\-:/+.])(\d{1,2}\s*[-:]\s*\d{1,2})\s*(?:pk|pso|pens?|aet|a\.e\.t\.?|ft)(?![A-Za-z])/gi,
+      re: /(?<![\w\-/+.]|\d\s*:\s*)(\d{1,2}\s*[-:]\s*\d{1,2})\s*(?:pk|pso|pens?|aet|a\.e\.t\.?|ft)(?![A-Za-z])/gi,
       kind: 'score',
+      validate: (m) => !/^\d{1,2}:\d{2}$/.test((m[1] ?? '').replace(/\s/g, '')),
     },
     // 基本写法：2-1、2:1、2 - 1（排除阵型 4-3-3、赛季 2025-26、日期、时间、范围）
+    // 冒号本身不挡：中文全角冒号后面不空格（"终场：2-1" "2-1：萨卡破门"），
+    // 时间链 1:30:00 由 `\d\s*[-:]\s*` / `\s*[-:]\s*\d` 两个分支排除；
+    // 右边只挡字母数字、不挡 "_"：B站标题 "阿森纳vs切尔西：2-1_哔哩哔哩_bilibili"
     {
-      re: /(?<![\w\-:/+.]|\d\.|\d\s*[-:]\s*)(\d{1,2})\s*([-:])\s*(\d{1,2})(?![\w\-:/%+]|\.\d|\s*[-:]\s*\d)/g,
+      re: /(?<![\w\-/+.]|\d\.|\d\s*[-:]\s*)(\d{1,2})\s*([-:])\s*(\d{1,2})(?![A-Za-z0-9\-/%+]|\.\d|\s*[-:]\s*\d)/g,
       kind: 'score',
       validate: validateNumericScore,
     },
@@ -251,16 +299,19 @@ function buildRules(): Rule[] {
     // 净胜两球、打进2球、丢了3球
     {
       re: new RegExp(
-        `(?:净胜|领先|落后|狂灌|狂轰|攻入|打进|打入|攻进|轰入|射入|灌进|连进|连入|连扳|扳回|丢了?|失|狂进|连丢|进了|再进|又进|共进|合计)\\s*${NUM_ANY}\\s*(?:个|粒)?\\s*(?:球|粒进球)`,
+        `(?:净胜|领先|落后|狂灌|狂轰|攻入|打进|打入|攻进|轰入|射入|灌进|连进|连入|连扳|扳回|丢了?|失|狂进|独进|连丢|进了|再进|又进|共进|合计)\\s*${NUM_ANY}\\s*(?:个|粒)?\\s*(?:球|粒进球)`,
         'g',
       ),
       kind: 'score',
     },
     // 5粒进球
     { re: new RegExp(`${NUM_ANY}\\s*(?:粒|个)\\s*进球`, 'g'), kind: 'score' },
-    // 进球者提示：XX 破门 / XX 建功（人名 2~6 个汉字）
+    // 进球者提示：XX 破门 / XX 建功（人名 2~6 个汉字，或 "C罗""B费""J罗" 这种一个大写字母加一个汉字）
     {
-      re: new RegExp(`[\\u4e00-\\u9fff·・]{2,6}(?:${alt(ZH_SCORER_SUFFIX)})`, 'g'),
+      re: new RegExp(
+        `(?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6})(?:${alt(ZH_SCORER_SUFFIX)})`,
+        'g',
+      ),
       kind: 'scorer',
       validate: validateZhScorer,
     },
@@ -298,6 +349,21 @@ function buildRules(): Rule[] {
       contextual: true,
     },
     { re: /第\s*\d{1,3}(?:\s*\+\s*\d{1,2})?\s*分钟/g, kind: 'event', contextual: true },
+    // 比分紧贴拉丁字母队名缩写（基本写法的 \w 边界会挡住）："曼城3-1AC米兰" "阿森纳2-1PSV"
+    {
+      re: /(?<=[一-鿿])(\d)\s*([-:])\s*(\d)(?=[A-Z]{2,}(?![a-z]))/g,
+      kind: 'score',
+      contextual: true,
+      validate: (m, norm) =>
+        !LATIN_UNIT_AFTER.test(norm.slice(m.index + m[0].length)) && validateNumericScore(m, norm),
+    },
+    // "蔚山HD2-1阿森纳" "PSG3-0拜仁"
+    {
+      re: /(?<=(?:^|[^A-Za-z0-9])[A-Z]{2,5})(\d)\s*([-:])\s*(\d)(?=[一-鿿])/g,
+      kind: 'score',
+      contextual: true,
+      validate: validateNumericScore,
+    },
     { re: new RegExp(alt(ZH_CONTEXTUAL), 'g'), kind: 'result', contextual: true },
     {
       re: new RegExp(`(?<![A-Za-z])(?:${alt(EN_CONTEXTUAL)})(?![A-Za-z])`, 'gi'),
@@ -310,7 +376,13 @@ function buildRules(): Rule[] {
 
 function getCache(): Cache {
   if (!cached) {
-    cached = { rules: buildRules(), contextRe: contextPattern(), safeRe: safePattern() };
+    cached = {
+      rules: buildRules(),
+      contextRe: contextPattern(),
+      safeRe: safePattern(),
+      safePatternRe: new RegExp(EN_SAFE_PATTERNS.join('|'), 'gi'),
+      teamStartRe: teamStartPattern(),
+    };
   }
   return cached;
 }
@@ -323,13 +395,17 @@ export function isFootballText(text: string): boolean {
 
 function protectedRanges(norm: string, extraSafe: string[]): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
-  const { safeRe } = getCache();
-  safeRe.lastIndex = 0;
-  for (let m = safeRe.exec(norm); m; m = safeRe.exec(norm)) {
-    ranges.push([m.index, m.index + m[0].length]);
+  const { safeRe, safePatternRe } = getCache();
+  for (const re of [safeRe, safePatternRe]) {
+    re.lastIndex = 0;
+    for (let m = re.exec(norm); m; m = re.exec(norm)) {
+      ranges.push([m.index, m.index + m[0].length]);
+    }
   }
-  for (const phrase of extraSafe) {
-    if (!phrase) continue;
+  for (const raw of extraSafe) {
+    if (!raw) continue;
+    // 逐字符归一化，长度不变，下标仍与原文对应
+    const phrase = normalizeText(raw);
     for (
       let idx = norm.indexOf(phrase);
       idx >= 0;
@@ -351,7 +427,7 @@ export function findSpoilers(text: string, options: DetectOptions = {}): Spoiler
   let football: boolean | undefined = options.football ? true : undefined;
 
   const extraRules: Rule[] = (options.extraWords ?? [])
-    .map((w) => w.trim())
+    .map((w) => normalizeText(w.trim()))
     .filter(Boolean)
     .map((w) => ({ re: new RegExp(escapeRe(w), 'gi'), kind: 'result' as const }));
 
@@ -428,8 +504,7 @@ function maskFor(span: SpoilerSpan): string {
   return MASK_CHAR.repeat(2);
 }
 
-/** 把剧透片段替换成遮挡符，返回新文字；没有剧透时原样返回 */
-export function redact(text: string, options: DetectOptions = {}): string {
+function redactOnce(text: string, options: DetectOptions): string {
   const spans = findSpoilers(text, options);
   if (!spans.length) return text;
   let out = '';
@@ -439,4 +514,22 @@ export function redact(text: string, options: DetectOptions = {}): string {
     pos = span.end;
   }
   return out + text.slice(pos);
+}
+
+/** 最多遮几轮（正常文字一轮就稳定；上限只防配置里的怪词导致死循环） */
+const MAX_REDACT_PASSES = 8;
+
+/**
+ * 把剧透片段替换成遮挡符，返回新文字；没有剧透时原样返回。
+ * 遮掉一处后，紧挨着的比分可能才露出来（"0-2reach the" 里紧贴的字母挡住了比分边界，
+ * 遮成 "0-2■■" 后比分才成立），所以一直遮到不再变化，保证 redact(redact(x)) === redact(x)。
+ */
+export function redact(text: string, options: DetectOptions = {}): string {
+  let prev = text;
+  let out = redactOnce(text, options);
+  for (let i = 1; i < MAX_REDACT_PASSES && out !== prev; i++) {
+    prev = out;
+    out = redactOnce(out, options);
+  }
+  return out;
 }

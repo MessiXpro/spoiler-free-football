@@ -2,7 +2,7 @@ import { ATTR_UI, type CurrentMatch, type ShieldController } from '@sff/core/dom
 
 /**
  * 手机上没有插件弹窗，所以在页面右下角放一个小按钮「防」，点开是迷你面板：
- * 临时显示 / 恢复、在此站点停用、正在看的比赛「看完了，显示比分」。
+ * 临时显示 / 恢复、在此站点停用、正在看的比赛「看完了，显示比分」；全网版还能改全网防剧透时段。
  * 面板放在 shadow root 里并带 data-sff-ui 标记，遮挡逻辑不会处理它，页面样式也不会影响它。
  */
 export interface PanelActions {
@@ -12,6 +12,11 @@ export interface PanelActions {
   revealScore: (match: CurrentMatch) => Promise<string>;
   disableSite: () => Promise<void>;
   webUrl: () => string;
+  /** 全网版：查看/修改全网防剧透时段（手机上的脚本管理器大多没有脚本菜单，只能在这里改） */
+  globalWindow?: {
+    get: () => { start: string; end: string };
+    save: (start: string, end: string) => Promise<string>;
+  };
 }
 
 const STYLE = `
@@ -24,6 +29,7 @@ const STYLE = `
 .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 button.b { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid #c9d8ce; background: #f3f7f4; color: inherit; }
 button.p { background: #1f8a4c; color: #fff; border-color: transparent; }
+input[type=time] { font: inherit; padding: 4px 6px; border-radius: 8px; border: 1px solid #c9d8ce; }
 .muted { color: #557161; font-size: 12px; }
 .score { font-weight: 700; font-size: 16px; margin-top: 6px; }
 @media (prefers-color-scheme: dark) { .panel { background: #16291e; color: #e8f3ec; } button.b { background: #1d3426; border-color: #2a4535; } .muted { color: #9db8a7; } }
@@ -52,6 +58,16 @@ export function mountPanel(actions: PanelActions) {
         </div>
         <div class="score" data-id="score" data-testid="sff-score"></div>
       </div>
+      <div data-id="global" hidden data-testid="sff-global">
+        <div class="muted" style="margin-top:10px">全网防剧透时段（00:00 到 00:00 表示全天）</div>
+        <div class="row">
+          <input type="time" data-id="g-start" data-testid="sff-global-start" />
+          <span>到</span>
+          <input type="time" data-id="g-end" data-testid="sff-global-end" />
+          <button class="b" data-id="g-save" data-testid="sff-global-save">保存</button>
+        </div>
+        <div class="muted" data-id="g-msg"></div>
+      </div>
       <div class="row"><a data-id="web" target="_blank" rel="noopener">打开防剧透网页</a></div>
     </div>`;
   const $ = (id: string) => root.querySelector(`[data-id="${id}"]`) as HTMLElement;
@@ -79,9 +95,27 @@ export function mountPanel(actions: PanelActions) {
     ($('web') as HTMLAnchorElement).href = actions.webUrl();
   };
 
+  const gw = actions.globalWindow;
+  $('global').hidden = !gw;
+  /** 打开面板时填入当前时段（refresh 经常被调用，不能覆盖正在输入的值） */
+  const fillGlobal = () => {
+    if (!gw) return;
+    const { start, end } = gw.get();
+    ($('g-start') as HTMLInputElement).value = start;
+    ($('g-end') as HTMLInputElement).value = end;
+    $('g-msg').textContent = '';
+  };
+
   fab.addEventListener('click', () => {
     panel.hidden = !panel.hidden;
+    if (!panel.hidden) fillGlobal();
     refresh();
+  });
+  $('g-save').addEventListener('click', async () => {
+    if (!gw) return;
+    const start = ($('g-start') as HTMLInputElement).value;
+    const end = ($('g-end') as HTMLInputElement).value;
+    $('g-msg').textContent = await gw.save(start, end);
   });
   $('pause').addEventListener('click', () => {
     actions.controller().pause(5 * 60 * 1000);

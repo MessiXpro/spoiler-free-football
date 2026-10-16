@@ -1,5 +1,13 @@
 import { bootShield, type ShieldController } from '@sff/core/dom';
-import { ext, loadSettings, onSettingsChanged, type TabMessage, type TabStatus } from './api.ts';
+import {
+  ext,
+  loadSettings,
+  onSettingsChanged,
+  WEB_MATCHES,
+  type TabMessage,
+  type TabStatus,
+} from './api.ts';
+import { isWebAppUrl } from './web-match.ts';
 
 /**
  * 内容脚本（document_start）。manifest 里同时注入了 cloak.css：页面先整页透明，
@@ -7,9 +15,15 @@ import { ext, loadSettings, onSettingsChanged, type TabMessage, type TabStatus }
  * 全网防剧透模式下由后台用 scripting.registerContentScripts 注入同一个脚本。
  */
 async function main() {
-  const settings = await loadSettings();
   // manifest 静态注入的是站点模式；后台动态注册的全网模式会先运行 global-flag.js 设置这个标记
   const siteMode = !(globalThis as unknown as { __sffGlobal?: boolean }).__sffGlobal;
+  // 全网模式不处理防剧透网页本身：用户点「看完了，显示比分」后显示的比分不能再被遮住
+  // （后台注册时已经排除了这些地址，这里再兜一次底，和用户脚本的 isWebApp() 一致）
+  if (!siteMode && isWebAppUrl(location.href, WEB_MATCHES)) {
+    document.documentElement?.classList.add('sff-ready');
+    return;
+  }
+  const settings = await loadSettings();
   // 角标最多每秒更新一次（弹幕等内容会频繁触发）
   let lastBadge = -1;
   let badgeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -36,9 +50,10 @@ async function main() {
   });
 
   ext.runtime.onMessage.addListener((msg: TabMessage, _sender, sendResponse) => {
-    if (window !== window.top) return undefined;
+    // 临时显示/恢复对所有 frame 生效（B 站等把播放器、评论放在 iframe 里）；状态只由顶层页面回复
     if (msg.type === 'pause') controller.pause(msg.ms);
     if (msg.type === 'resume') controller.resume();
+    if (window !== window.top) return undefined;
     const stats = controller.shield?.stats;
     const status: TabStatus = {
       active: controller.active,

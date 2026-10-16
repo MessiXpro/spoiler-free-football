@@ -1,4 +1,4 @@
-import { expectNoSpoilers } from '../helpers/spoilers.ts';
+import { expectNoSpoilers, SAMPLE_NOW } from '../helpers/spoilers.ts';
 import { card, expect, MATCH_IDS, readSample, test } from './fixtures.ts';
 
 test.describe('昨夜今晨 → 集锦/录像 → 看完显示比分', () => {
@@ -70,6 +70,9 @@ test.describe('昨夜今晨 → 集锦/录像 → 看完显示比分', () => {
     expect(src.searchParams.get('bvid')).toBe('BV1sffSample');
     expect(src.searchParams.get('danmaku')).toBe('0');
     expect(src.searchParams.get('t')).toBe('0');
+    // 不允许播放器自己全屏（全屏后遮挡条盖不住时长和进度条）
+    expect(await iframe.getAttribute('allowfullscreen')).toBeNull();
+    expect(await iframe.getAttribute('allow')).not.toContain('fullscreen');
     await expect(c.getByTestId('embed-mask')).toBeVisible();
     expect(scoreRequests).toEqual([]);
   });
@@ -164,5 +167,18 @@ test.describe('昨夜今晨 → 集锦/录像 → 看完显示比分', () => {
     await page.getByTestId('confirm-ok').click();
     await expect(c.getByTestId('score-missing')).toBeVisible();
     await expect(c.getByTestId('watched-badge')).toBeVisible();
+  });
+});
+
+test.describe('数据过期提醒', () => {
+  test('数据是最新的时不提醒；超过两天没更新时提醒，提醒本身不含剧透', async ({ page }) => {
+    await page.goto('./#/today');
+    await expect(page.getByTestId('view-today')).toBeVisible();
+    await expect(page.getByTestId('stale-banner')).toHaveCount(0);
+
+    await page.clock.setFixedTime(new Date(SAMPLE_NOW.getTime() + 3 * 24 * 60 * 60 * 1000));
+    await page.reload();
+    await expect(page.getByTestId('stale-banner')).toContainText('超过两天没有更新');
+    await expectNoSpoilers(page);
   });
 });

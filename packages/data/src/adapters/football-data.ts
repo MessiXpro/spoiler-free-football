@@ -7,6 +7,7 @@ import {
   toInt,
 } from '../normalize.ts';
 import { DAY_MS, isoDate } from '../time.ts';
+import { envList, envValue } from '../env.ts';
 
 /**
  * football-data.org v4（需要免费注册 API Key，环境变量 FOOTBALL_DATA_TOKEN）。
@@ -143,8 +144,20 @@ export function parseFootballDataMatch(m: FdMatch): RawFixture | null {
       ...(pens ? { penalties: pens } : {}),
       ...(note ? { note } : {}),
     };
+    // 合并时优先用其他来源的正确比分，也不拿它算两回合总比分
+    if (note) fixture.scoreIncludesShootout = true;
+    if (duration === 'PENALTY_SHOOTOUT') fixture.penaltyShootout = true;
   }
   return fixture;
+}
+
+/** 正常响应一定有 matches 数组；报错内容（{ message, errorCode }）不缓存 */
+function hasMatches(body: string): boolean {
+  try {
+    return Array.isArray((JSON.parse(body) as { matches?: unknown }).matches);
+  } catch {
+    return false;
+  }
 }
 
 export function createFootballDataAdapter(): FixtureAdapter {
@@ -153,13 +166,17 @@ export function createFootballDataAdapter(): FixtureAdapter {
     name: 'football-data.org',
     priority: 40,
     unavailableReason: (env) =>
-      env.FOOTBALL_DATA_TOKEN ? null : '未设置 FOOTBALL_DATA_TOKEN，跳过',
+      envValue(env, 'FOOTBALL_DATA_TOKEN') ? null : '未设置 FOOTBALL_DATA_TOKEN，跳过',
     async fetch(ctx: AdapterContext): Promise<AdapterResult> {
-      const token = ctx.env.FOOTBALL_DATA_TOKEN ?? '';
-      const codes = (ctx.env.FOOTBALL_DATA_COMPETITIONS ?? FOOTBALL_DATA_FREE.join(','))
-        .split(',')
-        .map((c) => c.trim().toUpperCase())
-        .filter((c) => FOOTBALL_DATA_CODES[c]);
+      const token = envValue(ctx.env, 'FOOTBALL_DATA_TOKEN') ?? '';
+      // 部署工作流在仓库变量没设置时传进来的是空字符串：同样用免费档默认列表
+      const codes = envList(
+        ctx.env,
+        'FOOTBALL_DATA_COMPETITIONS',
+        FOOTBALL_DATA_FREE,
+        (c) => Boolean(FOOTBALL_DATA_CODES[c]),
+        (c) => c.toUpperCase(),
+      );
       const fixtures: RawFixture[] = [];
       const notes: string[] = [];
       // 每次最多 10 天；dateTo 不包含
@@ -176,6 +193,7 @@ export function createFootballDataAdapter(): FixtureAdapter {
             kind: 'api',
             headers: { 'X-Auth-Token': token },
             ttlMs: 50 * 60 * 1000,
+            cacheable: hasMatches,
           });
           if (!data.matches) {
             notes.push(`football-data ${from}~${to}：${data.message ?? '无数据'}`);

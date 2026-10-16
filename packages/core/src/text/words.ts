@@ -19,8 +19,10 @@ export const ZH_STRONG = [
   '梅开三度',
   '独中两元',
   '独中三元',
+  '独中四元',
   '戴帽',
   '传射建功',
+  '一传一射',
   '传射',
   '双响',
   '点球大战',
@@ -102,6 +104,9 @@ export const ZH_STRONG = [
   '收获胜利',
   '收获首胜',
   '拿下胜利',
+  '全取三分',
+  '带走三分',
+  '处子球',
   '赢球',
   '输球',
   '丢球',
@@ -174,6 +179,26 @@ export const ZH_CONTEXTUAL = [
   '先失一球',
   '先丢一球',
   '一球未进',
+  // 这些在别的领域也常用（"选举失利""股市开门红""游戏双杀"），只在足球语境遮挡
+  '失利',
+  '杀入',
+  '逆袭',
+  '双杀',
+  '助攻',
+  '开门红',
+  '平分秋色',
+  '功亏一篑',
+  // "无缘"单用常见于赛前伤停（"萨卡无缘出战"），只遮结果搭配
+  '无缘决赛',
+  '无缘晋级',
+  '无缘淘汰赛',
+  '无缘八强',
+  '无缘四强',
+  '无缘十六强',
+  '无缘夺冠',
+  '无缘冠军',
+  '无缘胜利',
+  '无缘三分',
 ];
 
 /** 不应遮挡的中性复合词（出现时优先保护） */
@@ -195,6 +220,15 @@ export const ZH_SAFE = [
   '加时赛规则',
   '红牌规则',
   '天下足球',
+  '助攻榜',
+  // 队名里含"胜利/Victory"，目录里没有（比尔森胜利在目录里）
+  '利雅得胜利',
+  '神户胜利船',
+  '墨尔本胜利',
+  'Melbourne Victory',
+  // 抽签仪式的 draw 见 EN_SAFE_PATTERNS（需要词边界，不能放在这里）
+  // 赛前伤停："ruled out of the derby"
+  'ruled out of the',
   // 浏览器/软件名里的英文词
   'Microsoft Edge',
   'Edge 浏览器',
@@ -203,6 +237,23 @@ export const ZH_SAFE = [
   'Chrome/Edge',
   'Edge / Firefox',
   'Edge/Firefox',
+];
+
+/**
+ * 英文保护写法（正则源码，不区分大小写）。ZH_SAFE 是不带边界的字面量，
+ * "draw pot" 会吃掉 "draw potentially"，所以抽签仪式的 draw 放在这里，两端都要求词边界。
+ * 只收不会和"打平"混淆的写法：
+ * - "the draw for the" 只认后面接轮次/阶段（"the draw for the last 16"），"the draw for the Gunners" 照遮；
+ * - 不收 "draw in full"："Watch Arsenal's 2-2 draw in full" 是整场回放，和抽签结果分不开。
+ */
+export const EN_SAFE_PATTERNS = [
+  '(?<![A-Za-z])draw (?:ceremon(?:y|ies)|dates?|pots?|seedings?)(?![A-Za-z\\-])',
+  // "X draw took place" 只认前面是赛事/轮次名（"FA Cup third round draw took place"），
+  // "The 0-0 draw took place at Anfield" "derby draw took place" 是赛果
+  '(?<![A-Za-z])(?:cup|league|round|stage|phase|knockout|semi-?finals?|quarter-?finals?|finals|play-?offs?|last (?:16|32|64)) draws? (?:takes|took|will take) place(?![A-Za-z])',
+  '(?<![A-Za-z])the draws? for the (?:last (?:16|32|64|sixteen|eight|four)|round of \\d|' +
+    '(?:first|second|third|fourth|fifth|sixth|next|knockout|group|league|play-?off|qualifying|preliminary) (?:round|stage|phase)|' +
+    'quarter-?finals?|semi-?finals?|group stages?|play-?offs?)(?![A-Za-z])(?!\\s+(?:in a row|running|opener))',
 ];
 
 /** 英文：强结果词（不区分大小写） */
@@ -360,6 +411,14 @@ export const EN_CONTEXTUAL = [
   'goal-fest',
   'masterclass',
   'dominant',
+  'reach the',
+  'reaches the',
+  'reached the',
+  'into the final',
+  'out of the',
+  'go top',
+  'goes top',
+  'went top',
 ];
 
 /** 进球者提示：中文人名后面跟这些词 */
@@ -383,6 +442,8 @@ export const ZH_SCORER_SUFFIX = [
   '双响',
   '独中两元',
   '独中三元',
+  '独中四元',
+  '一传一射',
   '打进',
   '攻入',
   '轰入',
@@ -435,6 +496,8 @@ export const EN_SCORER_VERBS = [
   'screamer',
   'wonder goal',
   'own goal',
+  'goal vs',
+  'goal against',
 ];
 
 /** 判断足球语境用的通用词 */

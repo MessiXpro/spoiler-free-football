@@ -7,8 +7,9 @@ export interface RawFixture {
   /** 数据源自己的比赛 id */
   sourceId: string;
   competition: string;
-  season: string;
-  stage: Stage;
+  /** 赛季/阶段/状态：手工补充条目没写时留空，合并时取其他来源的，都没有再用默认值 */
+  season?: string;
+  stage?: Stage;
   matchday?: number;
   group?: string;
   leg?: 1 | 2;
@@ -17,10 +18,14 @@ export interface RawFixture {
   timeTbd?: boolean;
   home: TeamRef;
   away: TeamRef;
-  status: ScheduleStatus;
+  status?: ScheduleStatus;
   /** 数据源确认已完赛（只用于决定是否生成比分文件，不进入公开数据） */
   finished: boolean;
   score?: Omit<ScoreRecord, 'id' | 'source' | 'updatedAt'>;
+  /** 比分里含点球大战进球（数据源没给点球比分，没法扣掉）：合并时排在其他来源后面 */
+  scoreIncludesShootout?: boolean;
+  /** 数据源说是点球大战决出胜负（不一定给了点球比分）。没有点球比分的看不出谁晋级，合并时排在完整的比分后面 */
+  penaltyShootout?: boolean;
 }
 
 export interface AdapterContext {

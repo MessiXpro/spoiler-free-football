@@ -1,16 +1,28 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import {
+  applyWebWatched,
   bootShield,
   currentMatchFor,
+  defaultRules,
   defaultShieldSettings,
+  hostDisabledBy,
   hostMatches,
   inSchedule,
   normalizeSettings,
+  type ShieldSettings,
 } from '../src/dom/index.ts';
 import { CLASS_READY } from '../src/dom/css.ts';
 
 const BASE = 'https://example.github.io/app/data/';
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** 全网模式全天开启（jsdom 页面域名是 localhost，没有站点规则） */
+function alwaysOn(): ShieldSettings {
+  const s = defaultShieldSettings(BASE);
+  s.global = { enabled: true, start: '00:00', end: '00:00', days: [0, 1, 2, 3, 4, 5, 6] };
+  return s;
+}
 
 describe('插件/脚本启动逻辑', () => {
   it('全网模式时段（含跨午夜）', () => {
@@ -89,5 +101,136 @@ describe('插件/脚本启动逻辑', () => {
     on.resume();
     expect(document.body.textContent).toBe('Arsenal ■-■ Chelsea');
     on.shield?.stop();
+  });
+
+  it('停用名单只覆盖该域名及其子域名：在子域名停用不会连带停用主站', () => {
+    document.documentElement.className = '';
+    document.body.innerHTML = '<p>曼联 2-1 利物浦</p>';
+    const c = bootShield(
+      document,
+      { ...alwaysOn(), disabledHosts: ['live.localhost'] },
+      { siteMode: false },
+    );
+    expect(c.active).toBe(true);
+    expect(document.body.textContent).toBe('曼联 ■-■ 利物浦');
+    // 设置更新时同样只按单向匹配
+    c.update({ ...alwaysOn(), disabledHosts: ['m.localhost'] });
+    expect(c.shield?.stats.paused).toBe(false);
+    c.update({ ...alwaysOn(), disabledHosts: ['localhost'] });
+    expect(c.shield?.stats.paused).toBe(true);
+    c.shield?.stop();
+    const off = bootShield(
+      document,
+      { ...alwaysOn(), disabledHosts: ['localhost'] },
+      {
+        siteMode: false,
+      },
+    );
+    expect(off.active).toBe(false);
+
+    expect(hostDisabledBy('www.bilibili.com', 'live.bilibili.com')).toBe(false);
+    expect(hostDisabledBy('bilibili.com', 'search.bilibili.com')).toBe(false);
+    expect(hostDisabledBy('sports.qq.com', 'kbs.sports.qq.com')).toBe(false);
+    expect(hostDisabledBy('www.miguvideo.com', 'm.miguvideo.com')).toBe(false);
+    expect(hostDisabledBy('www.bilibili.com', 'bilibili.com')).toBe(true);
+    expect(hostDisabledBy('bilibili.com', 'www.bilibili.com')).toBe(true);
+    expect(hostDisabledBy('live.bilibili.com', 'bilibili.com')).toBe(true);
+    expect(hostDisabledBy('live.bilibili.com', 'live.bilibili.com')).toBe(true);
+    // "正在看的比赛"仍按同平台双向匹配
+    expect(hostMatches('www.miguvideo.com', 'm.miguvideo.com')).toBe(true);
+  });
+
+  it('临时显示期间停用：旧计时器到期后不会重新打开遮挡', async () => {
+    document.documentElement.className = '';
+    document.body.innerHTML = '<p>阿森纳 2-1 切尔西</p>';
+    const settings = alwaysOn();
+    const c = bootShield(document, settings, { siteMode: false });
+    expect(document.body.textContent).toBe('阿森纳 ■-■ 切尔西');
+    c.pause(30);
+    expect(document.body.textContent).toBe('阿森纳 2-1 切尔西');
+    c.update({ ...settings, enabled: false });
+    await wait(80);
+    expect(document.body.textContent).toBe('阿森纳 2-1 切尔西');
+    expect(c.shield?.stats.paused).toBe(true);
+    // 停用期间点"恢复遮挡"也不打开
+    c.resume();
+    expect(c.shield?.stats.paused).toBe(true);
+    // 重新启用后恢复遮挡
+    c.update(settings);
+    expect(document.body.textContent).toBe('阿森纳 ■-■ 切尔西');
+    c.shield?.stop();
+  });
+
+  it('无关的设置写入不会提前结束临时显示', async () => {
+    document.documentElement.className = '';
+    document.body.innerHTML = '<p>曼联 2-1 利物浦</p>';
+    const settings = alwaysOn();
+    const c = bootShield(document, settings, { siteMode: false });
+    c.pause(5 * 60 * 1000);
+    c.update(normalizeSettings({ ...settings, rulesCheckedAt: Date.now() }, BASE));
+    c.update({ ...settings, watched: { x: 1 } });
+    expect(document.body.textContent).toBe('曼联 2-1 利物浦');
+    expect(c.shield?.stats.paused).toBe(true);
+    c.resume();
+    expect(document.body.textContent).toBe('曼联 ■-■ 利物浦');
+    // 计时器到期后照常恢复
+    c.pause(20);
+    c.update({ ...settings, watched: { y: 1 } });
+    expect(c.shield?.stats.paused).toBe(true);
+    await wait(60);
+    expect(document.body.textContent).toBe('曼联 ■-■ 利物浦');
+    c.shield?.stop();
+  });
+
+  it('存下的远程规则比内置规则旧时改用内置规则', () => {
+    const bundled = defaultRules();
+    const old = normalizeSettings(
+      { rules: { ...bundled, version: '2000-01-01', sites: [] } },
+      BASE,
+    );
+    expect(old.rules).toBeUndefined();
+    const same = normalizeSettings({ rules: bundled }, BASE);
+    expect(same.rules?.version).toBe(bundled.version);
+    const newer = normalizeSettings({ rules: { ...bundled, version: '2999-01-01' } }, BASE);
+    expect(newer.rules?.version).toBe('2999-01-01');
+  });
+
+  it('不工作时页面改写 <html class> 也不会重新变空白', async () => {
+    document.documentElement.className = '';
+    const c = bootShield(
+      document,
+      { ...defaultShieldSettings(BASE), enabled: false },
+      { siteMode: true },
+    );
+    expect(c.active).toBe(false);
+    document.documentElement.className = 'theme-dark';
+    await wait(0);
+    expect(document.documentElement.classList.contains('theme-dark')).toBe(true);
+    expect(document.documentElement.classList.contains(CLASS_READY)).toBe(true);
+  });
+});
+
+describe('applyWebWatched：网页发来的已看记录', () => {
+  it('unwatch 删掉这些 id', () => {
+    expect(applyWebWatched({ a: 10, b: 20 }, { type: 'unwatch', ids: ['a', 'x', 3] })).toEqual({
+      watched: { b: 20 },
+      changed: true,
+    });
+    expect(applyWebWatched({ b: 20 }, { type: 'unwatch', ids: ['a'] }).changed).toBe(false);
+  });
+
+  it('hello 丢掉网页删除之前的旧记录，删除之后重新看过的保留', () => {
+    const r = applyWebWatched(
+      { old: 100, again: 300, other: 50 },
+      { type: 'hello', watched: { fresh: 400, old: 90 }, unwatched: { old: 200, again: 200 } },
+    );
+    expect(r).toEqual({ watched: { again: 300, other: 50, fresh: 400 }, changed: true });
+  });
+
+  it('state 只加不减，也不看 unwatched', () => {
+    expect(
+      applyWebWatched({ a: 1 }, { type: 'state', watched: { b: 2, c: 'x' }, unwatched: { a: 5 } }),
+    ).toEqual({ watched: { a: 1, b: 2 }, changed: true });
+    expect(applyWebWatched({ a: 1 }, { type: 'state', watched: { a: 9 } }).changed).toBe(false);
   });
 });

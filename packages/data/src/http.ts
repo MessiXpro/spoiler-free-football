@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isAllowedByRobots, parseRobots, type RobotsRules } from './robots.ts';
 
@@ -9,6 +9,11 @@ export interface FetchOptions {
   ttlMs?: number;
   /** API 接口（官方提供给程序调用的地址）不检查 robots.txt；网页抓取必须检查 */
   kind?: 'api' | 'page';
+  /**
+   * 返回 false 表示这是数据源用 HTTP 200 返回的报错（额度用完、Key 无效等）：
+   * 不写缓存（否则之后几次运行都会重放这个错误）；有旧缓存时改用旧缓存
+   */
+  cacheable?: (body: string) => boolean;
 }
 
 export interface FetchResult {
@@ -52,6 +57,7 @@ export interface HttpFetcherConfig {
 }
 
 interface CacheEntry {
+  /** 去掉密钥后的 URL（缓存目录会被 GitHub Actions 缓存保存下来，不能带密钥） */
   url: string;
   status: number;
   etag?: string;
@@ -59,6 +65,22 @@ interface CacheEntry {
   fetchedAt: number;
   body: string;
 }
+
+/**
+ * 缓存文件名：v2- + 去掉密钥后的 URL 的哈希。
+ * 旧版（没有前缀）用带密钥的完整 URL 算文件名、文件里也存了完整 URL，启动时清掉。
+ */
+const CACHE_PREFIX = 'v2-';
+const LEGACY_CACHE_FILE = /^[0-9a-f]{32}\.json$/;
+
+const isJson = (body: string) => {
+  try {
+    JSON.parse(body);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const DEFAULT_UA =
   'SpoilerFreeFootball/0.1 (+https://github.com/MessiXpro/spoiler-free-football; schedule aggregator, low-rate)';
@@ -74,8 +96,30 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
 
   const cachePath = (url: string) =>
     config.cacheDir
-      ? join(config.cacheDir, `${createHash('sha256').update(url).digest('hex').slice(0, 32)}.json`)
+      ? join(
+          config.cacheDir,
+          `${CACHE_PREFIX}${createHash('sha256').update(redactUrl(url)).digest('hex').slice(0, 32)}.json`,
+        )
       : null;
+
+  let legacySwept = false;
+  /** 删掉旧版缓存文件（里面有明文 TheSportsDB Key）；只删符合旧文件名格式的 */
+  async function sweepLegacyCache() {
+    if (legacySwept || !config.cacheDir) return;
+    legacySwept = true;
+    const dir = config.cacheDir;
+    let names: string[] = [];
+    try {
+      names = await readdir(dir);
+    } catch {
+      return;
+    }
+    await Promise.all(
+      names
+        .filter((n) => LEGACY_CACHE_FILE.test(n))
+        .map((n) => rm(join(dir, n), { force: true }).catch(() => {})),
+    );
+  }
 
   async function readCache(url: string): Promise<CacheEntry | null> {
     const path = cachePath(url);
@@ -87,19 +131,22 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
     }
   }
 
-  async function writeCache(entry: CacheEntry) {
-    const path = cachePath(entry.url);
+  async function writeCache(url: string, entry: Omit<CacheEntry, 'url'>) {
+    const path = cachePath(url);
     if (!path || !config.cacheDir) return;
     await mkdir(config.cacheDir, { recursive: true });
-    await writeFile(path, JSON.stringify(entry));
+    // 文件里只存去掉密钥的 URL
+    await writeFile(path, JSON.stringify({ ...entry, url: redactUrl(url) }));
   }
 
   async function throttle(host: string) {
     const interval = config.minIntervalMs?.[host] ?? config.defaultIntervalMs ?? 1000;
-    const last = lastRequestAt.get(host) ?? 0;
-    const wait = last + interval - Date.now();
-    if (wait > 0) await sleep(wait);
-    lastRequestAt.set(host, Date.now());
+    const now = Date.now();
+    const prev = lastRequestAt.get(host);
+    const at = prev === undefined ? now : Math.max(now, prev + interval);
+    // 先占好发出时间再等待：并发的请求（Promise.all）不会读到同一个"上次请求时间"而一起发出
+    lastRequestAt.set(host, at);
+    if (at > now) await sleep(at - now);
   }
 
   async function robotsFor(origin: string): Promise<RobotsRules | null> {
@@ -117,6 +164,7 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
 
   async function getText(url: string, options: FetchOptions = {}): Promise<FetchResult> {
     const ttl = options.ttlMs ?? 60 * 60 * 1000;
+    await sweepLegacyCache();
     const cached = await readCache(url);
     if (cached && Date.now() - cached.fetchedAt < ttl) {
       return { status: cached.status, body: cached.body, fromCache: true };
@@ -150,7 +198,7 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
         throw err;
       }
       if (res.status === 304 && cached) {
-        await writeCache({ ...cached, fetchedAt: Date.now() });
+        await writeCache(url, { ...cached, fetchedAt: Date.now() });
         return { status: cached.status, body: cached.body, fromCache: true };
       }
       if ((res.status === 429 || res.status >= 500) && attempt < retries) {
@@ -161,9 +209,20 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
         continue;
       }
       const body = await res.text();
+      // 重试后仍是 429/5xx：跟网络错误一样用旧缓存，不让整个数据源在这次部署里消失
+      if ((res.status === 429 || res.status >= 500) && cached) {
+        log(`HTTP ${res.status}，使用旧缓存：${redactUrl(url)}`);
+        return { status: cached.status, body: cached.body, fromCache: true };
+      }
       if (!res.ok) throw new HttpError(res.status, url);
-      await writeCache({
-        url,
+      if (options.cacheable && !options.cacheable(body)) {
+        if (cached) {
+          log(`数据源返回报错内容，使用旧缓存：${redactUrl(url)}`);
+          return { status: cached.status, body: cached.body, fromCache: true };
+        }
+        return { status: res.status, body, fromCache: false };
+      }
+      await writeCache(url, {
         status: res.status,
         etag: res.headers.get('etag') ?? undefined,
         lastModified: res.headers.get('last-modified') ?? undefined,
@@ -176,8 +235,12 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
 
   return {
     getText,
-    async getJson<T>(url: string, options?: FetchOptions) {
-      const { body } = await getText(url, options);
+    async getJson<T>(url: string, options: FetchOptions = {}) {
+      const { body } = await getText(url, {
+        ...options,
+        // 不是合法 JSON 的响应（被截断、错误页）也不缓存
+        cacheable: (b) => isJson(b) && (options.cacheable?.(b) ?? true),
+      });
       return JSON.parse(body) as T;
     },
   };

@@ -8,7 +8,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(SHELL)
-      .then((cache) => cache.addAll(PRECACHE))
+      // cache: 'reload'：绕过浏览器 HTTP 缓存（GitHub Pages 的 HTML 有 10 分钟缓存），
+      // 否则新版本的缓存里可能存进旧的 index.html，指向已经被删掉的旧 JS，页面会一直白屏
+      .then((cache) => cache.addAll(PRECACHE.map((u) => new Request(u, { cache: 'reload' }))))
       .then(() => self.skipWaiting()),
   );
 });

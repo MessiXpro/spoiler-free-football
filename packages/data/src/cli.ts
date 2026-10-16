@@ -1,5 +1,6 @@
 import { join, resolve } from 'node:path';
 import { buildData, CONFIG_DIR, loadConfig, writeOutput } from './build.ts';
+import { envValue } from './env.ts';
 import { createHttpFetcher } from './http.ts';
 import { SAMPLE_DIR, SAMPLE_ENV, SAMPLE_NOW, sampleFetcher } from './sample.ts';
 
@@ -25,7 +26,8 @@ async function main() {
   const fetcher = sample
     ? sampleFetcher()
     : createHttpFetcher({
-        cacheDir: resolve(process.env.SFF_HTTP_CACHE ?? '.http-cache'),
+        // 空字符串当作未设置（否则 resolve('') 会把缓存写进当前目录）
+        cacheDir: resolve(envValue(process.env, 'SFF_HTTP_CACHE') ?? '.http-cache'),
         log,
         defaultIntervalMs: 1000,
         minIntervalMs: {
@@ -41,7 +43,7 @@ async function main() {
     env: sample ? SAMPLE_ENV : process.env,
     config,
     log,
-    pastDays: Number(arg('past-days') ?? 21),
+    pastDays: arg('past-days') ? Number(arg('past-days')) : undefined,
     futureDays: Number(arg('future-days') ?? 30),
   });
   await writeOutput(outDir, output);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   beijingDate,
+  isFixtureLocked,
   neutralTitle,
   programLockReasons,
   type Program,
@@ -25,11 +26,15 @@ function ProgramCard({
   program,
   episodes,
   reasons,
+  all,
+  state,
   now,
 }: {
   program: Program;
   episodes: ProgramEpisode[];
   reasons: PublicMatch[];
+  all: PublicMatch[];
+  state: UserState;
   now: Date;
 }) {
   const locked = reasons.length > 0;
@@ -64,7 +69,12 @@ function ProgramCard({
           <ul className="reason-list">
             {reasons.slice(0, 5).map((m) => (
               <li key={m.id}>
-                <a href={href({ name: 'match', id: m.id })}>{neutralTitle(m)}</a>
+                {isFixtureLocked(m, all, state, now) ? (
+                  // 对阵被锁定的淘汰赛：不显示队名，也不给链接（比赛编号里有队名）
+                  <span>{neutralTitle(m, { lockedTeams: true })}</span>
+                ) : (
+                  <a href={href({ name: 'match', id: m.id })}>{neutralTitle(m)}</a>
+                )}
               </li>
             ))}
             {reasons.length > 5 && <li>……共 {reasons.length} 场</li>}
@@ -158,6 +168,8 @@ export function ProgramsView({ data, state, now }: { data: AppData; state: UserS
             program={p}
             episodes={data.episodes.filter((e) => e.programId === p.id)}
             reasons={programLockReasons(p, data.matches, state, now)}
+            all={data.matches}
+            state={state}
             now={now}
           />
         ))}

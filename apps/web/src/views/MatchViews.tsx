@@ -1,5 +1,10 @@
+import { useState } from 'react';
 import {
   beijingDate,
+  isFixtureLocked,
+  isSubscribed,
+  isWatched,
+  liveStatus,
   matchesInWindow,
   nightWindow,
   unwatchedRecent,
@@ -22,6 +27,19 @@ const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '�
 function dayLabel(ms: number): string {
   const d = new Date(ms + 8 * 3600 * 1000);
   return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日（${WEEKDAYS[d.getUTCDay()]}）`;
+}
+
+/**
+ * "没看完"类列表：这次打开页面后在列表里出现过、之后被记为已看的比赛，先留在列表里（显示为已看）。
+ * 否则点了"看完了，显示比分"后卡片立刻消失，比分也就看不到了。离开页面再回来时才移出列表。
+ */
+function useKeepRevealed(list: PublicMatch[], all: PublicMatch[], state: UserState): PublicMatch[] {
+  const [seen] = useState(() => new Set<string>());
+  for (const m of list) seen.add(m.id);
+  const ids = new Set(list.map((m) => m.id));
+  return all
+    .filter((m) => ids.has(m.id) || (seen.has(m.id) && isWatched(state, m.id)))
+    .sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff) || a.id.localeCompare(b.id));
 }
 
 function MatchGrid({
@@ -48,10 +66,22 @@ export function TonightView({ data, state, now, offset }: ViewProps & { offset: 
   const w = nightWindow(now, offset);
   const list = matchesInWindow(data.matches, state, w);
   const inWindow = new Set(list.map((m) => m.id));
-  const older =
+  // 北京时间中午到午夜开球的比赛要到午夜才进"昨夜今晨"的时间窗，进行中时单独列出来
+  const live =
+    offset === 0
+      ? data.matches
+          .filter(
+            (m) => !inWindow.has(m.id) && liveStatus(m, now) === 'live' && isSubscribed(m, state),
+          )
+          .sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff))
+      : [];
+  const older = useKeepRevealed(
     offset === 0
       ? unwatchedRecent(data.matches, state, now, 7).filter((m) => !inWindow.has(m.id))
-      : [];
+      : [],
+    data.matches,
+    state,
+  ).filter((m) => !inWindow.has(m.id));
   const title = offset === 0 ? '昨夜今晨' : `往前第 ${-offset} 晚`;
   return (
     <section className="view" data-testid="view-today">
@@ -81,6 +111,12 @@ export function TonightView({ data, state, now, offset }: ViewProps & { offset: 
           )}
         </nav>
       </div>
+      {live.length > 0 && (
+        <div data-testid="live-now">
+          <h2 className="section-title">进行中</h2>
+          <MatchGrid matches={live} all={data.matches} state={state} now={now} />
+        </div>
+      )}
       {list.length ? (
         <MatchGrid matches={list} all={data.matches} state={state} now={now} />
       ) : (
@@ -99,7 +135,7 @@ export function TonightView({ data, state, now, offset }: ViewProps & { offset: 
 }
 
 export function UnwatchedView({ data, state, now }: ViewProps) {
-  const list = unwatchedRecent(data.matches, state, now, 21);
+  const list = useKeepRevealed(unwatchedRecent(data.matches, state, now, 21), data.matches, state);
   return (
     <section className="view" data-testid="view-unwatched">
       <div className="view-head">
@@ -155,10 +191,16 @@ export function MatchDetailView({ data, state, now, id }: ViewProps & { id: stri
       </section>
     );
   }
+  // 比赛编号由两队名字拼成，对阵被锁定时不能显示
+  const locked = isFixtureLocked(match, data.matches, state, now);
   return (
     <section className="view" data-testid="view-match">
       <MatchCard match={match} all={data.matches} state={state} now={now} expanded />
-      <p className="muted small">比赛编号：{match.id}（手工补充链接时用）</p>
+      {!locked && (
+        <p className="muted small" data-testid="match-id">
+          比赛编号：{match.id}（手工补充链接时用）
+        </p>
+      )}
     </section>
   );
 }

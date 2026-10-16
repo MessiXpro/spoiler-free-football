@@ -35,15 +35,21 @@ export function parseManual(config: ManualConfig): RawFixture[] {
       source: 'manual',
       sourceId: `manual-${i}`,
       competition: m.competition,
-      season: m.season ?? kickoff.slice(0, 4),
-      stage: m.stage ?? (m.competition === 'friendlies' ? 'friendly' : 'regular'),
+      // 没写的赛季/阶段/状态不填默认值：合并时取其他来源的。
+      // 否则一条只写了开球时间的改期条目会改掉比赛 id、把淘汰赛变成联赛（不再锁定对阵）、盖掉延期状态
+      ...(m.season ? { season: m.season } : {}),
+      ...(m.stage
+        ? { stage: m.stage }
+        : m.competition === 'friendlies'
+          ? { stage: 'friendly' as const }
+          : {}),
       ...(m.matchday ? { matchday: m.matchday } : {}),
       ...(m.group ? { group: m.group } : {}),
       kickoff,
       ...(m.timeTbd ? { timeTbd: true } : {}),
       home: teamRef(m.home, national),
       away: teamRef(m.away, national),
-      status: m.status ?? 'scheduled',
+      ...(m.status ? { status: m.status } : {}),
       finished: false,
     });
   }

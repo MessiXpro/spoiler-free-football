@@ -1,6 +1,7 @@
 import type { AdapterContext, AdapterResult, FixtureAdapter, RawFixture } from '../types.ts';
 import { isNationalCompetition, pair, stageFromApiFootball, teamRef } from '../normalize.ts';
 import { isoDate } from '../time.ts';
+import { envList, envValue } from '../env.ts';
 
 /**
  * API-Football v3（可选，环境变量 APIFOOTBALL_KEY）。
@@ -117,6 +118,7 @@ export function parseApiFootballFixture(f: AfFixture): RawFixture | null {
       ...(et && ft ? { regularTime: ft } : {}),
       ...(pens ? { penalties: pens } : {}),
     };
+    if (short === 'PEN') fixture.penaltyShootout = true;
   }
   return fixture;
 }
@@ -136,13 +138,13 @@ export function createApiFootballAdapter(): FixtureAdapter {
     id: 'api-football',
     name: 'API-Football',
     priority: 30,
-    unavailableReason: (env) => (env.APIFOOTBALL_KEY ? null : '未设置 APIFOOTBALL_KEY，跳过'),
+    unavailableReason: (env) =>
+      envValue(env, 'APIFOOTBALL_KEY') ? null : '未设置 APIFOOTBALL_KEY，跳过',
     async fetch(ctx: AdapterContext): Promise<AdapterResult> {
-      const key = ctx.env.APIFOOTBALL_KEY ?? '';
-      const leagues = (ctx.env.APIFOOTBALL_LEAGUES ?? DEFAULT_API_FOOTBALL_LEAGUES.join(','))
-        .split(',')
-        .map((x) => x.trim())
-        .filter((id) => API_FOOTBALL_LEAGUES[id]);
+      const key = envValue(ctx.env, 'APIFOOTBALL_KEY') ?? '';
+      const leagues = envList(ctx.env, 'APIFOOTBALL_LEAGUES', DEFAULT_API_FOOTBALL_LEAGUES, (id) =>
+        Boolean(API_FOOTBALL_LEAGUES[id]),
+      );
       const fixtures: RawFixture[] = [];
       const notes: string[] = [];
       const from = isoDate(ctx.windowStart);
@@ -169,6 +171,14 @@ export function createApiFootballAdapter(): FixtureAdapter {
             kind: 'api',
             headers: { 'x-apisports-key': key },
             ttlMs: 5 * 60 * 60 * 1000,
+            // 额度用完、Key 或套餐不对时接口仍返回 HTTP 200 + errors：不缓存，修好 Key 后下一次运行就能拿到数据
+            cacheable: (body) => {
+              try {
+                return !hasErrors((JSON.parse(body) as AfResponse).errors);
+              } catch {
+                return false;
+              }
+            },
           });
           const err = hasErrors(data.errors);
           if (err) {

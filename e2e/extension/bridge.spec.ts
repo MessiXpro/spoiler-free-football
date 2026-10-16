@@ -64,7 +64,7 @@ test('网页 → 插件联动：跳转时带上比赛；在插件弹窗里显示
   await expect(card.getByTestId('score-display')).toHaveCount(0);
 });
 
-test('网页上显示比分 → 插件里也记为已看', async ({ context }) => {
+test('网页上显示比分 → 插件里也记为已看；标记为没看 → 插件里也删掉', async ({ context }) => {
   await blockExternal(context);
   const web = await context.newPage();
   await web.clock.setFixedTime(SAMPLE_NOW);
@@ -83,4 +83,19 @@ test('网页上显示比分 → 插件里也记为已看', async ({ context }) =
       ),
     )
     .toContain('laliga-2026-27-atletico-real-madrid');
+
+  // 网页上「藏起比分并标记为没看」→ 插件里也删掉，刷新网页后不会被插件加回来
+  await card.getByRole('button', { name: '藏起比分并标记为没看' }).click();
+  await expect(card.getByTestId('watched-badge')).toHaveCount(0);
+  await expect
+    .poll(async () =>
+      sw.evaluate(async () =>
+        Object.keys((await chrome.storage.local.get('settings')).settings?.watched ?? {}),
+      ),
+    )
+    .not.toContain('laliga-2026-27-atletico-real-madrid');
+  await web.reload();
+  await expect(card).toBeVisible();
+  await web.waitForTimeout(500);
+  await expect(card.getByTestId('watched-badge')).toHaveCount(0);
 });

@@ -71,6 +71,11 @@ test.describe('淘汰赛对阵锁定', () => {
     await page.goto('./#/unwatched');
     await card(page, r16.id).getByTestId('reveal-button').click();
     await page.getByTestId('confirm-ok').click();
+    // 卡片留在「没看完」里显示结果（这场示例数据没有比分文件，显示"还没有比分"的提示）
+    await expect(
+      card(page, r16.id).locator('[data-testid=score-display],[data-testid=score-missing]'),
+    ).toBeVisible();
+    await expect(card(page, r16.id).getByTestId('watched-badge')).toBeVisible();
     await page.goto('./#/upcoming');
     await expect(card(page, qf.id)).toContainText('拜仁');
   });

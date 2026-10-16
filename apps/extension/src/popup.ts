@@ -1,4 +1,4 @@
-import { fetchScoreFrom, hostMatches } from '@sff/core/dom';
+import { fetchScoreFrom, hostDisabledBy, hostMatches } from '@sff/core/dom';
 import {
   DEFAULT_WEB_URL,
   ext,
@@ -79,13 +79,13 @@ async function main() {
   });
 
   const toggleSite = $<HTMLButtonElement>('toggle-site');
-  const disabled = settings.disabledHosts.some((h) => host && hostMatches(host, h));
+  const disabled = Boolean(host) && settings.disabledHosts.some((h) => hostDisabledBy(host, h));
   toggleSite.textContent = disabled ? '在此站点启用' : '在此站点停用';
   toggleSite.hidden = !host;
   toggleSite.addEventListener('click', async () => {
     const s = await loadSettings();
     const list = disabled
-      ? s.disabledHosts.filter((h) => !hostMatches(host, h))
+      ? s.disabledHosts.filter((h) => !hostDisabledBy(host, h))
       : [...s.disabledHosts, host];
     await saveSettings({ disabledHosts: list });
     window.close();

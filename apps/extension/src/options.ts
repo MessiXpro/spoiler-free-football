@@ -1,9 +1,24 @@
 import { HIDE_CATEGORIES, HIDE_CATEGORY_LABELS } from '@sff/core';
-import { defaultRules } from '@sff/core/dom';
+import { defaultRules, type ShieldSettings } from '@sff/core/dom';
 import { ext, loadSettings, saveSettings } from './api.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const DAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+/**
+ * 每次修改都基于存储里最新的设置合并（并且一个接一个写）：render() 拿到的 s 只是打开页面时的快照，
+ * 直接展开它会把刚改过的字段改回去（例如先改开始时间、再改结束时间）。
+ */
+let queue: Promise<unknown> = Promise.resolve();
+function update(patch: (cur: ShieldSettings) => Partial<ShieldSettings>): Promise<ShieldSettings> {
+  const next = queue.then(async () => saveSettings(patch(await loadSettings())));
+  queue = next.catch(() => {});
+  return next;
+}
+const saveGlobal = (p: Partial<ShieldSettings['global']>) =>
+  update((cur) => ({ global: { ...cur.global, ...p } }));
+const savePrefs = (p: (prefs: ShieldSettings['prefs']) => Partial<ShieldSettings['prefs']>) =>
+  update((cur) => ({ prefs: { ...cur.prefs, ...p(cur.prefs) } }));
 
 async function render() {
   const s = await loadSettings();
@@ -16,16 +31,11 @@ async function render() {
         [
           HIDE_CATEGORY_LABELS[c],
           s.prefs.hide[c],
-          (v: boolean) =>
-            saveSettings({ prefs: { ...s.prefs, hide: { ...s.prefs.hide, [c]: v } } }),
+          (v: boolean) => savePrefs((p) => ({ hide: { ...p.hide, [c]: v } })),
         ] as [string, boolean, (v: boolean) => Promise<unknown>],
     ),
-    [
-      '封面图（换成中性占位图）',
-      s.prefs.covers,
-      (v) => saveSettings({ prefs: { ...s.prefs, covers: v } }),
-    ],
-    ['标签页标题', s.prefs.title, (v) => saveSettings({ prefs: { ...s.prefs, title: v } })],
+    ['封面图（换成中性占位图）', s.prefs.covers, (v) => savePrefs(() => ({ covers: v }))],
+    ['标签页标题', s.prefs.title, (v) => savePrefs(() => ({ title: v }))],
   ];
   for (const [label, checked, onChange] of items) {
     const row = document.createElement('label');
@@ -50,7 +60,7 @@ async function render() {
         return;
       }
     }
-    await saveSettings({ global: { ...s.global, enabled: ge.checked } });
+    await saveGlobal({ enabled: ge.checked });
     $('global-msg').textContent = ge.checked ? '已开启。' : '已关闭。';
     void render();
   };
@@ -58,8 +68,8 @@ async function render() {
   const end = $<HTMLInputElement>('global-end');
   start.value = s.global.start;
   end.value = s.global.end;
-  start.onchange = () => void saveSettings({ global: { ...s.global, start: start.value } });
-  end.onchange = () => void saveSettings({ global: { ...s.global, end: end.value } });
+  start.onchange = () => void saveGlobal({ start: start.value });
+  end.onchange = () => void saveGlobal({ end: end.value });
   const days = $('global-days');
   days.innerHTML = '';
   DAYS.forEach((d, i) => {
@@ -68,12 +78,14 @@ async function render() {
     c.type = 'checkbox';
     c.checked = s.global.days.includes(i);
     c.onchange = () =>
-      void saveSettings({
+      void update((cur) => ({
         global: {
-          ...s.global,
-          days: c.checked ? [...s.global.days, i] : s.global.days.filter((x) => x !== i),
+          ...cur.global,
+          days: c.checked
+            ? [...new Set([...cur.global.days, i])].sort((a, b) => a - b)
+            : cur.global.days.filter((x) => x !== i),
         },
-      }).then(render);
+      })).then(render);
     l.append(c, document.createTextNode(`周${d}`));
     days.append(l);
   });
@@ -94,7 +106,9 @@ async function render() {
     const b = document.createElement('button');
     b.textContent = '恢复';
     b.onclick = () =>
-      void saveSettings({ disabledHosts: s.disabledHosts.filter((x) => x !== h) }).then(render);
+      void update((cur) => ({ disabledHosts: cur.disabledHosts.filter((x) => x !== h) })).then(
+        render,
+      );
     li.append(document.createTextNode(`${h} `), b);
     list.append(li);
   }
@@ -107,7 +121,7 @@ async function render() {
       return;
     }
     const v = base.value.endsWith('/') ? base.value : `${base.value}/`;
-    void saveSettings({ dataBase: v.endsWith('data/') ? v : `${v}data/` }).then(render);
+    void update(() => ({ dataBase: v.endsWith('data/') ? v : `${v}data/` })).then(render);
   };
 }
 

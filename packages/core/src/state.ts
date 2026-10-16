@@ -31,6 +31,11 @@ export interface UserState {
   settings: Settings;
   /** 最近修改时间（毫秒），合并同步数据时用 */
   updatedAt: number;
+  /**
+   * 订阅、赛事和设置的最近修改时间（毫秒）。标记已看等操作只更新 updatedAt，不更新这个，
+   * 否则只点了"显示比分"的设备会把别的设备上更新过的订阅盖掉。旧数据没有这一项时用 updatedAt。
+   */
+  prefsUpdatedAt?: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -91,7 +96,7 @@ export function sanitizeUserState(input: unknown): UserState {
   if (typeof rs.syncKey === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(rs.syncKey)) {
     settings.syncKey = rs.syncKey;
   }
-  return {
+  const out: UserState = {
     v: 1,
     teams: strArray(raw.teams) ?? base.teams,
     competitions: comps,
@@ -100,14 +105,23 @@ export function sanitizeUserState(input: unknown): UserState {
     settings,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : 0,
   };
+  if (typeof raw.prefsUpdatedAt === 'number' && Number.isFinite(raw.prefsUpdatedAt)) {
+    out.prefsUpdatedAt = raw.prefsUpdatedAt;
+  }
+  return out;
+}
+
+/** 订阅和设置的修改时间（旧数据没有单独记录时退回 updatedAt） */
+export function prefsTime(state: UserState): number {
+  return state.prefsUpdatedAt ?? state.updatedAt;
 }
 
 /**
  * 合并两份状态（例如导入同步码）：
- * 已看记录取并集；订阅和设置以较新的一份为准。
+ * 已看记录取并集；订阅和设置以较新的一份为准（按订阅和设置本身的修改时间，不看已看记录的变化）。
  */
 export function mergeUserState(local: UserState, incoming: UserState): UserState {
-  const newer = incoming.updatedAt >= local.updatedAt ? incoming : local;
+  const newer = prefsTime(incoming) >= prefsTime(local) ? incoming : local;
   const union = (a: Record<string, number>, b: Record<string, number>) => {
     const out = { ...a };
     for (const [k, v] of Object.entries(b)) out[k] = Math.max(out[k] ?? 0, v);
@@ -121,6 +135,7 @@ export function mergeUserState(local: UserState, incoming: UserState): UserState
     watched: union(local.watched, incoming.watched),
     unlocked: union(local.unlocked, incoming.unlocked),
     updatedAt: Math.max(local.updatedAt, incoming.updatedAt),
+    prefsUpdatedAt: Math.max(prefsTime(local), prefsTime(incoming)),
   };
 }
 
@@ -137,6 +152,23 @@ export function isSubscribed(match: PublicMatch, state: UserState): boolean {
 
 export function isWatched(state: UserState, matchId: string): boolean {
   return Boolean(state.watched[matchId]);
+}
+
+/**
+ * 延期/取消的比赛没有比分可看，用户可以手动"标记为已看"，解除它对节目和下一轮对阵的折叠。
+ * 比赛 id 里没有日期，改期后重新安排的那场还是同一个 id，所以不能记进 watched，
+ * 而是按原定开球时间记一条解锁：改期后的那场照常算没看。
+ */
+export function postponedClearKey(match: Pick<PublicMatch, 'id' | 'kickoff'>): string {
+  return `postponed:${match.id}:${Date.parse(match.kickoff)}`;
+}
+
+/** 这场延期/取消的比赛是否被手动标记过（状态恢复正常或开球时间变了就不再算） */
+export function isPostponedCleared(
+  state: UserState,
+  match: Pick<PublicMatch, 'id' | 'kickoff' | 'status'>,
+): boolean {
+  return match.status !== 'scheduled' && Boolean(state.unlocked[postponedClearKey(match)]);
 }
 
 const HOUR = 60 * 60 * 1000;
@@ -210,6 +242,9 @@ export function upcomingMatches(
     .sort(byKickoff);
 }
 
+/** 往前看多少天内的前一轮比赛（数据管线默认也公开这么多天的已结束比赛，见 packages/data/src/build.ts） */
+export const FIXTURE_LOCK_LOOKBACK_DAYS = 60;
+
 /**
  * 淘汰赛对阵会暴露前一轮的晋级者。
  * 如果这两支球队在同一赛事里还有更早阶段、已结束但没看完的订阅比赛，就锁定队名。
@@ -232,10 +267,12 @@ export function isFixtureLocked(
     if (prev.season !== match.season) return false;
     if (!teams.has(prev.home.id) && !teams.has(prev.away.id)) return false;
     const t = Date.parse(prev.kickoff);
-    if (t >= kickoff || kickoff - t > 60 * DAY) return false;
+    if (t >= kickoff || kickoff - t > FIXTURE_LOCK_LOOKBACK_DAYS * DAY) return false;
     // 同一轮的首回合不暴露次回合对阵
     if (stageOrder(prev.stage) >= order) return false;
-    if (liveStatus(prev, now) === 'upcoming') return false;
+    // 还没到开球时间的不算（包括提前宣布延期/取消的比赛）
+    if (t > now.getTime() || liveStatus(prev, now) === 'upcoming') return false;
+    if (isPostponedCleared(state, prev)) return false;
     return isSubscribed(prev, state) && !isWatched(state, prev.id);
   });
 }
@@ -255,7 +292,10 @@ export function programLockReasons(
       (program.relatedCompetitions.length === 0 ||
         program.relatedCompetitions.includes(m.competition)) &&
       Date.parse(m.kickoff) >= since &&
+      // 还没到开球时间的不算（提前宣布延期/取消的比赛 liveStatus 不是 upcoming，要单独排除）
+      Date.parse(m.kickoff) <= now.getTime() &&
       liveStatus(m, now) !== 'upcoming' &&
+      !isPostponedCleared(state, m) &&
       isSubscribed(m, state) &&
       !isWatched(state, m.id),
   );

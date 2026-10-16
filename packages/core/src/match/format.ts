@@ -25,10 +25,13 @@ const STAGE_LABELS: Record<Stage, string> = {
   friendly: '',
 };
 
-/** 淘汰赛阶段的先后，用于"下一轮对阵会暴露晋级者"的锁定判断 */
+/**
+ * 淘汰赛阶段的先后，用于"下一轮对阵会暴露晋级者"的锁定判断。
+ * 附加赛排在小组赛/联赛阶段之后、第一轮之前：欧冠/欧联的淘汰附加赛对阵会暴露联赛阶段的排名。
+ */
 const STAGE_ORDER: Record<Stage, number> = {
   qualifying: 0,
-  playoff: 1,
+  playoff: 1.5,
   regular: 1,
   'league-phase': 1,
   group: 1,

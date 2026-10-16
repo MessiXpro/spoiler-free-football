@@ -20,8 +20,17 @@ export function parseHash(hash: string): Route {
     case 'settings':
     case 'about':
       return { name: head };
-    case 'match':
-      return arg ? { name: 'match', id: decodeURIComponent(arg) } : { name: 'today', offset: 0 };
+    case 'match': {
+      if (!arg) return { name: 'today', offset: 0 };
+      // 手改/截断的链接可能带不完整的 %xx，解码失败就按原样当编号（显示"找不到这场比赛"），不能让整页崩掉
+      let id = arg;
+      try {
+        id = decodeURIComponent(arg);
+      } catch {
+        /* 保留原样 */
+      }
+      return { name: 'match', id };
+    }
     case 'import':
       return { name: 'import', code: parts.slice(1).join('/') };
     case 'today': {

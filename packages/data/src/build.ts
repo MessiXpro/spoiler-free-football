@@ -1,7 +1,13 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_SITE_RULES_JSON, redact, type DataMeta, type PublicMatch } from '@sff/core';
+import {
+  DEFAULT_SITE_RULES_JSON,
+  FIXTURE_LOCK_LOOKBACK_DAYS,
+  redact,
+  type DataMeta,
+  type PublicMatch,
+} from '@sff/core';
 import { createApiFootballAdapter } from './adapters/api-football.ts';
 import { createFootballDataAdapter } from './adapters/football-data.ts';
 import { createManualAdapter, type ManualConfig } from './adapters/manual.ts';
@@ -9,7 +15,8 @@ import { createOpenfootballAdapter } from './adapters/openfootball.ts';
 import { createTheSportsDbAdapter } from './adapters/thesportsdb.ts';
 import type { Fetcher } from './http.ts';
 import { buildLinks, type BroadcastConfig, type LinksConfig } from './links.ts';
-import { mergeFixtures } from './merge.ts';
+import { cleanEnv } from './env.ts';
+import { MAX_LEG_GAP_DAYS, mergeFixtures } from './merge.ts';
 import { assertNoLeaks } from './privacy.ts';
 import { publicProgram, scheduledEpisodes, type ProgramsConfig } from './programs.ts';
 import { DAY_MS, seasonOf } from './time.ts';
@@ -71,13 +78,21 @@ export interface BuildOutput {
 /** 跑一遍完整管线（不写盘），方便测试 */
 export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
   const log = opts.log ?? (() => {});
-  const windowStart = new Date(opts.now.getTime() - (opts.pastDays ?? 21) * DAY_MS);
+  // GitHub Actions 里没设置的变量是空字符串，统一当作未设置
+  const env = cleanEnv(opts.env);
+  // 公开的已结束比赛要覆盖淘汰赛锁定往前看的天数：否则更早一轮没看完的比赛不在数据里，后一轮对阵就锁不住
+  const pastDays = opts.pastDays ?? FIXTURE_LOCK_LOOKBACK_DAYS;
+  // 公开的时间窗
+  const windowStart = new Date(opts.now.getTime() - pastDays * DAY_MS);
   const windowEnd = new Date(opts.now.getTime() + (opts.futureDays ?? 30) * DAY_MS);
+  // 拉取的时间窗更长：两回合淘汰赛的首回合可能在 4~5 周前，只用来配对首/次回合、算总比分，不公开
+  const fetchStart = new Date(opts.now.getTime() - Math.max(pastDays, MAX_LEG_GAP_DAYS) * DAY_MS);
+  const published = (kickoff: string) => Date.parse(kickoff) >= windowStart.getTime();
   const ctx: AdapterContext = {
     fetcher: opts.fetcher,
     now: opts.now,
-    env: opts.env,
-    windowStart,
+    env,
+    windowStart: fetchStart,
     windowEnd,
     log,
   };
@@ -87,7 +102,7 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
   const all: RawFixture[] = [];
 
   for (const adapter of adapters) {
-    const reason = adapter.unavailableReason?.(opts.env);
+    const reason = adapter.unavailableReason?.(env);
     if (reason) {
       sources.push({ id: adapter.id, name: adapter.name, ok: false, count: 0, note: reason });
       continue;
@@ -99,7 +114,8 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
         id: adapter.id,
         name: adapter.name,
         ok: true,
-        count: result.fixtures.length,
+        // 只数公开时间窗内的（多拉的历史只用来配对两回合）
+        count: result.fixtures.filter((f) => published(f.kickoff)).length,
         ...(result.notes.length ? { note: result.notes.join('；') } : {}),
       });
     } catch (err) {
@@ -115,7 +131,9 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
 
   const priority = Object.fromEntries(adapters.map((a) => [a.id, a.priority]));
   const generatedAt = opts.now.toISOString();
-  const merged = mergeFixtures(all, priority, generatedAt);
+  const merged = mergeFixtures(all, priority, generatedAt, opts.now).filter(({ match }) =>
+    published(match.kickoff),
+  );
   const matches: PublicMatch[] = merged.map(({ match }) => ({
     ...match,
     links: buildLinks(match, opts.config.broadcast, opts.config.links, (w) => warnings.push(w)),

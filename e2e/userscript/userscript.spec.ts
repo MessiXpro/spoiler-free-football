@@ -220,30 +220,45 @@ test.describe('用户脚本（.user.js，document-start 注入）', () => {
     await expect(card.getByTestId('watched-badge')).toBeVisible();
   });
 
-  test('全网版：开启时段后普通网站也做通用识别；未开启时不处理', async ({ browser }) => {
-    for (const enabled of [false, true]) {
-      const context = await browser.newContext();
+  test('全网版：刚安装就默认开启（时段内普通网站也做通用识别）；关掉后不处理', async ({
+    browser,
+  }) => {
+    const days = [0, 1, 2, 3, 4, 5, 6];
+    const cases: Array<{ name: string; stored?: unknown; masked: boolean }> = [
+      // 刚安装、没有任何设置：默认时段 06:00–12:00，测试时间是北京时间早上 09:00
+      { name: '默认', masked: true },
+      {
+        name: '关闭',
+        stored: { global: { enabled: false, start: '06:00', end: '12:00', days } },
+        masked: false,
+      },
+      {
+        name: '全天',
+        stored: { global: { enabled: true, start: '00:00', end: '00:00', days } },
+        masked: true,
+      },
+    ];
+    for (const c of cases) {
+      const context = await browser.newContext({ timezoneId: 'Asia/Shanghai' });
+      await context.clock.setFixedTime(SAMPLE_NOW);
       await blockExternal(context);
       await serveSite(context, /^https:\/\/www\.example\.com\//, sitePage('neutral-site.html'));
-      await context.addInitScript((on: boolean) => {
-        localStorage.setItem(
-          'sff-userscript:settings',
-          JSON.stringify({
-            global: { enabled: on, start: '00:00', end: '00:00', days: [0, 1, 2, 3, 4, 5, 6] },
-          }),
-        );
-      }, enabled);
+      if (c.stored) {
+        await context.addInitScript((stored: string) => {
+          localStorage.setItem('sff-userscript:settings', stored);
+        }, JSON.stringify(c.stored));
+      }
       await context.addInitScript({ path: GLOBAL_SCRIPT });
       const page = await context.newPage();
       await page.goto('https://www.example.com/');
       await page.waitForTimeout(300);
-      if (enabled) {
-        await expect(page.locator('#t')).toHaveText('Arsenal ■-■ Chelsea');
-        await expect(page).toHaveTitle('Example: Arsenal ■-■ Chelsea');
+      if (c.masked) {
+        await expect(page.locator('#t'), c.name).toHaveText('Arsenal ■-■ Chelsea');
+        await expect(page, c.name).toHaveTitle('Example: Arsenal ■-■ Chelsea');
       } else {
-        await expect(page.locator('#t')).toHaveText('Arsenal 2-1 Chelsea');
+        await expect(page.locator('#t'), c.name).toHaveText('Arsenal 2-1 Chelsea');
       }
-      await expect(page.locator('html')).toHaveClass(/sff-ready/);
+      await expect(page.locator('html'), c.name).toHaveClass(/sff-ready/);
       await context.close();
     }
   });

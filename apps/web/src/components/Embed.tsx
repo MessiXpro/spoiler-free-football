@@ -32,6 +32,11 @@ export function Embed({ match, link, mask, liveMode, onClose }: Props) {
   const [maskOn, setMaskOn] = useState(mask || Boolean(liveMode));
   const wrapRef = useRef<HTMLDivElement>(null);
   if (!link.embed) return null;
+  // iPhone 的 Safari 不支持让普通元素全屏，没有就不显示「全屏」按钮
+  const canFullscreen =
+    typeof document !== 'undefined' &&
+    document.fullscreenEnabled === true &&
+    typeof HTMLElement.prototype.requestFullscreen === 'function';
 
   const fullscreen = () => {
     // 全屏的是外层容器，所以遮挡条在全屏时仍然有效
@@ -57,8 +62,9 @@ export function Embed({ match, link, mask, liveMode, onClose }: Props) {
           <iframe
             title={`${match.home.name} vs ${match.away.name}`}
             src={bilibiliEmbedUrl(link.embed.bvid, link.embed.page ?? 1)}
-            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-            allowFullScreen
+            // 不允许播放器自己全屏（双击画面、快捷键）：那样全屏的只有 iframe，遮挡条盖不住，
+            // 时长和进度条会露出来。全屏只走下面的「全屏」按钮（全屏外层容器，遮挡条仍然有效）
+            allow="autoplay; encrypted-media; picture-in-picture"
             sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
             referrerPolicy="strict-origin-when-cross-origin"
             data-testid="embed-iframe"
@@ -73,9 +79,16 @@ export function Embed({ match, link, mask, liveMode, onClose }: Props) {
       <div className="embed-toolbar">
         {playing && (
           <>
-            <button type="button" className="btn btn-small" onClick={fullscreen}>
-              全屏
-            </button>
+            {canFullscreen && (
+              <button
+                type="button"
+                className="btn btn-small"
+                onClick={fullscreen}
+                data-testid="embed-fullscreen"
+              >
+                全屏
+              </button>
+            )}
             <button type="button" className="btn btn-small" onClick={() => setMaskOn((v) => !v)}>
               {maskOn ? '移开遮挡条' : '加回遮挡条'}
             </button>

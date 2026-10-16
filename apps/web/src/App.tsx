@@ -22,6 +22,9 @@ const NAV: Array<{ route: Route; label: string; icon: string; match: Route['name
   },
 ];
 
+/** 数据超过这么久没更新就提醒 */
+const STALE_MS = 48 * 60 * 60 * 1000;
+
 const TITLES: Record<Route['name'], string> = {
   today: '昨夜今晨',
   unwatched: '没看完',
@@ -46,6 +49,9 @@ export function App() {
   }, [route.name]);
 
   let body: React.ReactNode;
+  // 数据管线停了（例如仓库 60 天没有活动，GitHub 会自动停用定时任务）时提醒一下，提醒本身不带任何赛果
+  const generatedAt = data.status === 'ready' ? Date.parse(data.data.meta?.generatedAt ?? '') : NaN;
+  const stale = Number.isFinite(generatedAt) && now.getTime() - generatedAt > STALE_MS;
   if (route.name === 'import') {
     body = <ImportView code={route.code} state={state} />;
   } else if (route.name === 'settings') {
@@ -63,7 +69,10 @@ export function App() {
     const d = data.data;
     switch (route.name) {
       case 'today':
-        body = <TonightView data={d} state={state} now={now} offset={route.offset} />;
+        // 换一晚就重新挂载，"刚看完先留在列表里"只在同一晚的页面里生效
+        body = (
+          <TonightView key={route.offset} data={d} state={state} now={now} offset={route.offset} />
+        );
         break;
       case 'unwatched':
         body = <UnwatchedView data={d} state={state} now={now} />;
@@ -106,7 +115,14 @@ export function App() {
           </a>
         </nav>
       </header>
-      <main className="main">{body}</main>
+      <main className="main">
+        {stale && route.name !== 'settings' && route.name !== 'import' ? (
+          <p className="stale-banner" role="status" data-testid="stale-banner">
+            数据已经超过两天没有更新，请检查 GitHub Actions 里的「数据更新与部署」是否被停用。
+          </p>
+        ) : null}
+        {body}
+      </main>
       <nav className="tabbar" aria-label="底部导航">
         {NAV.map((n) => (
           <a

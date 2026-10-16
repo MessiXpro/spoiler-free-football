@@ -90,6 +90,15 @@ export function cupRound(n: number): Stage {
   return `round-${clamped}` as Stage;
 }
 
+/** intRound 一直是轮次（不用杯赛编码 16/32/64）的赛事：联赛和预选赛 */
+export function theSportsDbRoundIsMatchday(competition: string): boolean {
+  return (
+    getCompetition(competition)?.kind === 'league' ||
+    competition === 'wc-qualifiers' ||
+    competition === 'euro-qualifiers'
+  );
+}
+
 /**
  * TheSportsDB 的 intRound：联赛是轮次；杯赛用特殊编码
  * （125 = 1/4 决赛，150 = 半决赛，160 = 附加赛，200 = 决赛，400 = 资格赛，500 = 季前赛）
@@ -102,6 +111,12 @@ export function stageFromTheSportsDb(
   const comp = getCompetition(competition);
   if (!Number.isFinite(n)) return { stage: 'regular' };
   if (competition === 'friendlies') return { stage: 'friendly' };
+  // 联赛第 16、32 轮不是 1/8、1/16 决赛：先按轮次处理，100 以上的编码（附加赛、季前赛等）照旧
+  if (n >= 1 && n < 100 && theSportsDbRoundIsMatchday(competition)) {
+    return comp?.kind === 'league'
+      ? { stage: 'regular', matchday: n }
+      : { stage: 'group', matchday: n };
+  }
   switch (n) {
     case 125:
       return { stage: 'quarter-final' };

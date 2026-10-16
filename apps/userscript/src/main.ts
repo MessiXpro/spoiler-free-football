@@ -1,9 +1,10 @@
 import { isNewerRules, matchSite, validateSiteRules } from '@sff/core';
 import {
+  applyWebWatched,
   bootShield,
   currentMatchFor,
   defaultRules,
-  hostMatches,
+  hostDisabledBy,
   installCloak,
   installShadowHook,
   normalizeSettings,
@@ -13,6 +14,7 @@ import {
   type ShieldSettings,
 } from '@sff/core/dom';
 import { mountPanel } from './panel.ts';
+import { isTimeValue, parseTimeWindow } from './schedule.ts';
 import {
   getJson,
   getValue,
@@ -29,6 +31,9 @@ declare const __SFF_VARIANT__: 'sites' | 'global';
 const WEB_URL = __SFF_WEB_URL__;
 const DEFAULT_DATA_BASE = new URL('data/', WEB_URL).href;
 const KEY = 'settings';
+/** 父页面通知 iframe 里的脚本临时显示/恢复 */
+const FRAME_MSG = 'sff-userscript-frames';
+const MAX_PAUSE = 5 * 60 * 1000;
 
 /** 当前页面是不是防剧透网页本身 */
 function isWebApp(): boolean {
@@ -37,7 +42,14 @@ function isWebApp(): boolean {
 }
 
 async function load(): Promise<ShieldSettings> {
-  return normalizeSettings(await getValue<Partial<ShieldSettings>>(KEY), DEFAULT_DATA_BASE);
+  const raw = await getValue<Partial<ShieldSettings>>(KEY);
+  const s = normalizeSettings(raw, DEFAULT_DATA_BASE);
+  // 全网版：装了这个版本就是要全网防剧透，没设置过时默认开启（时段用默认的 06:00–12:00）；
+  // 用户自己关掉的保持关闭
+  if (__SFF_VARIANT__ === 'global' && typeof raw?.global?.enabled !== 'boolean') {
+    s.global = { ...s.global, enabled: true };
+  }
+  return s;
 }
 
 async function save(patch: Partial<ShieldSettings>): Promise<ShieldSettings> {
@@ -57,17 +69,6 @@ function runBridge() {
   const target = location.origin === 'null' ? '*' : location.origin;
   const post = (watched: Record<string, number>) =>
     window.postMessage({ source: 'sff-shield', type: 'watched', watched }, target);
-  const merge = (a: Record<string, number>, b?: Record<string, number>) => {
-    const out = { ...a };
-    let changed = false;
-    for (const [id, t] of Object.entries(b ?? {})) {
-      if (typeof t === 'number' && !out[id]) {
-        out[id] = t;
-        changed = true;
-      }
-    }
-    return { out, changed };
-  };
   window.addEventListener('message', async (e: MessageEvent) => {
     if (e.source !== window) return;
     const d = e.data as {
@@ -75,6 +76,8 @@ function runBridge() {
       type?: string;
       dataBase?: string;
       watched?: Record<string, number>;
+      unwatched?: Record<string, number>;
+      ids?: string[];
       url?: string;
       liveMode?: boolean;
       match?: Omit<CurrentMatch, 'url' | 'host' | 'at'>;
@@ -89,13 +92,13 @@ function runBridge() {
       ) {
         patch.dataBase = d.dataBase;
       }
-      const { out, changed } = merge(s.watched, d.watched);
-      if (changed) patch.watched = out;
+      const { watched, changed } = applyWebWatched(s.watched, d);
+      if (changed) patch.watched = watched;
       if (Object.keys(patch).length) await save(patch);
-      post(out);
-    } else if (d.type === 'state') {
-      const { out, changed } = merge(s.watched, d.watched);
-      if (changed) await save({ watched: out });
+      post(watched);
+    } else if (d.type === 'state' || d.type === 'unwatch') {
+      const { watched, changed } = applyWebWatched(s.watched, d);
+      if (changed) await save({ watched });
     } else if (d.type === 'open-match' && d.match && d.url) {
       try {
         const host = new URL(d.url).hostname;
@@ -125,10 +128,13 @@ async function updateRules(s: ShieldSettings) {
     const { status, json } = await getJson(new URL('site-rules.json', s.dataBase).href);
     const remote = status === 200 ? validateSiteRules(json) : null;
     const current = s.rules ?? defaultRules();
+    // 不比当前旧、内容又不同就采用：改了规则忘记把 version 改大，已安装的脚本也能用上
+    const adopt =
+      remote &&
+      !isNewerRules(current.version, remote.version) &&
+      JSON.stringify(remote) !== JSON.stringify(current);
     await save(
-      remote && isNewerRules(remote.version, current.version)
-        ? { rules: remote, rulesCheckedAt: Date.now() }
-        : { rulesCheckedAt: Date.now() },
+      adopt ? { rules: remote, rulesCheckedAt: Date.now() } : { rulesCheckedAt: Date.now() },
     );
   } catch {
     /* 离线时下次再试 */
@@ -154,14 +160,70 @@ async function runShield() {
     return;
   }
   let controller: ShieldController = bootShield(document, settings, { siteMode });
-
   const isTop = window === window.top;
+
+  // 临时显示/恢复也传给页面里的 iframe（播放器、评论区常放在 iframe 里，每个 frame 各跑一份脚本）
+  const forward = (type: 'pause' | 'resume', ms?: number) => {
+    for (let i = 0; i < window.frames.length; i++) {
+      try {
+        window.frames[i]!.postMessage({ source: FRAME_MSG, type, ms }, '*');
+      } catch {
+        /* 已经关掉的 frame */
+      }
+    }
+  };
+  const pauseAll = (ms: number) => {
+    controller.pause(ms);
+    forward('pause', ms);
+  };
+  const resumeAll = () => {
+    controller.resume();
+    forward('resume');
+  };
+  if (!isTop) {
+    window.addEventListener('message', (e: MessageEvent) => {
+      if (e.source !== window.parent) return;
+      const d = e.data as { source?: string; type?: string; ms?: unknown } | null;
+      if (d?.source !== FRAME_MSG) return;
+      if (d.type === 'pause') {
+        pauseAll(typeof d.ms === 'number' && d.ms > 0 ? Math.min(d.ms, MAX_PAUSE) : MAX_PAUSE);
+      } else if (d.type === 'resume') resumeAll();
+    });
+  }
+  /** 给面板和菜单用：暂停/恢复时连同 iframe 一起 */
+  const withFrames = (): ShieldController => ({
+    ...controller,
+    pause: (ms = MAX_PAUSE) => pauseAll(ms),
+    resume: resumeAll,
+  });
+
+  /**
+   * 全网版：修改全网防剧透时段。没有站点规则的页面受时段影响，刷新一下让新设置生效
+   * （视频网站按站点规则工作、不受影响，不刷新，免得打断播放）
+   */
+  const saveGlobal = async (patch: Partial<ShieldSettings['global']>) => {
+    const cur = await load();
+    settings = await save({ global: { ...cur.global, ...patch } });
+    if (!siteMode) location.reload();
+  };
+
   if (isTop && controller.active) {
     const panel = mountPanel({
-      controller: () => controller,
+      controller: withFrames,
       currentMatch: () => currentMatchFor(settings, location.hostname),
       isWatched: (id) => Boolean(settings.watched[id]),
       webUrl: () => settings.dataBase.replace(/data\/?$/, '') || WEB_URL,
+      globalWindow:
+        __SFF_VARIANT__ === 'global'
+          ? {
+              get: () => settings.global,
+              save: async (start, end) => {
+                if (!isTimeValue(start) || !isTimeValue(end)) return '请填写开始和结束时间';
+                await saveGlobal({ enabled: true, start, end });
+                return siteMode ? '已保存，其他网站下次打开时生效' : '已保存';
+              },
+            }
+          : undefined,
       disableSite: async () => {
         settings = await save({ disabledHosts: [...settings.disabledHosts, location.hostname] });
         controller.update(settings);
@@ -193,11 +255,11 @@ async function runShield() {
       },
     });
     registerMenu('防剧透：临时显示 5 分钟', () => {
-      controller.pause(5 * 60 * 1000);
+      pauseAll(MAX_PAUSE);
       panel.refresh();
     });
     registerMenu('防剧透：恢复遮挡', () => {
-      controller.resume();
+      resumeAll();
       panel.refresh();
     });
     registerMenu('防剧透：在此站点停用', async () => {
@@ -205,12 +267,35 @@ async function runShield() {
       controller.update(settings);
     });
   }
-  registerMenu('防剧透：在所有站点重新启用', async () => {
-    settings = await save({
-      disabledHosts: settings.disabledHosts.filter((h) => !hostMatches(location.hostname, h)),
-    });
-    controller = bootShield(document, settings, { siteMode });
+  registerMenu('防剧透：在此站点重新启用', async () => {
+    // 只去掉覆盖当前域名的停用项（和插件弹窗的「在此站点启用」一致）
+    const list = settings.disabledHosts.filter((h) => !hostDisabledBy(location.hostname, h));
+    if (list.length === settings.disabledHosts.length) return;
+    settings = await save({ disabledHosts: list });
+    if (controller.active) controller.update(settings);
+    else controller = bootShield(document, settings, { siteMode });
   });
+  if (__SFF_VARIANT__ === 'global' && isTop) {
+    const g = settings.global;
+    const range = `${g.start}–${g.end}`;
+    registerMenu(
+      g.enabled ? `防剧透：关闭全网模式（当前 ${range}）` : '防剧透：开启全网模式',
+      () => void saveGlobal({ enabled: !g.enabled }),
+    );
+    registerMenu('防剧透：设置全网时段', () => {
+      const input = window.prompt(
+        '全网防剧透时段，例如 06:00-12:00（00:00-00:00 表示全天）',
+        `${settings.global.start}-${settings.global.end}`,
+      );
+      if (input == null) return;
+      const t = parseTimeWindow(input);
+      if (!t) {
+        window.alert('格式不对，例如 06:00-12:00');
+        return;
+      }
+      void saveGlobal({ enabled: true, ...t });
+    });
+  }
   onValueChange(KEY, (v) => {
     settings = normalizeSettings(v as Partial<ShieldSettings>, DEFAULT_DATA_BASE);
     controller.update(settings);

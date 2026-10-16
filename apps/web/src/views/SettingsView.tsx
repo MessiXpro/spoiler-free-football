@@ -14,8 +14,8 @@ import {
 } from '@sff/core';
 import { ConfirmDialog } from '../components/Dialog.tsx';
 import { detectShield } from '../lib/bridge.ts';
-import { actions, getState, mergeState } from '../lib/store.ts';
-import { pullFromServer, pushToServer, randomSyncKey } from '../lib/sync-server.ts';
+import { actions, getState, importState, mergeState } from '../lib/store.ts';
+import { pullFromServer, randomSyncKey, uploadToServer } from '../lib/sync-server.ts';
 
 const GROUPS: TeamGroup[] = [
   'epl',
@@ -256,7 +256,7 @@ export function ImportConfirm({
       confirmText="导入"
       onCancel={() => onDone(false)}
       onConfirm={() => {
-        mergeState(incoming);
+        importState(incoming);
         onDone(true);
       }}
     >
@@ -267,7 +267,7 @@ export function ImportConfirm({
           已看记录：{Object.keys(incoming.watched).length} 场（其中 {newWatched} 场本机还没有）
         </li>
       </ul>
-      <p className="muted small">已看记录会合并；订阅和设置以较新的一份为准。</p>
+      <p className="muted small">已看记录会合并；订阅、赛事和设置改用同步码里的。</p>
     </ConfirmDialog>
   );
 }
@@ -290,7 +290,7 @@ function SyncServerPanel({ state }: { state: UserState }) {
       </summary>
       <p className="muted small">
         如果你按 README 部署了 Cloudflare
-        Worker，可以在这里填地址实现自动同步。不填也完全不影响使用。
+        Worker，可以在这里填地址，在设备之间手动同步：「上传到服务器」会先合并服务器上已有的记录再上传，不会冲掉其他设备的已看记录；「从服务器合并」把服务器上的记录合并到本机。不填也完全不影响使用。
       </p>
       <input
         className="input"
@@ -320,8 +320,8 @@ function SyncServerPanel({ state }: { state: UserState }) {
               className="btn btn-small"
               onClick={() =>
                 void run(async () => {
-                  await pushToServer(state.settings.syncEndpoint!, key, getState());
-                  return '已上传';
+                  await uploadToServer(state.settings.syncEndpoint!, key);
+                  return '已合并并上传';
                 })
               }
             >
@@ -339,7 +339,7 @@ function SyncServerPanel({ state }: { state: UserState }) {
                 })
               }
             >
-              从服务器下载
+              从服务器合并
             </button>
           </>
         )}

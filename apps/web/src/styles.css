@@ -535,6 +535,16 @@ a {
   font-size: 12px;
 }
 
+.stale-banner {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--warn);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+}
+
 .dialog-backdrop {
   position: fixed;
   inset: 0;

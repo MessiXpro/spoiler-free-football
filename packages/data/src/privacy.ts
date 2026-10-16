@@ -9,8 +9,15 @@ import { findSpoilers } from '@sff/core';
 const FORBIDDEN_KEYS =
   /^(?:score|scores|goals?|winner|result|fulltime|full_time|halftime|half_time|penalt(?:y|ies)|aggregate|duration|length|extratime|extra_time|regulartime|aet|outcome|minute)$/i;
 
-/** 球队名来自数据源，不是赛果描述，不做结果词检查（比如 "Melbourne Victory"） */
-const NAME_PATHS = /\.(?:home|away)\.name$/;
+/**
+ * 球队名来自数据源，不是赛果描述，不做结果词检查（比如 "Melbourne Victory"）；
+ * 比赛 id 和球队 id 由赛事、赛季、阶段、日期和球队名生成（目录外球队就是 x-melbourne-victory），同样不查结果词。
+ * 这几类只查数字比分写法，比分仍然进不了公开数据。
+ */
+const NAME_PATHS = /\.(?:home|away)\.(?:name|id)$|\.matches\[\d+\]\.id$/;
+/** 去掉日期、赛季后再找 "2-1" / "2:1" / "2比1" */
+const NAME_DATE = /\d{4}-\d{2}-\d{2}|\d{4}-\d{2}(?!\d)/g;
+const NAME_SCORE = /(?<!\d)\d{1,2}\s*[-–—:：比]\s*\d{1,2}(?!\d)/;
 
 const URL_SCORE = /(?:^|[-_/])\d{1,2}[-_:]\d{1,2}(?:[-_/.]|$)/;
 const URL_DATE = /\d{4}[-_]\d{2}[-_]\d{2}|\d{8}/g;
@@ -38,7 +45,11 @@ export function findPublicDataLeaks(value: unknown, path = '$'): string[] {
         }
         return;
       }
-      if (NAME_PATHS.test(p)) return;
+      if (NAME_PATHS.test(p)) {
+        const hit = v.replace(NAME_DATE, ' ').match(NAME_SCORE);
+        if (hit) leaks.push(`${p}: "${v}" 含 ${hit[0]}`);
+        return;
+      }
       const spans = findSpoilers(v, { football: true });
       if (spans.length) leaks.push(`${p}: "${v}" 含 ${spans.map((s) => s.text).join('、')}`);
       return;

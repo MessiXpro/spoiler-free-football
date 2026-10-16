@@ -78,6 +78,11 @@ export function buildShieldCss(site: SiteRule | null, prefs: CssPrefs = DEFAULT_
       `${inner('img')},${inner('picture')},${inner('video')},${inner('canvas')}{opacity:0!important}`,
     );
     out.push(`${inner('*')}{background-image:none!important}`);
+    // 封面选择器直接命中图片/视频本身（"[class*='news' i] img"、<img class="cover">）时上面只管后代：
+    // 图片内容移出显示区域，露出自身的中性背景；视频、画布直接透明
+    const self = (s: string) => scopes.map((scope) => `${scope}:is(${s})`).join(',');
+    out.push(`${self('img')}{object-position:-99999px -99999px!important}`);
+    out.push(`${self('video,canvas')}{opacity:0!important}`);
   }
 
   if (prefs.hide.duration || prefs.hide.progress) {

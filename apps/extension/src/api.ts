@@ -12,6 +12,11 @@ export const DEFAULT_WEB_URL =
     : 'https://messixpro.github.io/spoiler-free-football/';
 export const DEFAULT_DATA_BASE = new URL('data/', DEFAULT_WEB_URL).href;
 
+declare const __SFF_WEB_MATCHES__: string[];
+/** 构建时注入的防剧透网页地址（match pattern）：桥接脚本在这些页面运行，全网模式不处理这些页面 */
+export const WEB_MATCHES: string[] =
+  typeof __SFF_WEB_MATCHES__ !== 'undefined' ? __SFF_WEB_MATCHES__ : [`${DEFAULT_WEB_URL}*`];
+
 const KEY = 'settings';
 
 export async function loadSettings(): Promise<ShieldSettings> {
