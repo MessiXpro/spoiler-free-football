@@ -185,3 +185,43 @@ describe('Retry-After 等待有上限', () => {
     expect(Math.max(...waits)).toBe(60_000);
   });
 });
+
+describe('被限流后主动放慢', () => {
+  it('收到 429 后，同一域名之后的请求间隔至少 5 秒（其他域名不受影响）', async () => {
+    const waits: Array<[string, number]> = [];
+    let lastUrl = '';
+    let n = 0;
+    const impl = (async (input: string | URL) => {
+      lastUrl = String(input);
+      return ++n === 1
+        ? new Response('slow down', { status: 429, headers: { 'retry-after': '1' } })
+        : new Response('ok', { status: 200 });
+    }) as typeof fetch;
+    const logs: string[] = [];
+    let fakeNow = 0;
+    const realNow = Date.now;
+    Date.now = () => fakeNow;
+    try {
+      const f = createHttpFetcher({
+        fetchImpl: impl,
+        minIntervalMs: { 'api.example.com': 1000 },
+        defaultIntervalMs: 0,
+        log: (m) => logs.push(m),
+        sleep: async (ms) => {
+          waits.push([lastUrl, ms]);
+          fakeNow += ms;
+        },
+      });
+      await f.getText('https://api.example.com/a', { kind: 'api' });
+      await f.getText('https://api.example.com/b', { kind: 'api' });
+      await f.getText('https://other.example.com/c', { kind: 'api' });
+    } finally {
+      Date.now = realNow;
+    }
+    // 第 1 个请求：429 → 等 1 秒重试 → 成功；第 2 个请求前按放慢后的 5 秒间隔等待
+    const beforeB = waits.filter(([u]) => u.endsWith('/a')).map(([, ms]) => ms);
+    expect(Math.max(...beforeB)).toBeGreaterThanOrEqual(4000);
+    expect(logs.join()).toMatch(/api\.example\.com 限流.*5 秒/);
+    expect(waits.some(([u]) => u.includes('other.example.com'))).toBe(false);
+  });
+});

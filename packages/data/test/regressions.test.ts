@@ -13,8 +13,10 @@ import { createManualAdapter, parseManual } from '../src/adapters/manual.ts';
 import { parseOpenfootball } from '../src/adapters/openfootball.ts';
 import {
   createTheSportsDbAdapter,
+  DEFAULT_THESPORTSDB_LEAGUES,
   parseTheSportsDbEvent,
   roundsAround,
+  THESPORTSDB_LEAGUES,
   type TsdbEvent,
 } from '../src/adapters/thesportsdb.ts';
 import { buildData, CONFIG_DIR, loadConfig } from '../src/build.ts';
@@ -1253,6 +1255,42 @@ describe('数据源用时上限', () => {
     expect(urls.some((u) => u.includes('id=4482'))).toBe(false);
     expect(sourceStatus({ ok: true, count: res.fixtures.length, note: res.notes.join('；') })).toBe(
       'warn',
+    );
+  });
+});
+
+describe('真实数据试跑里目录外的球队名（2026-10）', () => {
+  it.each([
+    ['N.Ireland', true, 'nt-northern-ireland'],
+    ['LASK', false, 'lask'],
+    ['Sabah Baku', false, 'sabah'],
+    ['Sabah FK', false, 'sabah'],
+    ['Viking', false, 'viking'],
+    ['Ararat-Armenia', false, 'ararat-armenia'],
+    ['Celje', false, 'celje'],
+    ["Hapoel Be'er Sheva", false, 'hapoel-beer-sheva'],
+    ['Jagiellonia Białystok', false, 'jagiellonia'],
+    ['Lech Poznań', false, 'lech-poznan'],
+    ['Levski Sofia', false, 'levski-sofia'],
+    ['Lillestrøm', false, 'lillestrom'],
+    ['NEC Nijmegen', false, 'nec'],
+    ['OFI', false, 'ofi'],
+    ['Omonia Nicosia', false, 'omonia'],
+    ['Torreense', false, 'torreense'],
+  ] as const)('%s → %s', (name, national, id) => {
+    expect(teamRef(name, national).id).toBe(id);
+  });
+});
+
+describe('TheSportsDB 默认赛事顺序', () => {
+  it('覆盖除英超、西甲外的全部赛事，重要的排在前面', () => {
+    expect(new Set(DEFAULT_THESPORTSDB_LEAGUES)).toEqual(
+      new Set(Object.keys(THESPORTSDB_LEAGUES).filter((id) => id !== '4328' && id !== '4335')),
+    );
+    expect(DEFAULT_THESPORTSDB_LEAGUES.length).toBe(Object.keys(THESPORTSDB_LEAGUES).length - 2);
+    expect(DEFAULT_THESPORTSDB_LEAGUES.slice(0, 2)).toEqual(['4480', '4481']);
+    expect(DEFAULT_THESPORTSDB_LEAGUES.indexOf('4429')).toBeGreaterThan(
+      DEFAULT_THESPORTSDB_LEAGUES.indexOf('4570'),
     );
   });
 });

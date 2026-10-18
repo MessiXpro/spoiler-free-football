@@ -48,9 +48,32 @@ export const THESPORTSDB_LEAGUES: Record<string, string> = {
   '4335': 'laliga',
 };
 
-export const DEFAULT_THESPORTSDB_LEAGUES = Object.keys(THESPORTSDB_LEAGUES).filter(
-  (id) => id !== '4328' && id !== '4335',
-);
+/**
+ * 默认拉取的赛事，按重要程度排序：免费 Key 很慢，超过用时上限时排在后面的这次先不拉。
+ * （不能用 Object.keys：数字形式的键会被按数值排序，上届世界杯会排在最前面）
+ * 联赛默认由 openfootball / football-data 提供，可通过 THESPORTSDB_LEAGUES 环境变量加入
+ */
+export const DEFAULT_THESPORTSDB_LEAGUES = [
+  '4480', // 欧冠
+  '4481', // 欧联
+  '4482', // 足总杯
+  '4483', // 国王杯
+  '4570', // 联赛杯
+  '4490', // 欧国联
+  '4562', // 友谊赛
+  '5519', // 欧预赛
+  '5518', // 世预赛
+  '5515', // 世预赛
+  '5071', // 欧协联
+  '4511', // 西班牙超级杯
+  '4571', // 社区盾
+  '4512', // 欧洲超级杯
+  '5696', // 洲际杯
+  '4503', // 世俱杯
+  '4429', // 世界杯
+  '4502', // 欧洲杯
+  '4499', // 美洲杯
+];
 
 export interface TsdbEvent {
   idEvent: string;
@@ -283,7 +306,7 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
         }
       }
       if (skipped.length) {
-        notes.push(`超过用时上限，这次没拉取（失败）：${skipped.join('、')}`);
+        notes.push(`超过用时上限，这次没拉取（失败）：${[...new Set(skipped)].join('、')}`);
       }
       if (!premium) notes.push('使用免费测试 Key：只拉取当前前后几轮');
       ctx.log(`thesportsdb: ${fixtures.size} 场`);

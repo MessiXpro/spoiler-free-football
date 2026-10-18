@@ -74,6 +74,8 @@ interface CacheEntry {
  */
 const CACHE_PREFIX = 'v2-';
 const MAX_RETRY_WAIT_MS = 60_000;
+const MIN_SLOWED_INTERVAL_MS = 5_000;
+const MAX_SLOWED_INTERVAL_MS = 30_000;
 const LEGACY_CACHE_FILE = /^[0-9a-f]{32}\.json$/;
 
 const isJson = (body: string) => {
@@ -94,6 +96,8 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
   const sleep = config.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const userAgent = config.userAgent ?? DEFAULT_UA;
   const lastRequestAt = new Map<string, number>();
+  /** 被限流（429）之后放慢的请求间隔：这次运行里一直有效 */
+  const slowedInterval = new Map<string, number>();
   const robotsCache = new Map<string, RobotsRules | null>();
   const log = config.log ?? (() => {});
 
@@ -142,8 +146,22 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
     await writeFile(path, JSON.stringify({ ...entry, url: redactUrl(url) }));
   }
 
+  /**
+   * 被限流后把这个域名的请求间隔翻倍（至少 5 秒，最多 30 秒）。免费 Key 往往和很多人共用，
+   * 实际额度比文档写的低，与其一直撞限流再长时间等待，不如主动放慢
+   */
+  function slowDown(host: string) {
+    const current =
+      slowedInterval.get(host) ?? config.minIntervalMs?.[host] ?? config.defaultIntervalMs ?? 1000;
+    const next = Math.min(MAX_SLOWED_INTERVAL_MS, Math.max(MIN_SLOWED_INTERVAL_MS, current * 2));
+    if (next === slowedInterval.get(host)) return;
+    slowedInterval.set(host, next);
+    log(`${host} 限流（HTTP 429），之后每次请求间隔 ${Math.round(next / 1000)} 秒`);
+  }
+
   async function throttle(host: string) {
-    const interval = config.minIntervalMs?.[host] ?? config.defaultIntervalMs ?? 1000;
+    const interval =
+      slowedInterval.get(host) ?? config.minIntervalMs?.[host] ?? config.defaultIntervalMs ?? 1000;
     const now = Date.now();
     const prev = lastRequestAt.get(host);
     const at = prev === undefined ? now : Math.max(now, prev + interval);
@@ -212,6 +230,7 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
         await writeCache(url, { ...cached, fetchedAt: Date.now() });
         return { status: cached.status, body: cached.body, fromCache: true };
       }
+      if (res.status === 429) slowDown(u.host);
       if ((res.status === 429 || res.status >= 500) && attempt < retries) {
         const retryAfter = Number(res.headers.get('retry-after'));
         // Retry-After 可能很长（比如一小时）：最多等 1 分钟，再不行就用旧缓存或报错
