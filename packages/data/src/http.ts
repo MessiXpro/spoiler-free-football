@@ -5,8 +5,11 @@ import { isAllowedByRobots, parseRobots, type RobotsRules } from './robots.ts';
 
 export interface FetchOptions {
   headers?: Record<string, string>;
-  /** 缓存有效期（毫秒）；过期后带 ETag 重新验证 */
-  ttlMs?: number;
+  /**
+   * 缓存有效期（毫秒）；过期后带 ETag 重新验证。
+   * 也可以是函数：按缓存里的内容决定（例如已经踢完的轮次可以缓存更久）
+   */
+  ttlMs?: number | ((cachedBody: string) => number);
   /** API 接口（官方提供给程序调用的地址）不检查 robots.txt；网页抓取必须检查 */
   kind?: 'api' | 'page';
   /**
@@ -187,9 +190,13 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
   }
 
   async function getText(url: string, options: FetchOptions = {}): Promise<FetchResult> {
-    const ttl = options.ttlMs ?? 60 * 60 * 1000;
     await sweepLegacyCache();
     const cached = await readCache(url);
+    const ttl = !cached
+      ? 0
+      : typeof options.ttlMs === 'function'
+        ? options.ttlMs(cached.body)
+        : (options.ttlMs ?? 60 * 60 * 1000);
     if (cached && Date.now() - cached.fetchedAt < ttl) {
       return { status: cached.status, body: cached.body, fromCache: true };
     }

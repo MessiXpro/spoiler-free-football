@@ -93,6 +93,28 @@ export interface TsdbEvent {
 }
 
 const FINISHED = new Set(['FT', 'AET', 'PEN', 'AWD', 'WO', 'MATCH FINISHED']);
+
+const RECENT_TTL_MS = 3 * 60 * 60 * 1000;
+const SETTLED_TTL_MS = 24 * 60 * 60 * 1000;
+const SETTLED_AFTER_MS = 2 * 24 * 60 * 60 * 1000;
+
+/**
+ * 一整轮的缓存有效期：每场都已完赛、而且最后一场也是两天以前的，缓存一天；否则 3 小时
+ * （还有没踢的、延期的、刚踢完可能更正比分的，都按 3 小时）
+ */
+export function settledRoundTtl(body: string, now = Date.now()): number {
+  try {
+    const events = (JSON.parse(body) as EventsResponse).events;
+    if (!Array.isArray(events) || events.length === 0) return RECENT_TTL_MS;
+    const settled = events.every((e) => {
+      const f = parseTheSportsDbEvent(e, new Date(now));
+      return Boolean(f?.finished) && now - Date.parse(f!.kickoff) > SETTLED_AFTER_MS;
+    });
+    return settled ? SETTLED_TTL_MS : RECENT_TTL_MS;
+  } catch {
+    return RECENT_TTL_MS;
+  }
+}
 const POSTPONED = new Set(['PST', 'SUSP', 'INT', 'POSTPONED']);
 const CANCELLED = new Set(['CANC', 'ABD', 'CANCELLED', 'ABANDONED']);
 
@@ -239,7 +261,8 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
       const get = (path: string) =>
         ctx.fetcher.getJson<EventsResponse>(`${BASE}/${key}/${path}`, {
           kind: 'api',
-          ttlMs: 3 * 60 * 60 * 1000,
+          // 按轮次拉取的结果里全都踢完两天以上的，很少再变：缓存一天，省请求（免费 Key 很慢）
+          ttlMs: path.startsWith('eventsround') ? settledRoundTtl : RECENT_TTL_MS,
           cacheable: isEventsBody,
         });
 

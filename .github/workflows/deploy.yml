@@ -1,12 +1,11 @@
 name: 数据更新与部署
 
-# 每天北京时间 06:20、08:20、10:20、14:20、20:20 跑一次数据管线（欧洲比赛大多在北京时间凌晨结束）
+# 每天北京时间 06:20、08:20、20:20 跑一次数据管线：欧洲比赛大多在北京时间凌晨结束，
+# 早上两次拿赛果和比分，晚上一次更新当晚的开球时间。私有仓库每月只有 2000 分钟免费额度，所以不跑更多次
 on:
   schedule:
     - cron: '20 22 * * *'
     - cron: '20 0 * * *'
-    - cron: '20 2 * * *'
-    - cron: '20 6 * * *'
     - cron: '20 12 * * *'
   push:
     branches: [main]
@@ -33,11 +32,23 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: write
+      pages: read
     outputs:
       pages: ${{ steps.check.outputs.pages }}
       # 是否部署到 Cloudflare Pages（DEPLOY_TARGET 为 cloudflare 或 both；表达式里比较不区分大小写）
       cloudflare: ${{ vars.DEPLOY_TARGET == 'cloudflare' || vars.DEPLOY_TARGET == 'both' }}
     steps:
+      # 公开仓库 60 天没有任何活动（提交等）时，GitHub 会自动停用定时任务，数据就不再更新。
+      # 每天由定时任务自己调用一次「启用工作流」接口来重置这个计时（放在这个已有的 job 里，不多占一个 job 的计费分钟）；
+      # 已经停用的工作流没法自己恢复，所以只能放在这个工作流里，不能另建一个定时工作流
+      - name: 保持定时任务启用
+        if: github.event_name == 'schedule' && github.event.schedule == '20 22 * * *'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/deploy.yml/enable"
+
       - id: check
         name: 检查 GitHub Pages 是否已开启
         env:
@@ -90,13 +101,31 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
+      # Cloudflare Pages：先确认项目存在（没有就自动创建）并查到网页地址；
+      # 放在数据管线前面，Token/账户 ID 填错时几秒钟就失败，不白跑
+      - name: 准备 Cloudflare Pages 项目
+        id: cloudflare
+        if: github.event_name != 'pull_request' && needs.hosting.outputs.cloudflare == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PROJECT: ${{ vars.CLOUDFLARE_PROJECT }}
+        run: pnpm --filter @sff/data run cloudflare:prepare
+
       - name: 确定网页地址
+        env:
+          WEB_URL_VAR: ${{ vars.SFF_WEB_URL }}
+          CLOUDFLARE_ONLY: ${{ vars.DEPLOY_TARGET == 'cloudflare' }}
+          CLOUDFLARE_URL: ${{ steps.cloudflare.outputs.url }}
         run: |
-          if [ -n "${{ vars.SFF_WEB_URL }}" ]; then
-            url="${{ vars.SFF_WEB_URL }}"
+          if [ -n "$WEB_URL_VAR" ]; then
+            url="$WEB_URL_VAR"
+          elif [ "$CLOUDFLARE_ONLY" = "true" ] && [ -n "$CLOUDFLARE_URL" ]; then
+            url="$CLOUDFLARE_URL"
           else
-            owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
-            url="https://${owner}.github.io/${{ github.event.repository.name }}/"
+            # 定时任务的事件里没有 repository 信息，仓库名从 GITHUB_REPOSITORY（owner/name）里取
+            owner="$(echo "${GITHUB_REPOSITORY%%/*}" | tr '[:upper:]' '[:lower:]')"
+            url="https://${owner}.github.io/${GITHUB_REPOSITORY#*/}/"
           fi
           echo "SFF_WEB_URL=$url" >> "$GITHUB_ENV"
           echo "网页地址：$url"
@@ -141,22 +170,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx --yes wrangler@4 pages deploy apps/web/dist --project-name "${{ vars.CLOUDFLARE_PROJECT || 'spoiler-free-football' }}" --branch main
-
-  # 公开仓库 60 天没有任何活动（提交等）时，GitHub 会自动停用定时任务，数据就不再更新。
-  # 每天由定时任务自己调用一次「启用工作流」接口来重置这个计时；
-  # 已经停用的工作流没法自己恢复，所以只能放在这个工作流里，不能另建一个定时工作流
-  keepalive:
-    if: github.event_name == 'schedule' && github.event.schedule == '20 22 * * *'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: write
-    steps:
-      - name: 保持定时任务启用
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/deploy.yml/enable"
+          PROJECT: ${{ steps.cloudflare.outputs.project }}
+        run: |
+          # 粘贴 secrets 时可能多带了空格或换行：上面的检查会去掉，这里也去掉，两边看到的一样
+          CLOUDFLARE_ACCOUNT_ID="$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | tr -d '[:space:]')"
+          CLOUDFLARE_API_TOKEN="$(printf %s "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')"
+          export CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN
+          npx --yes wrangler@4 pages deploy apps/web/dist --project-name "$PROJECT" --branch main
 
   # 推送或手动运行时 GitHub Pages 还没开启、也没配 Cloudflare：数据管线照常试跑（上面的 build），这里给出明确的失败提示
   pages-missing:

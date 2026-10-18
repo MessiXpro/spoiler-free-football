@@ -16,6 +16,7 @@ import {
   DEFAULT_THESPORTSDB_LEAGUES,
   parseTheSportsDbEvent,
   roundsAround,
+  settledRoundTtl,
   THESPORTSDB_LEAGUES,
   type TsdbEvent,
 } from '../src/adapters/thesportsdb.ts';
@@ -1330,5 +1331,43 @@ describe('TheSportsDB 默认赛事顺序', () => {
     expect(DEFAULT_THESPORTSDB_LEAGUES.indexOf('4429')).toBeGreaterThan(
       DEFAULT_THESPORTSDB_LEAGUES.indexOf('4570'),
     );
+  });
+});
+
+describe('TheSportsDB 已经踢完的轮次缓存更久', () => {
+  const round = fixture('thesportsdb/eventsround-4328-r1-2026-2027-freekey.json');
+  const HOUR = 60 * 60 * 1000;
+
+  it('全部完赛、最后一场也在两天以前：缓存一天；否则 3 小时', () => {
+    // 这一轮最后一场是 2026-08-24 19:00（UTC）
+    expect(settledRoundTtl(round, Date.parse('2026-10-18T06:00:00Z'))).toBe(24 * HOUR);
+    expect(settledRoundTtl(round, Date.parse('2026-08-25T19:00:00Z'))).toBe(3 * HOUR);
+    const withUnplayed = JSON.parse(round) as { events: Array<Record<string, unknown>> };
+    withUnplayed.events[0]!.strStatus = 'NS';
+    expect(settledRoundTtl(JSON.stringify(withUnplayed), Date.parse('2026-10-18T06:00:00Z'))).toBe(
+      3 * HOUR,
+    );
+    expect(settledRoundTtl('{"events":null}')).toBe(3 * HOUR);
+    expect(settledRoundTtl('not json')).toBe(3 * HOUR);
+  });
+
+  it('缓存有效期可以按缓存内容决定', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'sff-ttl-'));
+    let n = 0;
+    const impl = (async () => new Response(`v${++n}`, { status: 200 })) as typeof fetch;
+    const f = createHttpFetcher({ cacheDir: dir, fetchImpl: impl, defaultIntervalMs: 0 });
+    const seen: string[] = [];
+    const ttl = (body: string) => {
+      seen.push(body);
+      return body === 'v1' ? 60 * 60 * 1000 : 0;
+    };
+    expect((await f.getText('https://api.example.com/r', { kind: 'api', ttlMs: ttl })).body).toBe(
+      'v1',
+    );
+    // 第二次：缓存里是 v1，按函数给的 1 小时有效期直接用缓存
+    const again = await f.getText('https://api.example.com/r', { kind: 'api', ttlMs: ttl });
+    expect(again).toMatchObject({ body: 'v1', fromCache: true });
+    expect(seen).toEqual(['v1']);
+    expect(n).toBe(1);
   });
 });
