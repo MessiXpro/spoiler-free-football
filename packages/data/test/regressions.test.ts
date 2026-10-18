@@ -1013,3 +1013,64 @@ describe('#46 公开窗口覆盖淘汰赛锁定往前看的天数', () => {
     );
   });
 });
+
+describe('维护者诊断：目录外球队、可能重复的比赛', () => {
+  const NOW = new Date('2026-11-10T06:00:00Z');
+  const fixed = (id: string, priority: number, fixtures: RawFixture[]): FixtureAdapter => ({
+    id,
+    name: id,
+    priority,
+    fetch: async () => ({ fixtures, notes: [] }),
+  });
+
+  it('列出目录里没有的球队；同一支球队 3 小时内出现两场（主客写反）记为可能重复', async () => {
+    const kickoff = '2026-11-08T15:00:00.000Z';
+    const out = await buildData({
+      now: NOW,
+      fetcher: createFixtureFetcher([]),
+      env: {},
+      config: await loadConfig(),
+      adapters: [
+        fixed('football-data', 40, [
+          raw({
+            source: 'football-data',
+            competition: 'fa-cup',
+            home: teamRef('Arsenal'),
+            away: teamRef('Boreham Wood'),
+            kickoff,
+          }),
+        ]),
+        fixed('thesportsdb', 20, [
+          raw({
+            source: 'thesportsdb',
+            competition: 'fa-cup',
+            home: teamRef('Boreham Wood FC'),
+            away: teamRef('Arsenal'),
+            kickoff,
+          }),
+        ]),
+      ],
+    });
+    expect(out.diagnostics.unknownTeams).toHaveLength(2);
+    expect(out.diagnostics.unknownTeams).toEqual(
+      expect.arrayContaining([
+        { source: 'football-data', competition: 'fa-cup', name: 'Boreham Wood' },
+        { source: 'thesportsdb', competition: 'fa-cup', name: 'Boreham Wood FC' },
+      ]),
+    );
+    expect(out.diagnostics.possibleDuplicates).toHaveLength(1);
+    expect(out.diagnostics.possibleDuplicates[0]!.competition).toBe('fa-cup');
+    // 诊断信息不写进公开数据
+    expect(JSON.stringify([...out.files.values()])).not.toContain('possibleDuplicates');
+  });
+
+  it('正常数据没有可能重复的比赛', async () => {
+    const out = await buildData({
+      now: SAMPLE_NOW,
+      fetcher: sampleFetcher(),
+      env: SAMPLE_ENV,
+      config: await loadConfig(CONFIG_DIR, { links: join(SAMPLE_DIR, 'links.sample.json') }),
+    });
+    expect(out.diagnostics.possibleDuplicates).toEqual([]);
+  });
+});

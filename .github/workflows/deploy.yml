@@ -10,6 +10,12 @@ on:
     - cron: '20 12 * * *'
   push:
     branches: [main]
+  # 改了数据管线的 PR：先用真实数据试跑一遍（只构建、不部署），合并前就能发现问题
+  pull_request:
+    paths:
+      - 'packages/data/**'
+      - 'packages/core/**'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -18,11 +24,46 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy
-  cancel-in-progress: false
+  group: deploy-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # 网页托管有没有配置好。GitHub Pages 还没开启时：定时任务不白跑（省 Actions 额度），推送/手动运行时用中文说明要做什么
+  hosting:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      pages: ${{ steps.check.outputs.pages }}
+    steps:
+      - id: check
+        name: 检查 GitHub Pages 是否已开启
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_TARGET: ${{ vars.DEPLOY_TARGET }}
+        run: |
+          if [ "$DEPLOY_TARGET" = "cloudflare" ]; then
+            echo "pages=unused" >> "$GITHUB_OUTPUT"
+            echo "部署到 Cloudflare Pages，不需要 GitHub Pages"
+          elif gh api "repos/${{ github.repository }}/pages" > /dev/null 2> pages-error.txt; then
+            echo "pages=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub Pages 已开启"
+          elif grep -q "404" pages-error.txt; then
+            echo "pages=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=GitHub Pages 还没开启::网页还没上线。到仓库 Settings → Pages，把 Source 选成「GitHub Actions」。在那之前定时任务不会构建，以免白白占用 Actions 额度。"
+          else
+            # 查不了（权限等原因）就照常尝试部署
+            cat pages-error.txt
+            echo "pages=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: hosting
+    # PR：只试跑数据管线。定时任务：网页托管配好了才跑
+    if: >-
+      ${{ !cancelled() && (github.event_name == 'pull_request' ||
+      (needs.hosting.result == 'success' &&
+      (needs.hosting.outputs.pages != 'false' || github.event_name != 'schedule'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -70,12 +111,25 @@ jobs:
           node scripts/assemble-site.mjs
 
       - uses: actions/upload-pages-artifact@v3
-        if: vars.DEPLOY_TARGET != 'cloudflare'
+        if: github.event_name != 'pull_request' && needs.hosting.outputs.pages == 'true'
         with:
           path: apps/web/dist
 
+      # PR 试跑：上传公开数据方便检查（不含比分文件）
+      - name: 上传试跑的公开数据（不含比分）
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-data-preview
+          path: |
+            apps/web/public/data
+            !apps/web/public/data/scores
+          retention-days: 7
+
       - name: 部署到 Cloudflare Pages（可选）
-        if: vars.DEPLOY_TARGET == 'cloudflare' || vars.DEPLOY_TARGET == 'both'
+        if: >-
+          github.event_name != 'pull_request' &&
+          (vars.DEPLOY_TARGET == 'cloudflare' || vars.DEPLOY_TARGET == 'both')
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -96,9 +150,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/deploy.yml/enable"
 
+  # 推送或手动运行时 GitHub Pages 还没开启：数据管线照常试跑（上面的 build），这里给出明确的失败提示
+  pages-missing:
+    needs: hosting
+    if: needs.hosting.outputs.pages == 'false' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 网页还没上线：需要开启 GitHub Pages
+        run: |
+          msg="GitHub Pages 还没开启，网页没有部署。请到仓库 Settings → Pages，把 Source 选成「GitHub Actions」，然后在 Actions 里重新运行「数据更新与部署」。私有仓库开 Pages 需要 GitHub 付费套餐；不想付费，可以把仓库改成公开，或者按 README 改用 Cloudflare Pages。"
+          echo "::error title=网页还没上线::$msg"
+          { echo "## ❌ 网页还没上线"; echo; echo "$msg"; } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
   deploy-pages:
-    needs: build
-    if: vars.DEPLOY_TARGET != 'cloudflare'
+    needs: [hosting, build]
+    if: needs.hosting.outputs.pages == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

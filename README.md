@@ -90,6 +90,8 @@
 
 1. 仓库 → **Actions** → 左侧选 **数据更新与部署** → 右侧 **Run workflow**。
 2. 大约 5–10 分钟后完成。之后它会每天自动运行 5 次（北京时间 06:20、08:20、10:20、14:20、20:20）。
+   - 运行页面最下面有一份「数据管线结果」小结：每个数据源拿到多少场、哪些球队名还没有中文名（只有场数和队名，没有比分）。
+   - 如果 GitHub Pages 还没开启，这次运行会出现红叉「网页还没上线」，并写明要去哪里设置；数据管线本身照样会试跑。在开启之前，每天的定时运行会自动跳过，不占用 Actions 额度。
 3. 打开网页：GitHub Pages 是 `https://messixpro.github.io/spoiler-free-football/`（方式 B 见上）。
 
 > GitHub 会自动停用**公开仓库**里 60 天没有任何活动的定时任务。这个工作流每天会自己续期一次，正常不用管；万一「昨夜今晨」好几天没有新比赛，打开仓库 **Actions** → 左侧 **数据更新与部署**，如果上方提示工作流已停用，点 **Enable workflow**，再点 **Run workflow** 运行一次。
@@ -369,7 +371,7 @@ pnpm run ci         # 以上全部（必须带 run：pnpm 自带一个同名的 
 | 工作流 | 什么时候跑 | 做什么 |
 |---|---|---|
 | CI | 每次 push / PR | lint、类型检查、全部单元测试、构建、Playwright（网页三种视口 + 插件 + 用户脚本），上传插件和脚本 |
-| 数据更新与部署 | 每天 5 次、push 到 main、手动 | 真实数据管线（含防泄露检查）→ 构建 → 部署 GitHub Pages 或 Cloudflare Pages；每天续期一次，免得 GitHub 自动停用定时任务 |
+| 数据更新与部署 | 每天 5 次、push 到 main、手动；改了数据管线的 PR | 真实数据管线（含防泄露检查）→ 构建 → 部署 GitHub Pages 或 Cloudflare Pages；PR 里只试跑、不部署；网页托管没配好时定时运行自动跳过；每天续期一次，免得 GitHub 自动停用定时任务 |
 | 发布插件和用户脚本 | 打 `v*` 标签 | 附件发布 |
 
 仓库变量（Settings → Variables）：`SFF_WEB_URL`（网页地址，默认按 GitHub Pages 推算）、`DEPLOY_TARGET`（`github-pages` 默认 / `cloudflare` / `both`）、`CLOUDFLARE_PROJECT`、`FOOTBALL_DATA_COMPETITIONS`（付费档 football-data 可加 `PL,PD,CL,EC,WC,FAC,FLC,CDR,EL,UCL`）。

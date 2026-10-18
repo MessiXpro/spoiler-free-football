@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_SITE_RULES_JSON,
   FIXTURE_LOCK_LOOKBACK_DAYS,
+  getTeam,
   redact,
   type DataMeta,
   type PublicMatch,
@@ -73,6 +74,51 @@ export interface BuildOutput {
   /** 文件名 → 内容（相对 data 目录） */
   files: Map<string, unknown>;
   warnings: string[];
+  /** 只给维护者看的诊断信息（不写进公开数据，也不含比分） */
+  diagnostics: BuildDiagnostics;
+}
+
+export interface BuildDiagnostics {
+  /** 目录里没有的球队名：不同来源写法不一样时会变成两场比赛，需要在 packages/core/src/catalog/teams.ts 补别名 */
+  unknownTeams: Array<{ source: string; competition: string; name: string }>;
+  /** 同一赛事、开球时间相近、有同一支球队的两场公开比赛：多半是同一场被拆成了两场 */
+  possibleDuplicates: Array<{ competition: string; a: string; b: string }>;
+}
+
+const DUPLICATE_WINDOW_MS = 3 * 60 * 60 * 1000;
+
+function collectDiagnostics(all: RawFixture[], matches: PublicMatch[]): BuildDiagnostics {
+  const seen = new Set<string>();
+  const unknownTeams: BuildDiagnostics['unknownTeams'] = [];
+  for (const f of all) {
+    for (const t of [f.home, f.away]) {
+      if (getTeam(t.id)) continue;
+      const key = `${f.source}|${f.competition}|${t.name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unknownTeams.push({ source: f.source, competition: f.competition, name: t.name });
+    }
+  }
+  unknownTeams.sort((x, y) =>
+    `${x.competition}|${x.name}|${x.source}`.localeCompare(
+      `${y.competition}|${y.name}|${y.source}`,
+    ),
+  );
+  const possibleDuplicates: BuildDiagnostics['possibleDuplicates'] = [];
+  const label = (m: PublicMatch) => `${m.home.name} vs ${m.away.name}（${m.kickoff}）`;
+  for (let i = 0; i < matches.length; i++) {
+    for (let j = i + 1; j < matches.length; j++) {
+      const a = matches[i]!;
+      const b = matches[j]!;
+      if (a.competition !== b.competition) continue;
+      if (Math.abs(Date.parse(a.kickoff) - Date.parse(b.kickoff)) > DUPLICATE_WINDOW_MS) continue;
+      // 一支球队 3 小时内不可能踢两场（主客队写反了也算）
+      const teams = new Set([a.home.id, a.away.id]);
+      if (!teams.has(b.home.id) && !teams.has(b.away.id)) continue;
+      possibleDuplicates.push({ competition: a.competition, a: label(a), b: label(b) });
+    }
+  }
+  return { unknownTeams, possibleDuplicates };
 }
 
 /** 跑一遍完整管线（不写盘），方便测试 */
@@ -175,7 +221,7 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
   for (const { score } of merged) {
     if (score) files.set(`scores/${score.id}.json`, score);
   }
-  return { meta, matches, files, warnings };
+  return { meta, matches, files, warnings, diagnostics: collectDiagnostics(all, matches) };
 }
 
 /** 写入输出目录（先清空，避免留下过期的比分文件） */
