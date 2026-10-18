@@ -167,3 +167,21 @@ describe('请求超时', () => {
     expect(res).toMatchObject({ body: 'fresh', fromCache: true });
   });
 });
+
+describe('Retry-After 等待有上限', () => {
+  it('服务器让等一小时：最多等 1 分钟', async () => {
+    const waits: number[] = [];
+    let n = 0;
+    const impl = (async () =>
+      ++n === 1
+        ? new Response('slow down', { status: 429, headers: { 'retry-after': '3600' } })
+        : new Response('ok', { status: 200 })) as typeof fetch;
+    const f = createHttpFetcher({
+      fetchImpl: impl,
+      defaultIntervalMs: 0,
+      sleep: async (ms) => void waits.push(ms),
+    });
+    expect((await f.getText('https://api.example.com/a', { kind: 'api' })).body).toBe('ok');
+    expect(Math.max(...waits)).toBe(60_000);
+  });
+});

@@ -69,6 +69,9 @@ export interface BuildOptions {
   pastDays?: number;
   futureDays?: number;
   log?: (msg: string) => void;
+  /** 每个数据源的用时上限，默认 8 分钟 */
+  adapterBudgetMs?: number;
+  clock?: () => number;
 }
 
 export interface BuildOutput {
@@ -97,6 +100,7 @@ export interface BuildDiagnostics {
 const revealsAdvancement = (stage: Stage | undefined) => !stage || isKnockoutStage(stage);
 
 const DUPLICATE_WINDOW_MS = 3 * 60 * 60 * 1000;
+const DEFAULT_ADAPTER_BUDGET_MS = 8 * 60 * 1000;
 
 function collectDiagnostics(all: RawFixture[], matches: PublicMatch[]): BuildDiagnostics {
   const seen = new Set<string>();
@@ -176,10 +180,15 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
       sources.push({ id: adapter.id, name: adapter.name, ok: false, count: 0, note: reason });
       continue;
     }
-    const started = Date.now();
+    const clock = opts.clock ?? Date.now;
+    const started = clock();
     try {
-      const result = await adapter.fetch(ctx);
-      log(`${adapter.name}：用时 ${Math.round((Date.now() - started) / 1000)} 秒`);
+      const result = await adapter.fetch({
+        ...ctx,
+        clock,
+        deadline: started + (opts.adapterBudgetMs ?? DEFAULT_ADAPTER_BUDGET_MS),
+      });
+      log(`${adapter.name}：用时 ${Math.round((clock() - started) / 1000)} 秒`);
       all.push(...result.fixtures);
       sources.push({
         id: adapter.id,

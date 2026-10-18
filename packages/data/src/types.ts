@@ -36,6 +36,13 @@ export interface AdapterContext {
   windowStart: Date;
   windowEnd: Date;
   log: (msg: string) => void;
+  /**
+   * 用时上限（返回毫秒时间戳的时钟上的截止时间）：要发很多请求的数据源过了这个时间就停下，
+   * 已经拿到的照常用，免得一个慢的数据源占满 GitHub Actions 的额度
+   */
+  deadline?: number;
+  /** 当前时间（毫秒），默认 Date.now；测试里可以换掉 */
+  clock?: () => number;
 }
 
 export interface AdapterResult {

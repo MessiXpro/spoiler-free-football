@@ -220,7 +220,15 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
           cacheable: isEventsBody,
         });
 
+      const now = ctx.clock ?? Date.now;
+      const overBudget = () => ctx.deadline !== undefined && now() > ctx.deadline;
+      const skipped: string[] = [];
       for (const id of leagues) {
+        // 超过用时上限：剩下的赛事这次不拉（已经拿到的照常用，下次运行有缓存会快很多）
+        if (overBudget()) {
+          skipped.push(THESPORTSDB_LEAGUES[id]!);
+          continue;
+        }
         const before = fixtures.size;
         let requests = 2;
         try {
@@ -260,6 +268,7 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
           }
           for (const [s, rounds] of roundsBySeason) {
             for (const r of [...rounds].sort((a, b) => a - b)) {
+              if (overBudget()) break;
               requests++;
               add(
                 eventsOf(await get(`eventsround.php?id=${id}&r=${r}&s=${encodeURIComponent(s)}`)),
@@ -272,6 +281,9 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
         } catch (err) {
           notes.push(`联赛 ${id}（${THESPORTSDB_LEAGUES[id]}）失败：${(err as Error).message}`);
         }
+      }
+      if (skipped.length) {
+        notes.push(`超过用时上限，这次没拉取（失败）：${skipped.join('、')}`);
       }
       if (!premium) notes.push('使用免费测试 Key：只拉取当前前后几轮');
       ctx.log(`thesportsdb: ${fixtures.size} 场`);

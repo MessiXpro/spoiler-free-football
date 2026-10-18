@@ -1222,3 +1222,37 @@ describe('TheSportsDB 免费 Key 少发请求', () => {
     expect(rounds.some((q) => q.includes('s=2026-2027') && q.includes('r=5&'))).toBe(false);
   });
 });
+
+describe('数据源用时上限', () => {
+  it('TheSportsDB 超过用时上限：剩下的赛事不拉，已经拿到的照常用，说明里写明', async () => {
+    let t = 0;
+    const urls: string[] = [];
+    const res = await createTheSportsDbAdapter().fetch(
+      ctx({
+        env: { THESPORTSDB_LEAGUES: '4328,4482,4570' },
+        clock: () => t,
+        deadline: 1000,
+        fetcher: createFixtureFetcher(
+          [
+            ['eventsnextleague', () => fixture('thesportsdb/eventsnextleague-4328-freekey.json')],
+            ['eventspastleague', () => fixture('thesportsdb/eventspastleague-4328-freekey.json')],
+            [
+              'eventsround',
+              () => fixture('thesportsdb/eventsround-4328-r1-2026-2027-freekey.json'),
+            ],
+          ],
+          (u) => {
+            urls.push(u);
+            t += 400; // 每次请求 0.4 秒
+          },
+        ),
+      }),
+    );
+    expect(res.fixtures.length).toBeGreaterThan(0);
+    expect(res.notes.join()).toMatch(/超过用时上限.*失败.*fa-cup.*efl-cup/);
+    expect(urls.some((u) => u.includes('id=4482'))).toBe(false);
+    expect(sourceStatus({ ok: true, count: res.fixtures.length, note: res.notes.join('；') })).toBe(
+      'warn',
+    );
+  });
+});

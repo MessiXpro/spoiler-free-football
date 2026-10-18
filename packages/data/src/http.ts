@@ -73,6 +73,7 @@ interface CacheEntry {
  * 旧版（没有前缀）用带密钥的完整 URL 算文件名、文件里也存了完整 URL，启动时清掉。
  */
 const CACHE_PREFIX = 'v2-';
+const MAX_RETRY_WAIT_MS = 60_000;
 const LEGACY_CACHE_FILE = /^[0-9a-f]{32}\.json$/;
 
 const isJson = (body: string) => {
@@ -155,7 +156,10 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
     if (robotsCache.has(origin)) return robotsCache.get(origin) ?? null;
     let rules: RobotsRules | null = null;
     try {
-      const res = await fetchImpl(`${origin}/robots.txt`, { headers: { 'User-Agent': userAgent } });
+      const res = await fetchImpl(`${origin}/robots.txt`, {
+        headers: { 'User-Agent': userAgent },
+        signal: AbortSignal.timeout(config.timeoutMs ?? 30_000),
+      });
       if (res.ok) rules = parseRobots(await res.text());
     } catch {
       rules = null;
@@ -210,8 +214,12 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
       }
       if ((res.status === 429 || res.status >= 500) && attempt < retries) {
         const retryAfter = Number(res.headers.get('retry-after'));
+        // Retry-After 可能很长（比如一小时）：最多等 1 分钟，再不行就用旧缓存或报错
         await sleep(
-          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 5000 * 2 ** attempt,
+          Math.min(
+            MAX_RETRY_WAIT_MS,
+            Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 5000 * 2 ** attempt,
+          ),
         );
         continue;
       }
