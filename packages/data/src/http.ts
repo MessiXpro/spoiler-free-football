@@ -51,6 +51,8 @@ export interface HttpFetcherConfig {
   minIntervalMs?: Record<string, number>;
   defaultIntervalMs?: number;
   retries?: number;
+  /** 单次请求（含读取响应内容）的超时，默认 30 秒；卡住的连接不能拖住整个数据管线 */
+  timeoutMs?: number;
   log?: (msg: string) => void;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
@@ -181,11 +183,16 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
     if (cached?.lastModified) headers['If-Modified-Since'] = cached.lastModified;
 
     const retries = config.retries ?? 2;
+    const timeoutMs = config.timeoutMs ?? 30_000;
     for (let attempt = 0; ; attempt++) {
       await throttle(u.host);
       let res: Response;
+      let body: string;
       try {
-        res = await fetchImpl(url, { headers });
+        // 超时同时覆盖连接和读取响应内容
+        const signal = AbortSignal.timeout(timeoutMs);
+        res = await fetchImpl(url, { headers, signal });
+        body = res.status === 304 ? '' : await res.text();
       } catch (err) {
         if (attempt < retries) {
           await sleep(2000 * 2 ** attempt);
@@ -208,7 +215,6 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
         );
         continue;
       }
-      const body = await res.text();
       // 重试后仍是 429/5xx：跟网络错误一样用旧缓存，不让整个数据源在这次部署里消失
       if ((res.status === 429 || res.status >= 500) && cached) {
         log(`HTTP ${res.status}，使用旧缓存：${redactUrl(url)}`);

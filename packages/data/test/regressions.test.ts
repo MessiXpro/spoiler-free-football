@@ -24,6 +24,7 @@ import { mergeFixtures } from '../src/merge.ts';
 import { stageFromTheSportsDb, teamRef } from '../src/normalize.ts';
 import { findPublicDataLeaks } from '../src/privacy.ts';
 import { fixture, SAMPLE_DIR, SAMPLE_ENV, SAMPLE_NOW, sampleFetcher } from '../src/sample.ts';
+import { sourceStatus, stepSummary } from '../src/summary.ts';
 import type { AdapterContext, FixtureAdapter, RawFixture } from '../src/types.ts';
 
 const json = <T>(path: string) => JSON.parse(fixture(path)) as T;
@@ -1072,5 +1073,152 @@ describe('维护者诊断：目录外球队、可能重复的比赛', () => {
       config: await loadConfig(CONFIG_DIR, { links: join(SAMPLE_DIR, 'links.sample.json') }),
     });
     expect(out.diagnostics.possibleDuplicates).toEqual([]);
+  });
+});
+
+describe('诊断和运行页小结不暴露淘汰赛对阵', () => {
+  const NOW = new Date('2026-11-10T06:00:00Z');
+  const kickoff = '2026-11-08T15:00:00.000Z';
+  const fixed = (id: string, priority: number, fixtures: RawFixture[]): FixtureAdapter => ({
+    id,
+    name: id,
+    priority,
+    fetch: async () => ({ fixtures, notes: [] }),
+  });
+  const knockout = (source: string, home: string, away: string) =>
+    raw({
+      source,
+      competition: 'fa-cup',
+      stage: 'round-of-32',
+      home: teamRef(home),
+      away: teamRef(away),
+      kickoff,
+    });
+
+  it('淘汰赛的目录外球队只计数；可能重复的淘汰赛不写队名', async () => {
+    const out = await buildData({
+      now: NOW,
+      fetcher: createFixtureFetcher([]),
+      env: {},
+      config: await loadConfig(),
+      adapters: [
+        fixed('football-data', 40, [knockout('football-data', 'Arsenal', 'Boreham Wood')]),
+        fixed('thesportsdb', 20, [knockout('thesportsdb', 'Boreham Wood FC', 'Arsenal')]),
+      ],
+    });
+    expect(out.diagnostics.unknownTeams).toEqual([]);
+    expect(out.diagnostics.hiddenKnockoutTeams).toBe(2);
+    expect(out.diagnostics.possibleDuplicates).toHaveLength(1);
+    const summary = stepSummary(out, 0);
+    for (const name of ['Boreham', '阿森纳', 'Arsenal', 'arsenal', 'boreham']) {
+      expect(summary).not.toContain(name);
+      expect(JSON.stringify(out.diagnostics)).not.toContain(name);
+    }
+    expect(summary).toContain('队名已隐藏');
+    expect(summary).toContain('2 个目录外的球队名');
+  });
+
+  it('请求全部失败、或一场都没拿到的数据源显示 ⚠️，不显示 ✅', () => {
+    expect(
+      sourceStatus({
+        ok: true,
+        count: 0,
+        note: 'football-data 2026-11-01~2026-11-10 失败：HTTP 403',
+      }),
+    ).toBe('warn');
+    expect(sourceStatus({ ok: true, count: 12, note: 'API-Football 联赛 39 失败：quota' })).toBe(
+      'warn',
+    );
+    expect(sourceStatus({ ok: true, count: 0, note: '使用免费测试 Key：只拉取当前前后几轮' })).toBe(
+      'warn',
+    );
+    expect(
+      sourceStatus({ ok: true, count: 30, note: '使用免费测试 Key：只拉取当前前后几轮' }),
+    ).toBe('ok');
+    expect(sourceStatus({ ok: false, count: 0, note: '未设置 KEY，跳过' })).toBe('off');
+    expect(sourceStatus({ id: 'manual', ok: true, count: 0 })).toBe('ok');
+  });
+
+  it('football-data / API-Football 返回错误信息时，说明里带"失败"', async () => {
+    const res = await createFootballDataAdapter().fetch(
+      ctx({
+        env: { FOOTBALL_DATA_TOKEN: 't' },
+        windowStart: new Date('2026-11-01T00:00:00Z'),
+        windowEnd: new Date('2026-11-05T00:00:00Z'),
+        fetcher: createFixtureFetcher([
+          [
+            'api.football-data.org',
+            () => JSON.stringify({ message: 'restricted', errorCode: 403 }),
+          ],
+        ]),
+      }),
+    );
+    expect(res.notes.length).toBeGreaterThan(0);
+    expect(res.notes.every((n) => /失败/.test(n))).toBe(true);
+  });
+});
+
+describe('TheSportsDB 免费 Key 少发请求', () => {
+  const event = (p: Record<string, string>) => ({
+    idEvent: p.idEvent ?? '1',
+    idLeague: '4429',
+    strLeague: 'FIFA World Cup',
+    strHomeTeam: 'Spain',
+    strAwayTeam: 'France',
+    strStatus: 'FT',
+    ...p,
+  });
+  const run = async (next: unknown[], past: unknown[], now: Date) => {
+    const urls: string[] = [];
+    await createTheSportsDbAdapter().fetch(
+      ctx({
+        now,
+        windowStart: new Date(now.getTime() - 60 * 86400000),
+        windowEnd: new Date(now.getTime() + 30 * 86400000),
+        env: { THESPORTSDB_LEAGUES: '4429' },
+        fetcher: createFixtureFetcher(
+          [
+            ['eventsnextleague', () => JSON.stringify({ events: next.length ? next : null })],
+            ['eventspastleague', () => JSON.stringify({ events: past })],
+            ['eventsround', () => JSON.stringify({ events: null })],
+          ],
+          (u) => urls.push(u),
+        ),
+      }),
+    );
+    return urls.filter((u) => u.includes('eventsround')).map((u) => new URL(u).search);
+  };
+
+  it('已经结束很久的赛事（只有早于时间窗的最近一场）不再按轮次拉取', async () => {
+    const final = event({
+      strSeason: '2026',
+      intRound: '200',
+      dateEvent: '2026-07-19',
+      strTimestamp: '2026-07-19T19:00:00',
+    });
+    expect(await run([], [final], new Date('2026-10-18T06:00:00Z'))).toEqual([]);
+  });
+
+  it('最近一场和下一场在不同赛季：各自只拉自己赛季的前后几轮', async () => {
+    const past = event({
+      strSeason: '2025-2026',
+      intRound: '5',
+      dateEvent: '2026-10-01',
+      strTimestamp: '2026-10-01T19:00:00',
+    });
+    const next = event({
+      idEvent: '2',
+      strSeason: '2026-2027',
+      intRound: '1',
+      strStatus: 'NS',
+      dateEvent: '2026-10-25',
+      strTimestamp: '2026-10-25T19:00:00',
+    });
+    const rounds = await run([next], [past], new Date('2026-10-18T06:00:00Z'));
+    expect(rounds.filter((q) => q.includes('s=2025-2026')).length).toBeGreaterThan(0);
+    expect(rounds.filter((q) => q.includes('s=2026-2027')).length).toBeGreaterThan(0);
+    // 两个赛季各 3 轮左右，而不是 2 × 6 轮
+    expect(rounds.length).toBeLessThanOrEqual(6);
+    expect(rounds.some((q) => q.includes('s=2026-2027') && q.includes('r=5&'))).toBe(false);
   });
 });

@@ -196,7 +196,7 @@ export function createFootballDataAdapter(): FixtureAdapter {
             cacheable: hasMatches,
           });
           if (!data.matches) {
-            notes.push(`football-data ${from}~${to}：${data.message ?? '无数据'}`);
+            notes.push(`football-data ${from}~${to} 失败：${data.message ?? '没有返回比赛数据'}`);
             continue;
           }
           for (const m of data.matches) {

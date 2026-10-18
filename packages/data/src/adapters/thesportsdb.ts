@@ -221,6 +221,8 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
         });
 
       for (const id of leagues) {
+        const before = fixtures.size;
+        let requests = 2;
         try {
           const [next, past] = await Promise.all([
             get(`eventsnextleague.php?id=${id}`),
@@ -237,17 +239,36 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
               add(eventsOf(await get(`eventsseason.php?id=${id}&s=${encodeURIComponent(s)}`)));
             continue;
           }
-          const rounds = roundsAround(
-            seed.map((e) => Number(e.intRound)).filter((n) => Number.isFinite(n)),
-            theSportsDbRoundIsMatchday(THESPORTSDB_LEAGUES[id]!),
-          );
-          for (const s of seasons) {
-            for (const r of rounds) {
+          // 每场"最近一场/下一场"只拉它自己赛季的前后几轮（不把每个赛季的轮次都拉一遍）；
+          // 早于时间窗一周以上的（已经结束的赛事，例如上届世界杯、8 月的社区盾）不再往外扩，省请求
+          const matchdayOnly = theSportsDbRoundIsMatchday(THESPORTSDB_LEAGUES[id]!);
+          const oldBefore = ctx.windowStart.getTime() - 7 * 24 * 60 * 60 * 1000;
+          const roundsBySeason = new Map<string, Set<number>>();
+          for (const e of seed) {
+            const round = Number(e.intRound);
+            if (!e.strSeason || !Number.isFinite(round)) continue;
+            let parsed: RawFixture | null = null;
+            try {
+              parsed = parseTheSportsDbEvent(e, ctx.now);
+            } catch {
+              /* 解析不了的照常拉取 */
+            }
+            if (parsed && Date.parse(parsed.kickoff) < oldBefore) continue;
+            const set = roundsBySeason.get(e.strSeason) ?? new Set<number>();
+            for (const r of roundsAround([round], matchdayOnly)) set.add(r);
+            roundsBySeason.set(e.strSeason, set);
+          }
+          for (const [s, rounds] of roundsBySeason) {
+            for (const r of [...rounds].sort((a, b) => a - b)) {
+              requests++;
               add(
                 eventsOf(await get(`eventsround.php?id=${id}&r=${r}&s=${encodeURIComponent(s)}`)),
               );
             }
           }
+          ctx.log(
+            `thesportsdb ${THESPORTSDB_LEAGUES[id]}：${fixtures.size - before} 场，${requests} 次请求`,
+          );
         } catch (err) {
           notes.push(`联赛 ${id}（${THESPORTSDB_LEAGUES[id]}）失败：${(err as Error).message}`);
         }

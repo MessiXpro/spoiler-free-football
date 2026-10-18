@@ -35,14 +35,17 @@ jobs:
     timeout-minutes: 5
     outputs:
       pages: ${{ steps.check.outputs.pages }}
+      # 是否部署到 Cloudflare Pages（DEPLOY_TARGET 为 cloudflare 或 both；表达式里比较不区分大小写）
+      cloudflare: ${{ vars.DEPLOY_TARGET == 'cloudflare' || vars.DEPLOY_TARGET == 'both' }}
     steps:
       - id: check
         name: 检查 GitHub Pages 是否已开启
         env:
           GH_TOKEN: ${{ github.token }}
-          DEPLOY_TARGET: ${{ vars.DEPLOY_TARGET }}
+          CLOUDFLARE_ONLY: ${{ vars.DEPLOY_TARGET == 'cloudflare' }}
+          CLOUDFLARE_ALSO: ${{ vars.DEPLOY_TARGET == 'both' }}
         run: |
-          if [ "$DEPLOY_TARGET" = "cloudflare" ]; then
+          if [ "$CLOUDFLARE_ONLY" = "true" ]; then
             echo "pages=unused" >> "$GITHUB_OUTPUT"
             echo "部署到 Cloudflare Pages，不需要 GitHub Pages"
           elif gh api "repos/${{ github.repository }}/pages" > /dev/null 2> pages-error.txt; then
@@ -50,7 +53,11 @@ jobs:
             echo "GitHub Pages 已开启"
           elif grep -q "404" pages-error.txt; then
             echo "pages=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=GitHub Pages 还没开启::网页还没上线。到仓库 Settings → Pages，把 Source 选成「GitHub Actions」。在那之前定时任务不会构建，以免白白占用 Actions 额度。"
+            if [ "$CLOUDFLARE_ALSO" = "true" ]; then
+              echo "::warning title=GitHub Pages 还没开启::这次只部署到 Cloudflare Pages。想同时用 GitHub Pages：Settings → Pages，Source 选「GitHub Actions」。"
+            else
+              echo "::warning title=GitHub Pages 还没开启::网页还没上线。到仓库 Settings → Pages，把 Source 选成「GitHub Actions」。在那之前定时任务不会构建，以免白白占用 Actions 额度。"
+            fi
           else
             # 查不了（权限等原因）就照常尝试部署
             cat pages-error.txt
@@ -59,11 +66,12 @@ jobs:
 
   build:
     needs: hosting
-    # PR：只试跑数据管线。定时任务：网页托管配好了才跑
+    # PR：只试跑数据管线。定时任务：GitHub Pages 或 Cloudflare Pages 至少配好一个才跑
     if: >-
       ${{ !cancelled() && (github.event_name == 'pull_request' ||
       (needs.hosting.result == 'success' &&
-      (needs.hosting.outputs.pages != 'false' || github.event_name != 'schedule'))) }}
+      (needs.hosting.outputs.pages != 'false' || needs.hosting.outputs.cloudflare == 'true' ||
+      github.event_name != 'schedule'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -150,10 +158,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/deploy.yml/enable"
 
-  # 推送或手动运行时 GitHub Pages 还没开启：数据管线照常试跑（上面的 build），这里给出明确的失败提示
+  # 推送或手动运行时 GitHub Pages 还没开启、也没配 Cloudflare：数据管线照常试跑（上面的 build），这里给出明确的失败提示
   pages-missing:
     needs: hosting
-    if: needs.hosting.outputs.pages == 'false' && github.event_name != 'schedule'
+    if: >-
+      needs.hosting.outputs.pages == 'false' && needs.hosting.outputs.cloudflare != 'true' &&
+      github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

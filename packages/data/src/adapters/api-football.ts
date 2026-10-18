@@ -182,7 +182,7 @@ export function createApiFootballAdapter(): FixtureAdapter {
           });
           const err = hasErrors(data.errors);
           if (err) {
-            notes.push(`API-Football 联赛 ${id}：${err}`);
+            notes.push(`API-Football 联赛 ${id} 失败：${err}`);
             continue;
           }
           for (const f of data.response ?? []) {

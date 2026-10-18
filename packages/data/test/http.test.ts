@@ -133,3 +133,37 @@ describe('时间工具', () => {
     expect(seasonOf(new Date('2027-07-15'))).toBe('2027-28');
   });
 });
+
+describe('请求超时', () => {
+  it('卡住不返回的请求按超时处理：重试后仍超时就报错，有旧缓存时用旧缓存', async () => {
+    const hang = (async (_url: string | URL, init?: RequestInit) =>
+      new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+      })) as typeof fetch;
+    const f = createHttpFetcher({
+      fetchImpl: hang,
+      defaultIntervalMs: 0,
+      timeoutMs: 20,
+      retries: 1,
+      sleep: async () => {},
+    });
+    await expect(f.getText('https://api.example.com/slow', { kind: 'api' })).rejects.toThrow();
+
+    const dir = await mkdtemp(join(tmpdir(), 'sff-http-'));
+    let ok = true;
+    const flaky = (async (url: string | URL, init?: RequestInit) =>
+      ok ? new Response('fresh', { status: 200 }) : hang(url, init)) as typeof fetch;
+    const g = createHttpFetcher({
+      cacheDir: dir,
+      fetchImpl: flaky,
+      defaultIntervalMs: 0,
+      timeoutMs: 20,
+      retries: 0,
+      sleep: async () => {},
+    });
+    expect((await g.getText('https://api.example.com/c', { kind: 'api' })).body).toBe('fresh');
+    ok = false;
+    const res = await g.getText('https://api.example.com/c', { kind: 'api', ttlMs: 0 });
+    expect(res).toMatchObject({ body: 'fresh', fromCache: true });
+  });
+});

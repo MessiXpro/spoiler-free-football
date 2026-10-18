@@ -5,9 +5,12 @@ import {
   DEFAULT_SITE_RULES_JSON,
   FIXTURE_LOCK_LOOKBACK_DAYS,
   getTeam,
+  isKnockoutStage,
   redact,
+  stageLabel,
   type DataMeta,
   type PublicMatch,
+  type Stage,
 } from '@sff/core';
 import { createApiFootballAdapter } from './adapters/api-football.ts';
 import { createFootballDataAdapter } from './adapters/football-data.ts';
@@ -83,17 +86,30 @@ export interface BuildDiagnostics {
   unknownTeams: Array<{ source: string; competition: string; name: string }>;
   /** 同一赛事、开球时间相近、有同一支球队的两场公开比赛：多半是同一场被拆成了两场 */
   possibleDuplicates: Array<{ competition: string; a: string; b: string }>;
+  /**
+   * 淘汰赛（或没写阶段的手工条目）里目录外的球队名个数。这些名字不列出：
+   * 诊断会显示在 GitHub Actions 运行页上，淘汰赛对阵会暴露前一轮谁晋级
+   */
+  hiddenKnockoutTeams: number;
 }
+
+/** 这场比赛的对阵会不会暴露前一轮结果（没写阶段的按会处理） */
+const revealsAdvancement = (stage: Stage | undefined) => !stage || isKnockoutStage(stage);
 
 const DUPLICATE_WINDOW_MS = 3 * 60 * 60 * 1000;
 
 function collectDiagnostics(all: RawFixture[], matches: PublicMatch[]): BuildDiagnostics {
   const seen = new Set<string>();
+  const hidden = new Set<string>();
   const unknownTeams: BuildDiagnostics['unknownTeams'] = [];
   for (const f of all) {
     for (const t of [f.home, f.away]) {
       if (getTeam(t.id)) continue;
       const key = `${f.source}|${f.competition}|${t.name}`;
+      if (revealsAdvancement(f.stage)) {
+        hidden.add(key);
+        continue;
+      }
       if (seen.has(key)) continue;
       seen.add(key);
       unknownTeams.push({ source: f.source, competition: f.competition, name: t.name });
@@ -105,7 +121,10 @@ function collectDiagnostics(all: RawFixture[], matches: PublicMatch[]): BuildDia
     ),
   );
   const possibleDuplicates: BuildDiagnostics['possibleDuplicates'] = [];
-  const label = (m: PublicMatch) => `${m.home.name} vs ${m.away.name}（${m.kickoff}）`;
+  const label = (m: PublicMatch) =>
+    revealsAdvancement(m.stage)
+      ? `${stageLabel(m) || '淘汰赛'}（${m.kickoff}，队名已隐藏）`
+      : `${m.home.name} vs ${m.away.name}（${m.kickoff}）`;
   for (let i = 0; i < matches.length; i++) {
     for (let j = i + 1; j < matches.length; j++) {
       const a = matches[i]!;
@@ -118,7 +137,11 @@ function collectDiagnostics(all: RawFixture[], matches: PublicMatch[]): BuildDia
       possibleDuplicates.push({ competition: a.competition, a: label(a), b: label(b) });
     }
   }
-  return { unknownTeams, possibleDuplicates };
+  return {
+    unknownTeams,
+    possibleDuplicates,
+    hiddenKnockoutTeams: [...hidden].filter((k) => !seen.has(k)).length,
+  };
 }
 
 /** 跑一遍完整管线（不写盘），方便测试 */
@@ -153,8 +176,10 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
       sources.push({ id: adapter.id, name: adapter.name, ok: false, count: 0, note: reason });
       continue;
     }
+    const started = Date.now();
     try {
       const result = await adapter.fetch(ctx);
+      log(`${adapter.name}：用时 ${Math.round((Date.now() - started) / 1000)} 秒`);
       all.push(...result.fixtures);
       sources.push({
         id: adapter.id,
