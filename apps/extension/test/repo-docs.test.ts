@@ -37,3 +37,25 @@ describe('README', () => {
     expect(row).toContain('`version`');
   });
 });
+
+describe('Cloudflare Pages 部署', () => {
+  const yml = read('.github', 'workflows', 'deploy.yml');
+
+  it('先准备好 Pages 项目（放在数据管线前面，填错几秒就失败），项目名默认值两边一致', () => {
+    const prepare = yml.indexOf('pnpm --filter @sff/data run cloudflare:prepare');
+    expect(prepare).toBeGreaterThan(0);
+    expect(prepare).toBeLessThan(yml.indexOf('pnpm data:build'));
+    // 网页地址要在构建插件/脚本之前确定（它们会把地址写进去）
+    expect(yml.indexOf('steps.cloudflare.outputs.url')).toBeLessThan(
+      yml.indexOf('pnpm --filter @sff/extension build'),
+    );
+    const pkg = JSON.parse(read('packages', 'data', 'package.json')) as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts['cloudflare:prepare']).toBeDefined();
+    expect(yml).toContain("vars.CLOUDFLARE_PROJECT || 'spoiler-free-football'");
+    expect(read('packages', 'data', 'src', 'cloudflare-cli.ts')).toContain(
+      "?? 'spoiler-free-football'",
+    );
+  });
+});

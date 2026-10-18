@@ -90,10 +90,27 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
+      # Cloudflare Pages：先确认项目存在（没有就自动创建）并查到网页地址；
+      # 放在数据管线前面，Token/账户 ID 填错时几秒钟就失败，不白跑
+      - name: 准备 Cloudflare Pages 项目
+        id: cloudflare
+        if: github.event_name != 'pull_request' && needs.hosting.outputs.cloudflare == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PROJECT: ${{ vars.CLOUDFLARE_PROJECT }}
+        run: pnpm --filter @sff/data run cloudflare:prepare
+
       - name: 确定网页地址
+        env:
+          WEB_URL_VAR: ${{ vars.SFF_WEB_URL }}
+          CLOUDFLARE_ONLY: ${{ vars.DEPLOY_TARGET == 'cloudflare' }}
+          CLOUDFLARE_URL: ${{ steps.cloudflare.outputs.url }}
         run: |
-          if [ -n "${{ vars.SFF_WEB_URL }}" ]; then
-            url="${{ vars.SFF_WEB_URL }}"
+          if [ -n "$WEB_URL_VAR" ]; then
+            url="$WEB_URL_VAR"
+          elif [ "$CLOUDFLARE_ONLY" = "true" ] && [ -n "$CLOUDFLARE_URL" ]; then
+            url="$CLOUDFLARE_URL"
           else
             owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
             url="https://${owner}.github.io/${{ github.event.repository.name }}/"

@@ -79,12 +79,21 @@
 
 **方式 B：Cloudflare Pages（免费，私有仓库也能用）**
 
-1. 注册 <https://dash.cloudflare.com/sign-up>，在 **Workers & Pages** 里创建一个 Pages 项目，名字填 `spoiler-free-football`（选「直接上传」，随便传一个空文件夹即可）。
-2. 在 Cloudflare 右上角头像 → **My Profile** → **API Tokens** → 创建 Token，模板选 **Edit Cloudflare Workers**（或自定义权限 Cloudflare Pages: Edit）。
-3. 回到 GitHub 仓库 **Settings → Secrets and variables → Actions**：
-   - Secrets 里添加 `CLOUDFLARE_API_TOKEN`（上一步的 Token）和 `CLOUDFLARE_ACCOUNT_ID`（Cloudflare 首页右侧能看到 Account ID）。
-   - 切到 **Variables** 标签，添加 `DEPLOY_TARGET` = `cloudflare`（两边都部署就填 `both`），再添加 `SFF_WEB_URL` = `https://spoiler-free-football.pages.dev/`。
-4. 网页地址就是 `https://spoiler-free-football.pages.dev/`。
+Pages 项目不用自己建，网页地址也不用自己填：第一次运行时工作流会自动创建名为 `spoiler-free-football` 的项目，并把网页地址写在运行页面的小结里。你只需要做下面 3 件事：
+
+1. **注册并找到 Account ID**：注册 <https://dash.cloudflare.com/sign-up>（免费，验证邮箱即可）。登录后看浏览器地址栏，`dash.cloudflare.com/` 后面那一串 32 位的字母和数字就是 **Account ID**。也可以在首页账户名旁边的「⋯」菜单里点 Copy account ID。
+2. **创建 API Token**：右上角头像 → **My Profile** → **API Tokens** → **Create Token** → 最下面 **Create Custom Token** 的 **Get started**：
+   - Token name：随便填，例如 `spoiler-free-football`
+   - Permissions：三个下拉框依次选 **Account** → **Cloudflare Pages** → **Edit**
+   - Account Resources：**Include** → 你的账户
+   - 点 **Continue to summary** → **Create Token**，复制显示出来的 Token（只显示一次，丢了就再建一个）
+3. **填进 GitHub**：仓库 **Settings → Secrets and variables → Actions**：
+   - **Secrets** 标签 → New repository secret，添加 `CLOUDFLARE_API_TOKEN`（第 2 步的 Token）和 `CLOUDFLARE_ACCOUNT_ID`（第 1 步的 Account ID）
+   - **Variables** 标签 → New repository variable，添加 `DEPLOY_TARGET`，值填 `cloudflare`
+
+然后做第 4 步。网页地址一般是 `https://spoiler-free-football.pages.dev/`（这个名字被别人用过时 Cloudflare 会自动加后缀，以运行小结里写的为准）。填错时运行会在几秒内失败，页面最上面有中文说明哪一项不对。
+
+> 国内访问：`*.pages.dev` 和 `*.github.io` 一样，在国内可能慢或偶尔打不开（见下文「国内访问慢怎么办」）。网页打开过一次就会缓存在手机/电脑上。
 
 ### 第 4 步：第一次运行
 
@@ -374,4 +383,4 @@ pnpm run ci         # 以上全部（必须带 run：pnpm 自带一个同名的 
 | 数据更新与部署 | 每天 5 次、push 到 main、手动；改了数据管线的 PR | 真实数据管线（含防泄露检查）→ 构建 → 部署 GitHub Pages 或 Cloudflare Pages；PR 里只试跑、不部署；网页托管没配好时定时运行自动跳过；每天续期一次，免得 GitHub 自动停用定时任务 |
 | 发布插件和用户脚本 | 打 `v*` 标签 | 附件发布 |
 
-仓库变量（Settings → Variables）：`SFF_WEB_URL`（网页地址，默认按 GitHub Pages 推算）、`DEPLOY_TARGET`（`github-pages` 默认 / `cloudflare` / `both`）、`CLOUDFLARE_PROJECT`、`FOOTBALL_DATA_COMPETITIONS`（付费档 football-data 可加 `PL,PD,CL,EC,WC,FAC,FLC,CDR,EL,UCL`）。
+仓库变量（Settings → Variables）：`SFF_WEB_URL`（网页地址，默认按 GitHub Pages 推算；`DEPLOY_TARGET=cloudflare` 时默认用 Cloudflare 返回的 `*.pages.dev` 地址；发布工作流 release.yml 只看这个变量）、`DEPLOY_TARGET`（`github-pages` 默认 / `cloudflare` / `both`）、`CLOUDFLARE_PROJECT`（Cloudflare Pages 项目名，默认 `spoiler-free-football`，不存在时自动创建）、`FOOTBALL_DATA_COMPETITIONS`（付费档 football-data 可加 `PL,PD,CL,EC,WC,FAC,FLC,CDR,EL,UCL`）。
