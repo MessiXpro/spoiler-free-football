@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.cache/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+test-results/
+playwright-report/
+blob-report/
+# 数据管线产物（由 CI 生成，不入库）
+apps/web/public/data/
+packages/data/.http-cache/
+.wrangler/

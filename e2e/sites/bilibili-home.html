@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>哔哩哔哩 (゜-゜)つロ 干杯~-bilibili</title>
+<style>.bili-video-card__image img{width:160px;height:90px;display:block}</style>
+</head>
+<body>
+<div class="feed2">
+  <div class="bili-video-card" id="card-football">
+    <div class="bili-video-card__image"><img src="https://i0.hdslb.com/football.jpg" alt=""></div>
+    <div class="bili-video-card__stats__duration">1:48:02</div>
+    <h3 class="bili-video-card__info--tit" title="【西甲】皇马 vs 巴萨 全场回放">【西甲】皇马 vs 巴萨 全场回放</h3>
+  </div>
+  <div class="bili-video-card" id="card-spoiler">
+    <div class="bili-video-card__image"><img src="https://i0.hdslb.com/spoiler.jpg" alt=""></div>
+    <div class="bili-video-card__stats__duration">8:15</div>
+    <h3 class="bili-video-card__info--tit">利物浦2-1埃弗顿 萨拉赫绝杀</h3>
+  </div>
+  <div class="bili-video-card" id="card-cooking">
+    <div class="bili-video-card__image"><img src="https://i0.hdslb.com/cook.jpg" alt=""></div>
+    <div class="bili-video-card__stats__duration">12:30</div>
+    <h3 class="bili-video-card__info--tit">今天做什么菜：番茄炒蛋</h3>
+  </div>
+</div>
+<script>
+  // 滚动加载
+  setTimeout(() => {
+    const d = document.createElement('div');
+    d.className = 'bili-video-card';
+    d.id = 'card-late';
+    d.innerHTML = '<div class="bili-video-card__image"><img src="https://i0.hdslb.com/late.jpg" alt=""></div><div class="bili-video-card__stats__duration">5:00</div><h3 class="bili-video-card__info--tit">切尔西1-0热刺 帕尔默建功</h3>';
+    document.querySelector('.feed2').appendChild(d);
+  }, 300);
+</script>
+</body>
+</html>

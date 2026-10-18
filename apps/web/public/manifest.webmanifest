@@ -1,0 +1,23 @@
+{
+  "name": "防剧透看球",
+  "short_name": "防剧透",
+  "description": "英超、西甲、欧冠、国家队录像与集锦入口，自动隐藏比分",
+  "lang": "zh-CN",
+  "start_url": "./#/today",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1f16",
+  "theme_color": "#1f3d2b",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

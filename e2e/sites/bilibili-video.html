@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>【英超】曼城 3-0 伊普斯维奇 哈兰德帽子戏法 全场集锦_哔哩哔哩_bilibili</title>
+<meta name="description" content="曼城3-0伊普斯维奇">
+<style>
+  body { font-family: sans-serif; margin: 0; }
+  .left-container { width: 70%; float: left; }
+  .right-container { width: 30%; float: right; }
+  .bpx-player-container { position: relative; width: 640px; height: 360px; background: #000; color: #fff; }
+  .bpx-player-control-bottom { position: absolute; bottom: 0; left: 0; right: 0; height: 40px; display: flex; gap: 8px; align-items: center; }
+  .bpx-player-progress-wrap { position: absolute; bottom: 40px; left: 0; right: 0; height: 6px; background: #444; }
+  .bpx-player-progress-popup { position: absolute; bottom: 12px; left: 100px; background: #222; }
+  .bpx-player-row-dm-wrap { position: absolute; top: 0; left: 0; right: 0; height: 300px; }
+  .bili-video-card__image img { width: 160px; height: 90px; display: block; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="left-container">
+    <div class="video-info-container">
+      <div class="video-info-title"><h1 class="video-title" title="【英超】曼城 3-0 伊普斯维奇 哈兰德帽子戏法 全场集锦">【英超】曼城 3-0 伊普斯维奇 哈兰德帽子戏法 全场集锦</h1></div>
+    </div>
+    <div class="bpx-player-container" id="bilibili-player">
+      <div class="bpx-player-row-dm-wrap"><span class="bili-dm">绝杀！！！</span><span class="bili-dm">3比0太爽了</span></div>
+      <div class="bpx-player-progress-wrap">
+        <div class="bpx-player-progress-popup"><div class="bpx-player-progress-preview-time">1:23:45</div><img class="bpx-player-progress-preview" src="https://i0.hdslb.com/preview.jpg" alt="预览"></div>
+      </div>
+      <div class="bpx-player-control-bottom">
+        <span class="bpx-player-ctrl-time-current">0:00</span>
+        <span class="bpx-player-ctrl-time-seperate">/</span>
+        <span class="bpx-player-ctrl-time-duration">1:52:30</span>
+      </div>
+    </div>
+    <div class="video-desc-container"><span class="desc-info-text">英超第7轮，哈兰德梅开二度后再进一球完成帽子戏法，曼城零封对手。</span></div>
+    <div class="video-tag-container"><a class="tag-link">英超</a><a class="tag-link">曼城</a><a class="tag-link">帽子戏法</a></div>
+    <div class="score-line"><span>曼城</span> <b class="n">3</b><i>:</i><b class="n">0</b> <span>伊普斯维奇</span></div>
+    <div id="commentapp"><div class="reply-item">这场3-0没悬念，哈兰德太强了</div></div>
+  </div>
+  <div class="right-container">
+    <div class="rec-list" id="reco_list">
+      <div class="video-page-card-small"><div class="pic-box"><img class="b-img" src="https://i0.hdslb.com/cover1.jpg" alt="cover"><span class="duration">10:24</span></div><div class="info"><p class="title">阿森纳2-1逆转切尔西</p></div></div>
+    </div>
+  </div>
+  <div id="plain">普通文字 2026 赛季 第 7 轮 4-3-3 阵型 U21</div>
+</div>
+<script>
+  // 模拟页面脚本陆续加载内容：弹幕、评论、推荐、标题变化、shadow DOM
+  const dm = () => {
+    const s = document.createElement('span');
+    s.className = 'bili-dm';
+    s.textContent = '哈兰德破门！';
+    document.querySelector('.bpx-player-row-dm-wrap').appendChild(s);
+  };
+  dm();
+  setTimeout(() => {
+    const c = document.createElement('div');
+    c.className = 'reply-item';
+    c.textContent = '补时绝杀那一下我跳起来了，2:1';
+    document.getElementById('commentapp').appendChild(c);
+    const p = document.createElement('p');
+    p.id = 'late-plain';
+    p.textContent = '赛后：曼城 3:0 伊普斯维奇，瓜帅很满意';
+    document.querySelector('.left-container').appendChild(p);
+  }, 50);
+  setTimeout(() => {
+    const host = document.createElement('bili-comments');
+    document.querySelector('.left-container').appendChild(host);
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<div id="shadow-text">影子里的比分 3-0 曼城晋级</div>';
+  }, 200);
+  setTimeout(() => {
+    document.title = '曼城3-0伊普斯维奇 哈兰德戴帽_哔哩哔哩_bilibili';
+  }, 400);
+  setTimeout(() => {
+    const card = document.createElement('div');
+    card.className = 'video-page-card-small';
+    card.id = 'late-card';
+    card.innerHTML = '<div class="pic-box"><img class="b-img" src="https://i0.hdslb.com/cover2.jpg" alt="cover"><span class="duration">12:01</span></div><div class="info"><p class="title" title="皇马点球大战淘汰拜仁">皇马点球大战淘汰拜仁</p></div>';
+    document.getElementById('reco_list').appendChild(card);
+    dm();
+    document.querySelector('.desc-info-text').firstChild.data = '更新：全场比分 3-0，曼城取胜';
+  }, 800);
+  window.__pageDone = new Promise((r) => setTimeout(r, 1200));
+</script>
+</body>
+</html>

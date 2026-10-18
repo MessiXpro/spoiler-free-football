@@ -1,0 +1,94 @@
+:root {
+  color-scheme: light dark;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  font-size: 14px;
+  --accent: #1f8a4c;
+}
+
+body.popup {
+  width: 320px;
+  margin: 0;
+  padding: 12px;
+}
+
+body.options {
+  max-width: 720px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.gap {
+  gap: 8px;
+}
+
+header.row {
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.switch {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.card {
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.title {
+  font-weight: 600;
+  margin: 4px 0 8px;
+}
+
+.muted {
+  opacity: 0.7;
+}
+
+.small {
+  font-size: 12px;
+}
+
+button {
+  font: inherit;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  background: transparent;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+
+button.ghost {
+  border-style: dashed;
+}
+
+#site-status {
+  margin-bottom: 8px;
+}
+
+#match-score {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 6px 0;
+}
+
+a {
+  color: var(--accent);
+}

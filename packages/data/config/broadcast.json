@@ -1,0 +1,354 @@
+{
+  "$comment": "中国大陆正版观看渠道配置。可直接编辑：改了以后下一次数据管线运行就会生效。confidence: high=有官方来源；medium=有可靠报道；low/unverified=未能核实，页面上会标注「待核实」。查证日期 2026-10-16，详见 docs/broadcast-rights.md。",
+  "checkedAt": "2026-10-16",
+  "platforms": {
+    "migu": {
+      "name": "咪咕视频",
+      "url": "https://www.miguvideo.com/",
+      "note": "以 App 为主，多数体育内容需要手机号登录，很多需要会员"
+    },
+    "iqiyi": {
+      "name": "爱奇艺体育",
+      "url": "https://sports.iqiyi.com/",
+      "note": "以「爱奇艺体育」App 为主；网页入口地址未核实，打不开时请用 App 搜索比赛"
+    },
+    "cctv5": {
+      "name": "CCTV-5 / 央视网",
+      "url": "https://tv.cctv.com/live/cctv5/",
+      "note": "免费"
+    },
+    "yangshipin": { "name": "央视频", "url": "https://www.yangshipin.cn/", "note": "免费" },
+    "bilibili": {
+      "name": "哔哩哔哩",
+      "url": "https://www.bilibili.com/",
+      "note": "官方号集锦标题和封面常带比分，请先开启防剧透插件/脚本"
+    },
+    "douyin": {
+      "name": "抖音",
+      "url": "https://www.douyin.com/",
+      "note": "官方号短视频标题常带比分"
+    }
+  },
+  "competitions": {
+    "epl": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "highlights", "live"],
+          "vip": true,
+          "confidence": "high",
+          "url": "https://www.miguvideo.com/p/home/0c40bbc85fa345bbba20f8e5fd11a922",
+          "note": "2025/26–2027/28 中国大陆独家新媒体版权，全部 380 场；部分场次免费"
+        },
+        {
+          "platform": "bilibili",
+          "kinds": ["highlights"],
+          "vip": false,
+          "confidence": "medium",
+          "url": "https://space.bilibili.com/1488532268",
+          "note": "英超联赛官方号（集锦）"
+        }
+      ]
+    },
+    "laliga": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "highlights", "live"],
+          "vip": true,
+          "confidence": "high",
+          "note": "2026/27–2029/30 中国大陆独家新媒体合作伙伴，全部 380 场，含集锦和点播"
+        },
+        {
+          "platform": "yangshipin",
+          "kinds": ["live", "replay"],
+          "vip": false,
+          "confidence": "medium",
+          "note": "据报道每轮 2 场焦点战在 CCTV/央视频免费播出"
+        }
+      ]
+    },
+    "ucl": {
+      "rights": [
+        {
+          "platform": "iqiyi",
+          "kinds": ["replay", "highlights", "live"],
+          "vip": true,
+          "confidence": "high",
+          "note": "欧足联官网 2026/27 观赛指南列出爱奇艺体育；已续约至 2031"
+        }
+      ]
+    },
+    "uel": {
+      "rights": [
+        {
+          "platform": "iqiyi",
+          "kinds": ["replay", "highlights", "live"],
+          "vip": true,
+          "confidence": "high",
+          "note": "欧足联官网 2026/27 观赛指南"
+        }
+      ]
+    },
+    "uecl": {
+      "rights": [
+        {
+          "platform": "iqiyi",
+          "kinds": ["replay", "highlights", "live"],
+          "vip": true,
+          "confidence": "high",
+          "note": "欧足联官网 2026/27 观赛指南"
+        }
+      ]
+    },
+    "uefa-super-cup": {
+      "rights": [
+        {
+          "platform": "iqiyi",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "low",
+          "note": "随欧足联俱乐部赛事打包，未单独核实"
+        }
+      ]
+    },
+    "fa-cup": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "highlights", "live"],
+          "vip": true,
+          "confidence": "medium",
+          "note": "英足总 2025-26 观赛名单列出咪咕；2026-27 名单尚未公布"
+        }
+      ]
+    },
+    "community-shield": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "medium",
+          "note": "英足总 2026 社区盾观赛名单"
+        },
+        {
+          "platform": "cctv5",
+          "kinds": ["live"],
+          "vip": false,
+          "confidence": "medium",
+          "note": "英足总 2026 社区盾观赛名单（CCTV5/5+）"
+        }
+      ]
+    },
+    "efl-cup": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "unverified",
+          "note": "未查到 2026-27 中国大陆版权方，请以平台实际为准"
+        }
+      ]
+    },
+    "copa-del-rey": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "unverified",
+          "note": "未查到 2026-27 中国大陆版权方，请以平台实际为准"
+        }
+      ]
+    },
+    "supercopa": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "unverified",
+          "note": "未查到 2026-27 中国大陆版权方，请以平台实际为准"
+        }
+      ]
+    },
+    "club-world-cup": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "highlights", "live"],
+          "vip": true,
+          "confidence": "medium",
+          "note": "咪咕与国际足联直签两届世俱杯（下一届 2029）"
+        }
+      ]
+    },
+    "intercontinental-cup": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "unverified",
+          "note": "2026 洲际杯中国大陆版权方未查到"
+        }
+      ]
+    },
+    "nations-league": {
+      "rights": [
+        {
+          "platform": "iqiyi",
+          "kinds": ["replay", "highlights", "live"],
+          "vip": true,
+          "confidence": "high",
+          "note": "欧足联官网 2026/27 欧国联观赛指南列出爱奇艺体育"
+        }
+      ]
+    },
+    "euro-qualifiers": {
+      "rights": [
+        {
+          "platform": "iqiyi",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "low",
+          "note": "推测与欧国联同属欧足联国家队打包，未单独核实（2027 年开赛）"
+        }
+      ]
+    },
+    "wc-qualifiers": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "unverified",
+          "note": "2026-27 赛季欧洲区没有世预赛；其他大洲版权方未核实"
+        }
+      ]
+    },
+    "world-cup": {
+      "rights": [
+        {
+          "platform": "cctv5",
+          "kinds": ["replay", "live", "highlights"],
+          "vip": false,
+          "confidence": "high",
+          "note": "中央广播电视总台独家（2026、2030）"
+        },
+        {
+          "platform": "yangshipin",
+          "kinds": ["replay", "live", "highlights"],
+          "vip": false,
+          "confidence": "high",
+          "note": "免费"
+        },
+        {
+          "platform": "migu",
+          "kinds": ["replay", "live"],
+          "vip": false,
+          "confidence": "high",
+          "note": "总台授权的直播/回看平台"
+        }
+      ]
+    },
+    "euro": {
+      "rights": [
+        {
+          "platform": "iqiyi",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "low",
+          "note": "下一届为 2028，届时请重新核实"
+        }
+      ]
+    },
+    "copa-america": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "unverified",
+          "note": "2026-27 赛季没有美洲杯"
+        }
+      ]
+    },
+    "finalissima": {
+      "rights": [
+        {
+          "platform": "migu",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "unverified",
+          "note": "未核实"
+        }
+      ]
+    },
+    "friendlies": {
+      "rights": [
+        {
+          "platform": "iqiyi",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "unverified",
+          "note": "友谊赛按场次单独售卖，请以各平台赛程为准"
+        },
+        {
+          "platform": "migu",
+          "kinds": ["replay", "live"],
+          "vip": true,
+          "confidence": "unverified",
+          "note": "友谊赛按场次单独售卖，请以各平台赛程为准"
+        }
+      ]
+    }
+  },
+  "teamChannels": {
+    "$comment": "球队官方 B 站号（集锦）。标注 medium 的已在 B 站搜索结果中看到「官方账号」标记，low 为疑似，需用户自行确认。",
+    "man-city": {
+      "platform": "bilibili",
+      "url": "https://space.bilibili.com/1832904916",
+      "name": "曼城官方号",
+      "confidence": "medium"
+    },
+    "liverpool": {
+      "platform": "bilibili",
+      "url": "https://space.bilibili.com/1162655250",
+      "name": "利物浦官方号",
+      "confidence": "medium"
+    },
+    "man-utd": {
+      "platform": "bilibili",
+      "url": "https://space.bilibili.com/1945684635",
+      "name": "曼联官方号",
+      "confidence": "medium"
+    },
+    "tottenham": {
+      "platform": "bilibili",
+      "url": "https://space.bilibili.com/1286571388",
+      "name": "热刺官方号",
+      "confidence": "medium"
+    },
+    "real-madrid": {
+      "platform": "bilibili",
+      "url": "https://space.bilibili.com/1748186868",
+      "name": "皇马官方号",
+      "confidence": "medium"
+    },
+    "barcelona": {
+      "platform": "bilibili",
+      "url": "https://space.bilibili.com/3493079237528000",
+      "name": "巴萨官方号",
+      "confidence": "low"
+    },
+    "atletico": {
+      "platform": "bilibili",
+      "url": "https://space.bilibili.com/430400780",
+      "name": "马竞官方号（疑似）",
+      "confidence": "low"
+    }
+  }
+}

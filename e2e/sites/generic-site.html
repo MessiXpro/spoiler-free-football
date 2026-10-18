@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>__TITLE__</title>
+</head>
+<body>
+<header><h1>__H1__</h1></header>
+<main>
+  <ul class="news-list">
+    <li class="item"><a class="item-title" href="#">英超-阿森纳2:1切尔西 萨卡破门</a></li>
+    <li class="item"><a class="item-title" href="#">欧冠-皇马(4)1-1(3)拜仁 点球大战晋级</a></li>
+    <li class="item"><a class="item-title" href="#" title="巴萨2比1马竞">巴萨对马竞</a></li>
+    <li class="item"><a class="item-title" href="#">英超第8轮前瞻：利物浦 vs 曼城 · 10月25日 23:30</a></li>
+  </ul>
+  <div class="match-score"><span class="home">曼联</span><em>1</em>-<em>1</em><span class="away">热刺</span></div>
+  <div class="comment-list"><div class="comment">这场太刺激了，补时扳平！</div></div>
+  <p id="neutral">2025-26 赛季 第 3 轮 U21 4-3-3 阵型</p>
+</main>
+<script>
+  setTimeout(() => {
+    const li = document.createElement('li');
+    li.className = 'item';
+    li.id = 'late';
+    li.innerHTML = '<a class="item-title" href="#">西甲：马竞 0-2 皇马，维尼修斯梅开二度</a>';
+    document.querySelector('.news-list').appendChild(li);
+    document.title = '最新：曼城 3-0 伊普斯维奇';
+  }, 150);
+</script>
+</body>
+</html>

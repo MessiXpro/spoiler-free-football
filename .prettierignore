@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+apps/web/public/data
+packages/data/test/fixtures
+e2e/sites
+test-results
+playwright-report
+*.md

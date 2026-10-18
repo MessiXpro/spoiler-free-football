@@ -1,0 +1,19 @@
+{
+  "name": "@sff/data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "数据管线：汇总赛程、录像/集锦入口、足球节目，产出不含比分的静态数据",
+  "scripts": {
+    "build:live": "tsx src/cli.ts --out ../../apps/web/public/data",
+    "build:sample": "tsx src/cli.ts --sample --out ../../apps/web/public/data",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sff/core": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6"
+  }
+}

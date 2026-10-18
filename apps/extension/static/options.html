@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>防剧透看球 · 设置</title>
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body class="options">
+    <h1>防剧透看球 · 设置</h1>
+
+    <section class="card">
+      <h2>遮挡哪些内容</h2>
+      <p class="muted small">
+        文字里的比分写法、结果词、进球者提示、标签页标题始终会处理；以下是额外的整块遮挡。
+      </p>
+      <div id="categories"></div>
+    </section>
+
+    <section class="card">
+      <h2>全网防剧透（可选）</h2>
+      <p class="muted small">
+        在设定时段内，对所有网站做通用的比分/结果词识别（新闻、社交网站等）。需要授予「读取所有网站」权限，只在这个时段内生效。
+      </p>
+      <label class="row gap"><input type="checkbox" id="global-enabled" /> 启用全网防剧透</label>
+      <label class="row gap"
+        >时段 <input type="time" id="global-start" /> 到 <input type="time" id="global-end"
+      /></label>
+      <div class="row gap" id="global-days"></div>
+      <p id="global-msg" class="muted small"></p>
+    </section>
+
+    <section class="card">
+      <h2>站点规则</h2>
+      <p class="muted small">规则是纯数据（CSS 选择器和词表），会定期从防剧透网页下载更新。</p>
+      <p id="rules-info" class="small"></p>
+      <button id="update-rules">立即检查更新</button>
+      <h3>已停用的站点</h3>
+      <ul id="disabled-hosts" class="small"></ul>
+    </section>
+
+    <section class="card">
+      <h2>防剧透网页地址</h2>
+      <p class="muted small">比分和规则从这里下载。打开过一次防剧透网页后会自动填好。</p>
+      <input type="url" id="data-base" size="60" />
+      <button id="save-base">保存</button>
+    </section>
+    <script src="options.js"></script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "@sff/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "防剧透核心：比分/结果词识别、中性标题、球队与赛事目录、同步码、站点规则与 DOM 遮挡引擎",
+  "exports": {
+    ".": "./src/index.ts",
+    "./dom": "./src/dom/index.ts",
+    "./rules/default-site-rules.json": "./src/rules/default-site-rules.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "jsdom": "^27.4.0"
+  },
+  "sideEffects": false
+}

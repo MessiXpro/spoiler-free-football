@@ -1,0 +1,291 @@
+{
+  "matches": [
+    {
+      "id": 537415,
+      "utcDate": "2026-06-29T20:30:00Z",
+      "status": "FINISHED",
+      "matchday": null,
+      "stage": "LAST_32",
+      "group": null,
+      "competition": {
+        "id": 2000,
+        "code": "WC",
+        "name": "FIFA World Cup",
+        "type": "CUP",
+        "emblem": "https://crests.football-data.org/wm26.png"
+      },
+      "homeTeam": {
+        "id": 759,
+        "name": "Germany",
+        "shortName": "Germany",
+        "tla": "GER",
+        "crest": "https://crests.football-data.org/759.svg"
+      },
+      "awayTeam": {
+        "id": 761,
+        "name": "Paraguay",
+        "shortName": "Paraguay",
+        "tla": "PAR",
+        "crest": "https://crests.football-data.org/761.svg"
+      },
+      "score": {
+        "winner": "AWAY_TEAM",
+        "duration": "PENALTY_SHOOTOUT",
+        "fullTime": {
+          "home": 4,
+          "away": 5
+        },
+        "halfTime": {
+          "home": 0,
+          "away": 1
+        }
+      }
+    },
+    {
+      "id": 537418,
+      "utcDate": "2026-06-30T01:00:00Z",
+      "status": "FINISHED",
+      "matchday": null,
+      "stage": "LAST_32",
+      "group": null,
+      "competition": {
+        "id": 2000,
+        "code": "WC",
+        "name": "FIFA World Cup",
+        "type": "CUP",
+        "emblem": "https://crests.football-data.org/wm26.png"
+      },
+      "homeTeam": {
+        "id": 8601,
+        "name": "Netherlands",
+        "shortName": "Netherlands",
+        "tla": "NED",
+        "crest": "https://crests.football-data.org/8601.svg"
+      },
+      "awayTeam": {
+        "id": 815,
+        "name": "Morocco",
+        "shortName": "Morocco",
+        "tla": "MAR",
+        "crest": "https://crests.football-data.org/morocco.svg"
+      },
+      "score": {
+        "winner": "AWAY_TEAM",
+        "duration": "PENALTY_SHOOTOUT",
+        "fullTime": {
+          "home": 3,
+          "away": 4
+        },
+        "halfTime": {
+          "home": 0,
+          "away": 0
+        }
+      }
+    },
+    {
+      "id": 537422,
+      "utcDate": "2026-07-01T20:00:00Z",
+      "status": "FINISHED",
+      "matchday": null,
+      "stage": "LAST_32",
+      "group": null,
+      "competition": {
+        "id": 2000,
+        "code": "WC",
+        "name": "FIFA World Cup",
+        "type": "CUP",
+        "emblem": "https://crests.football-data.org/wm26.png"
+      },
+      "homeTeam": {
+        "id": 805,
+        "name": "Belgium",
+        "shortName": "Belgium",
+        "tla": "BEL",
+        "crest": "https://crests.football-data.org/805.svg"
+      },
+      "awayTeam": {
+        "id": 804,
+        "name": "Senegal",
+        "shortName": "Senegal",
+        "tla": "SEN",
+        "crest": "https://crests.football-data.org/senegal.svg"
+      },
+      "score": {
+        "winner": "HOME_TEAM",
+        "duration": "EXTRA_TIME",
+        "fullTime": {
+          "home": 3,
+          "away": 2
+        },
+        "halfTime": {
+          "home": 0,
+          "away": 1
+        }
+      }
+    },
+    {
+      "id": 564698,
+      "utcDate": "2026-10-10T12:00:00Z",
+      "status": "CANCELLED",
+      "matchday": 8,
+      "stage": "REGULAR_SEASON",
+      "group": null,
+      "competition": {
+        "id": 2014,
+        "code": "PD",
+        "name": "Primera Division",
+        "type": "LEAGUE",
+        "emblem": "https://crests.football-data.org/laliga.png"
+      },
+      "homeTeam": {
+        "id": 87,
+        "name": "Rayo Vallecano de Madrid",
+        "shortName": "Rayo Vallecano",
+        "tla": "RAY",
+        "crest": "https://crests.football-data.org/87.png"
+      },
+      "awayTeam": {
+        "id": 77,
+        "name": "Athletic Club",
+        "shortName": "Athletic",
+        "tla": "ATH",
+        "crest": "https://crests.football-data.org/77.png"
+      },
+      "score": {
+        "winner": "DRAW",
+        "duration": "REGULAR",
+        "fullTime": {
+          "home": 0,
+          "away": 0
+        },
+        "halfTime": {
+          "home": null,
+          "away": null
+        }
+      }
+    },
+    {
+      "id": 557091,
+      "utcDate": "2026-05-08T00:30:00Z",
+      "status": "CANCELLED",
+      "matchday": 4,
+      "stage": "GROUP_STAGE",
+      "group": "GROUP_A",
+      "competition": {
+        "id": 2152,
+        "code": "CLI",
+        "name": "Copa Libertadores",
+        "type": "CUP",
+        "emblem": "https://crests.football-data.org/CLI.svg"
+      },
+      "homeTeam": {
+        "id": 7119,
+        "name": "CD Independiente Medellín",
+        "shortName": "Independiente",
+        "tla": "DIM",
+        "crest": "https://crests.football-data.org/7119.png"
+      },
+      "awayTeam": {
+        "id": 1783,
+        "name": "CR Flamengo",
+        "shortName": "Flamengo",
+        "tla": "FLA",
+        "crest": "https://crests.football-data.org/1783.png"
+      },
+      "score": {
+        "winner": "DRAW",
+        "duration": "REGULAR",
+        "fullTime": {
+          "home": 0,
+          "away": 0
+        },
+        "halfTime": {
+          "home": null,
+          "away": null
+        }
+      }
+    },
+    {
+      "id": 564455,
+      "utcDate": "2026-08-11T22:00:00Z",
+      "status": "FINISHED",
+      "matchday": 1,
+      "stage": "PLAY_OFFS",
+      "group": null,
+      "competition": {
+        "id": 2152,
+        "code": "CLI",
+        "name": "Copa Libertadores",
+        "type": "CUP",
+        "emblem": "https://crests.football-data.org/CLI.svg"
+      },
+      "homeTeam": {
+        "id": 1765,
+        "name": "Fluminense FC",
+        "shortName": "Fluminense",
+        "tla": "FLU",
+        "crest": "https://crests.football-data.org/1765.png"
+      },
+      "awayTeam": {
+        "id": 2052,
+        "name": "CS Independiente Rivadavia",
+        "shortName": "Rivadavia",
+        "tla": "RIV",
+        "crest": "https://crests.football-data.org/2052.png"
+      },
+      "score": {
+        "winner": "DRAW",
+        "duration": "REGULAR",
+        "fullTime": {
+          "home": 0,
+          "away": 0
+        },
+        "halfTime": {
+          "home": 0,
+          "away": 0
+        }
+      }
+    },
+    {
+      "id": 564456,
+      "utcDate": "2026-08-12T00:30:00Z",
+      "status": "FINISHED",
+      "matchday": 1,
+      "stage": "PLAY_OFFS",
+      "group": null,
+      "competition": {
+        "id": 2152,
+        "code": "CLI",
+        "name": "Copa Libertadores",
+        "type": "CUP",
+        "emblem": "https://crests.football-data.org/CLI.svg"
+      },
+      "homeTeam": {
+        "id": 2051,
+        "name": "Estudiantes de La Plata",
+        "shortName": "Estudiantes LP",
+        "tla": "EST",
+        "crest": "https://crests.football-data.org/2051.png"
+      },
+      "awayTeam": {
+        "id": 6993,
+        "name": "CD Universidad Católica",
+        "shortName": "Univ Católica",
+        "tla": "CAT",
+        "crest": "https://crests.football-data.org/6993.png"
+      },
+      "score": {
+        "winner": "DRAW",
+        "duration": "REGULAR",
+        "fullTime": {
+          "home": 1,
+          "away": 1
+        },
+        "halfTime": {
+          "home": 1,
+          "away": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,186 @@
+name: 数据更新与部署
+
+# 每天北京时间 06:20、08:20、10:20、14:20、20:20 跑一次数据管线（欧洲比赛大多在北京时间凌晨结束）
+on:
+  schedule:
+    - cron: '20 22 * * *'
+    - cron: '20 0 * * *'
+    - cron: '20 2 * * *'
+    - cron: '20 6 * * *'
+    - cron: '20 12 * * *'
+  push:
+    branches: [main]
+  # 改了数据管线的 PR：先用真实数据试跑一遍（只构建、不部署），合并前就能发现问题
+  pull_request:
+    paths:
+      - 'packages/data/**'
+      - 'packages/core/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: deploy-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # 网页托管有没有配置好。GitHub Pages 还没开启时：定时任务不白跑（省 Actions 额度），推送/手动运行时用中文说明要做什么
+  hosting:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      pages: ${{ steps.check.outputs.pages }}
+      # 是否部署到 Cloudflare Pages（DEPLOY_TARGET 为 cloudflare 或 both；表达式里比较不区分大小写）
+      cloudflare: ${{ vars.DEPLOY_TARGET == 'cloudflare' || vars.DEPLOY_TARGET == 'both' }}
+    steps:
+      - id: check
+        name: 检查 GitHub Pages 是否已开启
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_ONLY: ${{ vars.DEPLOY_TARGET == 'cloudflare' }}
+          CLOUDFLARE_ALSO: ${{ vars.DEPLOY_TARGET == 'both' }}
+        run: |
+          if [ "$CLOUDFLARE_ONLY" = "true" ]; then
+            echo "pages=unused" >> "$GITHUB_OUTPUT"
+            echo "部署到 Cloudflare Pages，不需要 GitHub Pages"
+          elif gh api "repos/${{ github.repository }}/pages" > /dev/null 2> pages-error.txt; then
+            echo "pages=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub Pages 已开启"
+          elif grep -q "404" pages-error.txt; then
+            echo "pages=false" >> "$GITHUB_OUTPUT"
+            if [ "$CLOUDFLARE_ALSO" = "true" ]; then
+              echo "::warning title=GitHub Pages 还没开启::这次只部署到 Cloudflare Pages。想同时用 GitHub Pages：Settings → Pages，Source 选「GitHub Actions」。"
+            else
+              echo "::warning title=GitHub Pages 还没开启::网页还没上线。到仓库 Settings → Pages，把 Source 选成「GitHub Actions」。在那之前定时任务不会构建，以免白白占用 Actions 额度。"
+            fi
+          else
+            # 查不了（权限等原因）就照常尝试部署
+            cat pages-error.txt
+            echo "pages=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: hosting
+    # PR：只试跑数据管线。定时任务：GitHub Pages 或 Cloudflare Pages 至少配好一个才跑
+    if: >-
+      ${{ !cancelled() && (github.event_name == 'pull_request' ||
+      (needs.hosting.result == 'success' &&
+      (needs.hosting.outputs.pages != 'false' || needs.hosting.outputs.cloudflare == 'true' ||
+      github.event_name != 'schedule'))) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # 仓库 Settings → Secrets and variables → Actions 里设置；不设也能跑（只用免 Key 的数据源）
+      FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+      THESPORTSDB_KEY: ${{ secrets.THESPORTSDB_KEY }}
+      APIFOOTBALL_KEY: ${{ secrets.APIFOOTBALL_KEY }}
+      FOOTBALL_DATA_COMPETITIONS: ${{ vars.FOOTBALL_DATA_COMPETITIONS }}
+      SFF_HTTP_CACHE: ${{ github.workspace }}/.http-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: 确定网页地址
+        run: |
+          if [ -n "${{ vars.SFF_WEB_URL }}" ]; then
+            url="${{ vars.SFF_WEB_URL }}"
+          else
+            owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+            url="https://${owner}.github.io/${{ github.event.repository.name }}/"
+          fi
+          echo "SFF_WEB_URL=$url" >> "$GITHUB_ENV"
+          echo "网页地址：$url"
+
+      - name: 恢复数据源缓存（减少 API 请求）
+        uses: actions/cache@v4
+        with:
+          path: .http-cache
+          key: http-cache-v2-${{ github.run_id }}
+          restore-keys: http-cache-v2-
+
+      - name: 运行数据管线（公开数据含防泄露检查，不通过则不部署）
+        run: pnpm data:build
+
+      - name: 构建网页、插件、用户脚本
+        run: |
+          pnpm --filter @sff/web build
+          pnpm --filter @sff/extension build
+          pnpm --filter @sff/userscript build
+          node scripts/assemble-site.mjs
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request' && needs.hosting.outputs.pages == 'true'
+        with:
+          path: apps/web/dist
+
+      # PR 试跑：上传公开数据方便检查（不含比分文件）
+      - name: 上传试跑的公开数据（不含比分）
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-data-preview
+          path: |
+            apps/web/public/data
+            !apps/web/public/data/scores
+          retention-days: 7
+
+      - name: 部署到 Cloudflare Pages（可选）
+        if: >-
+          github.event_name != 'pull_request' &&
+          (vars.DEPLOY_TARGET == 'cloudflare' || vars.DEPLOY_TARGET == 'both')
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 pages deploy apps/web/dist --project-name "${{ vars.CLOUDFLARE_PROJECT || 'spoiler-free-football' }}" --branch main
+
+  # 公开仓库 60 天没有任何活动（提交等）时，GitHub 会自动停用定时任务，数据就不再更新。
+  # 每天由定时任务自己调用一次「启用工作流」接口来重置这个计时；
+  # 已经停用的工作流没法自己恢复，所以只能放在这个工作流里，不能另建一个定时工作流
+  keepalive:
+    if: github.event_name == 'schedule' && github.event.schedule == '20 22 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: 保持定时任务启用
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/deploy.yml/enable"
+
+  # 推送或手动运行时 GitHub Pages 还没开启、也没配 Cloudflare：数据管线照常试跑（上面的 build），这里给出明确的失败提示
+  pages-missing:
+    needs: hosting
+    if: >-
+      needs.hosting.outputs.pages == 'false' && needs.hosting.outputs.cloudflare != 'true' &&
+      github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 网页还没上线：需要开启 GitHub Pages
+        run: |
+          msg="GitHub Pages 还没开启，网页没有部署。请到仓库 Settings → Pages，把 Source 选成「GitHub Actions」，然后在 Actions 里重新运行「数据更新与部署」。私有仓库开 Pages 需要 GitHub 付费套餐；不想付费，可以把仓库改成公开，或者按 README 改用 Cloudflare Pages。"
+          echo "::error title=网页还没上线::$msg"
+          { echo "## ❌ 网页还没上线"; echo; echo "$msg"; } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+  deploy-pages:
+    needs: [hosting, build]
+    if: needs.hosting.outputs.pages == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

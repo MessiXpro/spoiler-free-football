@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint（ESLint + Prettier）
+        run: pnpm lint
+      - name: 类型检查
+        run: pnpm typecheck
+      - name: 单元测试（core / data / web / extension / userscript / sync-worker）
+        run: pnpm test
+
+      - name: 生成示例数据并构建（网页、插件、用户脚本）
+        run: |
+          pnpm data:sample
+          pnpm build
+
+      - name: 安装 Playwright 浏览器
+        run: pnpm exec playwright install --with-deps chromium
+      - name: 端到端测试（网页三种视口 + 插件 + 用户脚本）
+        run: pnpm e2e
+
+      - name: 上传插件和用户脚本
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-and-userscript
+          path: |
+            apps/extension/dist/*.zip
+            apps/extension/dist/chrome
+            apps/extension/dist/firefox
+            apps/userscript/dist/*.user.js
+          if-no-files-found: ignore
+      - name: 上传测试报告
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore

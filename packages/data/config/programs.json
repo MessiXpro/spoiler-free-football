@@ -1,0 +1,203 @@
+{
+  "$comment": "足球节目。availability: available=国内有正版渠道；limited=有渠道但未核实细节；ended=疑似停播（仅存档）；unavailable-in-china=国内无正版（只做标注，不提供观看链接）。weekly 用于生成「最近一期」的中性条目（只给日期和栏目页链接，不抓取单期标题，因为单期标题本身常含比分）。查证日期 2026-10-16。",
+  "programs": [
+    {
+      "id": "txzq",
+      "nameZh": "天下足球",
+      "channel": "CCTV-5",
+      "schedule": "每周一 19:30 首播（遇直播赛事会调整，以 CCTV-5 节目单为准）",
+      "weekly": { "weekday": 1, "time": "19:30" },
+      "description": "央视老牌周播节目，回顾上周欧洲主流联赛和杯赛，常有专题和人物故事。",
+      "platforms": [
+        {
+          "name": "央视网 栏目页",
+          "url": "https://tv.cctv.com/lm/txzq/index.shtml",
+          "kind": "full",
+          "access": "free",
+          "verified": true
+        },
+        {
+          "name": "央视网 往期列表",
+          "url": "https://tv.cctv.com/lm/txzq/videoset/",
+          "kind": "full",
+          "access": "free",
+          "verified": true
+        },
+        {
+          "name": "CCTV-5 网络直播",
+          "url": "https://tv.cctv.com/live/cctv5/",
+          "kind": "full",
+          "access": "free",
+          "verified": true
+        }
+      ],
+      "spoilerRisk": "high",
+      "relatedCompetitions": [],
+      "coverageDays": 8,
+      "availability": "available",
+      "note": "央视网的单期标题和简介本身就带赛果，请先开启插件/脚本再打开栏目页。"
+    },
+    {
+      "id": "gjoz",
+      "nameZh": "冠军欧洲",
+      "channel": "CCTV-5",
+      "schedule": "原为欧冠比赛日当晚播出；2024/25 赛季起疑似停播",
+      "description": "央视欧冠专题节目。2024/25–2026/27 欧冠由爱奇艺体育独播、央视无欧冠版权，能查到的最新一期是 2024 年 6 月。",
+      "platforms": [
+        {
+          "name": "央视网 栏目页（往期存档）",
+          "url": "https://tv.cctv.com/lm/gjoz/",
+          "kind": "full",
+          "access": "free",
+          "verified": true
+        }
+      ],
+      "spoilerRisk": "high",
+      "relatedCompetitions": ["ucl"],
+      "coverageDays": 8,
+      "availability": "ended",
+      "note": "本赛季没有新节目；需要欧冠赛后内容可看爱奇艺体育的欧冠节目。"
+    },
+    {
+      "id": "iqiyi-ucl",
+      "nameZh": "爱奇艺体育 欧冠节目",
+      "channel": "爱奇艺体育",
+      "schedule": "欧冠比赛日前后（上赛季有《欧冠看点》《欧冠之星》等）",
+      "description": "国内唯一正版欧冠渠道的自制节目和集锦，多数需要「爱足球会员」。",
+      "platforms": [
+        {
+          "name": "爱奇艺体育 App",
+          "url": "https://apps.apple.com/cn/app/id542636127",
+          "kind": "full",
+          "access": "vip",
+          "verified": true
+        }
+      ],
+      "spoilerRisk": "high",
+      "relatedCompetitions": ["ucl", "uel", "uecl"],
+      "coverageDays": 4,
+      "availability": "limited",
+      "note": "2026/27 节目单和网页版专区地址未核实。"
+    },
+    {
+      "id": "migu-heiha",
+      "nameZh": "嘿哈说英超",
+      "channel": "咪咕视频",
+      "schedule": "2026/27 赛季每周一期（上线日未公布）",
+      "description": "詹俊、张路主持的英超周评节目；咪咕本赛季还有《绿茵狂想》《一周球事 talkshow》。",
+      "platforms": [
+        {
+          "name": "咪咕视频 英超专区（App 内搜索节目名）",
+          "url": "https://www.miguvideo.com/p/home/0c40bbc85fa345bbba20f8e5fd11a922",
+          "kind": "full",
+          "access": "login",
+          "verified": false
+        }
+      ],
+      "spoilerRisk": "high",
+      "relatedCompetitions": ["epl"],
+      "coverageDays": 8,
+      "availability": "limited",
+      "note": "节目专属页面和是否需要会员未核实。"
+    },
+    {
+      "id": "pl-official",
+      "nameZh": "英超联赛官方号",
+      "nameEn": "Premier League official (Bilibili / Douyin)",
+      "channel": "哔哩哔哩 / 抖音",
+      "schedule": "不定期；比赛周后更新每轮进球合集、精彩瞬间",
+      "description": "英超官方在国内平台的账号，发布官方授权的短视频。Premier League World、Matchday Live、Fanzone 等英文官方节目未在国内以原名发行，因此不单独收录。",
+      "platforms": [
+        {
+          "name": "哔哩哔哩 英超联赛",
+          "url": "https://space.bilibili.com/1488532268",
+          "kind": "clips",
+          "access": "free",
+          "verified": true
+        },
+        {
+          "name": "抖音 英超联赛",
+          "url": "https://www.douyin.com/user/MS4wLjABAAAAxd2l26Q-EbT0ZyTwhHLZFeg9FNBi7fCAyptz-iachBs",
+          "kind": "clips",
+          "access": "free",
+          "verified": true
+        }
+      ],
+      "spoilerRisk": "high",
+      "relatedCompetitions": ["epl"],
+      "coverageDays": 8,
+      "availability": "available",
+      "note": "标题和封面常带比分，请务必配合插件/脚本。"
+    },
+    {
+      "id": "zqzy",
+      "nameZh": "足球之夜",
+      "channel": "CCTV-5",
+      "schedule": "名义上每周四 19:30（央视网写「首播时间不固定」）",
+      "description": "以中国足球（中超、国足）为主，欧洲内容很少。",
+      "platforms": [
+        {
+          "name": "央视网 往期列表",
+          "url": "https://tv.cctv.com/lm/zqzy/videoset/",
+          "kind": "full",
+          "access": "free",
+          "verified": true
+        },
+        {
+          "name": "央视频 足球之夜",
+          "url": "https://m.yangshipin.cn/user?cpid=21471288100705687",
+          "kind": "full",
+          "access": "free",
+          "verified": true
+        }
+      ],
+      "spoilerRisk": "medium",
+      "relatedCompetitions": ["wc-qualifiers", "friendlies"],
+      "coverageDays": 8,
+      "availability": "available",
+      "note": "只在关注中国足球时有用；会剧透中超和国足结果。"
+    },
+    {
+      "id": "motd",
+      "nameZh": "今日比赛",
+      "nameEn": "Match of the Day",
+      "channel": "BBC One",
+      "schedule": "英国周六晚（北京时间周日早上 6 点左右）",
+      "description": "BBC 的英超集锦节目。",
+      "platforms": [],
+      "spoilerRisk": "high",
+      "relatedCompetitions": ["epl"],
+      "coverageDays": 3,
+      "availability": "unavailable-in-china",
+      "note": "国内无正版：BBC iPlayer 仅限英国，未发现中国大陆授权渠道（英超在国内的集锦版权属于咪咕）。"
+    },
+    {
+      "id": "mnf",
+      "nameZh": "周一足球之夜",
+      "nameEn": "Monday Night Football (Sky Sports)",
+      "channel": "Sky Sports",
+      "schedule": "有周一英超比赛的周次，北京时间周二凌晨",
+      "description": "Sky 的英超战术分析节目（内维尔、卡拉格）。",
+      "platforms": [],
+      "spoilerRisk": "high",
+      "relatedCompetitions": ["epl"],
+      "coverageDays": 8,
+      "availability": "unavailable-in-china",
+      "note": "国内无正版：Sky Sports 未在中国大陆发行，片段只在 YouTube。"
+    },
+    {
+      "id": "overlap",
+      "nameZh": "The Overlap",
+      "nameEn": "The Overlap / Stick to Football",
+      "channel": "YouTube",
+      "schedule": "每周一期",
+      "description": "加里·内维尔等人的足球播客/节目。",
+      "platforms": [],
+      "spoilerRisk": "high",
+      "relatedCompetitions": ["epl"],
+      "coverageDays": 8,
+      "availability": "unavailable-in-china",
+      "note": "国内无正版：未发现 B 站或其他国内平台的官方授权，B 站上的副本属于非官方搬运。"
+    }
+  ]
+}
