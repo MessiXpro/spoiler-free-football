@@ -11,7 +11,8 @@ describe('数据更新与部署工作流', () => {
   const yml = read('.github', 'workflows', 'deploy.yml');
 
   it('定时任务每天给自己续期一次，公开仓库 60 天没提交也不会被 GitHub 停用', () => {
-    const job = /\n {2}keepalive:\n([\s\S]*?)(?=\n {2}\S|\n?$)/.exec(yml)?.[1] ?? '';
+    // 续期放在 hosting job 里（不多占一个 job 的计费分钟）
+    const job = /\n {2}hosting:\n([\s\S]*?)(?=\n {2}\S|\n?$)/.exec(yml)?.[1] ?? '';
     expect(job).toContain('actions: write');
     expect(job).toMatch(
       /gh api -X PUT "repos\/\$\{\{ github\.repository \}\}\/actions\/workflows\/deploy\.yml\/enable"/,
@@ -21,6 +22,10 @@ describe('数据更新与部署工作流', () => {
     expect(cron).toBeDefined();
     expect(yml).toContain(`- cron: '${cron}'`);
     expect(readme).toContain('Enable workflow');
+  });
+
+  it('定时任务的事件里没有 repository 信息：网页地址不能用 github.event.repository', () => {
+    expect(yml).not.toContain('github.event.repository');
   });
 });
 
@@ -53,7 +58,9 @@ describe('Cloudflare Pages 部署', () => {
       scripts: Record<string, string>;
     };
     expect(pkg.scripts['cloudflare:prepare']).toBeDefined();
-    expect(yml).toContain("vars.CLOUDFLARE_PROJECT || 'spoiler-free-football'");
+    // 上传用的项目名就是准备那一步检查过的（不再各写一份默认值）
+    expect(yml).toContain('PROJECT: ${{ steps.cloudflare.outputs.project }}');
+    expect(yml).toContain('--project-name "$PROJECT"');
     expect(read('packages', 'data', 'src', 'cloudflare-cli.ts')).toContain(
       "?? 'spoiler-free-football'",
     );

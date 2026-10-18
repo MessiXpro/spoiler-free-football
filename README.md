@@ -91,6 +91,8 @@ Pages 项目不用自己建，网页地址也不用自己填：第一次运行�
    - **Secrets** 标签 → New repository secret，添加 `CLOUDFLARE_API_TOKEN`（第 2 步的 Token）和 `CLOUDFLARE_ACCOUNT_ID`（第 1 步的 Account ID）
    - **Variables** 标签 → New repository variable，添加 `DEPLOY_TARGET`，值填 `cloudflare`
 
+> 私有仓库每月有 2000 分钟免费的 Actions 额度。每天 3 次数据更新，大约用 300–800 分钟（第一次和缓存过期时慢，之后有缓存会快很多），再加上每次推送代码时的测试，一般够用。仓库改成公开就不限量。
+
 然后做第 4 步。网页地址一般是 `https://spoiler-free-football.pages.dev/`（这个名字被别人用过时 Cloudflare 会自动加后缀，以运行小结里写的为准）。填错时运行会在几秒内失败，页面最上面有中文说明哪一项不对。
 
 > 国内访问：`*.pages.dev` 和 `*.github.io` 一样，在国内可能慢或偶尔打不开（见下文「国内访问慢怎么办」）。网页打开过一次就会缓存在手机/电脑上。
@@ -98,7 +100,7 @@ Pages 项目不用自己建，网页地址也不用自己填：第一次运行�
 ### 第 4 步：第一次运行
 
 1. 仓库 → **Actions** → 左侧选 **数据更新与部署** → 右侧 **Run workflow**。
-2. 大约 5–10 分钟后完成。之后它会每天自动运行 5 次（北京时间 06:20、08:20、10:20、14:20、20:20）。
+2. 大约 5–10 分钟后完成。之后它会每天自动运行 3 次（北京时间 06:20、08:20、20:20；GitHub 的定时任务经常晚几十分钟到几小时才开始）。
    - 运行页面最下面有一份「数据管线结果」小结：每个数据源拿到多少场（⚠️ 表示有请求失败或一场都没拿到）、哪些球队名还没有中文名。小结里没有比分，淘汰赛的队名也会隐藏，不会暴露谁晋级。
    - 如果 GitHub Pages 还没开启，这次运行会出现红叉「网页还没上线」，并写明要去哪里设置；数据管线本身照样会试跑。在开启之前，每天的定时运行会自动跳过，不占用 Actions 额度。
 3. 打开网页：GitHub Pages 是 `https://messixpro.github.io/spoiler-free-football/`（方式 B 见上）。
@@ -380,7 +382,7 @@ pnpm run ci         # 以上全部（必须带 run：pnpm 自带一个同名的 
 | 工作流 | 什么时候跑 | 做什么 |
 |---|---|---|
 | CI | 每次 push / PR | lint、类型检查、全部单元测试、构建、Playwright（网页三种视口 + 插件 + 用户脚本），上传插件和脚本 |
-| 数据更新与部署 | 每天 5 次、push 到 main、手动；改了数据管线的 PR | 真实数据管线（含防泄露检查）→ 构建 → 部署 GitHub Pages 或 Cloudflare Pages；PR 里只试跑、不部署；网页托管没配好时定时运行自动跳过；每天续期一次，免得 GitHub 自动停用定时任务 |
+| 数据更新与部署 | 每天 3 次、push 到 main、手动；改了数据管线的 PR | 真实数据管线（含防泄露检查）→ 构建 → 部署 GitHub Pages 或 Cloudflare Pages；PR 里只试跑、不部署；网页托管没配好时定时运行自动跳过；每天续期一次，免得 GitHub 自动停用定时任务 |
 | 发布插件和用户脚本 | 打 `v*` 标签 | 附件发布 |
 
 仓库变量（Settings → Variables）：`SFF_WEB_URL`（网页地址，默认按 GitHub Pages 推算；`DEPLOY_TARGET=cloudflare` 时默认用 Cloudflare 返回的 `*.pages.dev` 地址；发布工作流 release.yml 只看这个变量）、`DEPLOY_TARGET`（`github-pages` 默认 / `cloudflare` / `both`）、`CLOUDFLARE_PROJECT`（Cloudflare Pages 项目名，默认 `spoiler-free-football`，不存在时自动创建）、`FOOTBALL_DATA_COMPETITIONS`（付费档 football-data 可加 `PL,PD,CL,EC,WC,FAC,FLC,CDR,EL,UCL`）。

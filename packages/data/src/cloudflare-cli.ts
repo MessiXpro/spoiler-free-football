@@ -9,7 +9,7 @@ import { envValue } from './env.ts';
  */
 async function main() {
   const env = process.env;
-  const project = envValue(env, 'CLOUDFLARE_PROJECT') ?? 'spoiler-free-football';
+  const project = (envValue(env, 'CLOUDFLARE_PROJECT') ?? 'spoiler-free-football').trim();
   const result = await ensurePagesProject({
     token: envValue(env, 'CLOUDFLARE_API_TOKEN'),
     accountId: envValue(env, 'CLOUDFLARE_ACCOUNT_ID'),
@@ -19,7 +19,8 @@ async function main() {
     `${result.created ? '已创建' : '已找到'} Cloudflare Pages 项目「${project}」，网页地址：${result.url}`,
   );
   const output = envValue(env, 'GITHUB_OUTPUT');
-  if (output) await appendFile(output, `url=${result.url}\n`);
+  // 项目名也交给部署那一步用（这里已经去掉了首尾空格并检查过格式）
+  if (output) await appendFile(output, `url=${result.url}\nproject=${project}\n`);
   const summary = envValue(env, 'GITHUB_STEP_SUMMARY');
   if (summary) await appendFile(summary, `## 网页地址\n\n${result.url}\n\n`);
 }
