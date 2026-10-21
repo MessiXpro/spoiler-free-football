@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import type { DataMeta, Program, ProgramEpisode, PublicMatch, ScoreRecord } from '@sff/core';
+import {
+  scorePath,
+  type DataMeta,
+  type Program,
+  type ProgramEpisode,
+  type PublicMatch,
+  type ScoreRecord,
+} from '@sff/core';
 
 export interface PlatformInfo {
   name: string;
@@ -80,7 +87,7 @@ export function useAppData(): DataState {
 
 /** 用户确认后才请求比分；没有这场的比分时返回 null */
 export async function fetchScore(id: string): Promise<ScoreRecord | null> {
-  const res = await fetch(dataUrl(`scores/${encodeURIComponent(id)}.json`), { cache: 'no-cache' });
+  const res = await fetch(dataUrl(scorePath(id)), { cache: 'no-cache' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   // 有的静态服务器找不到文件时会返回首页 HTML，当作"没有比分"处理

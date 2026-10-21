@@ -1,7 +1,7 @@
 import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FIXTURE_LOCK_LOOKBACK_DAYS } from '@sff/core';
+import { FIXTURE_LOCK_LOOKBACK_DAYS, scorePath } from '@sff/core';
 import { describe, expect, it } from 'vitest';
 import { createApiFootballAdapter, parseApiFootballFixture } from '../src/adapters/api-football.ts';
 import {
@@ -897,11 +897,11 @@ describe('#46 两回合间隔超过 21 天', () => {
     expect(out.matches.map((m) => [m.id, m.leg])).toEqual([
       ['efl-cup-2026-27-semi-final-newcastle-arsenal', 2],
     ]);
-    const score = out.files.get('scores/efl-cup-2026-27-semi-final-newcastle-arsenal.json') as {
+    const score = out.files.get(scorePath('efl-cup-2026-27-semi-final-newcastle-arsenal')) as {
       aggregate?: [number, number];
     };
     expect(score.aggregate).toEqual([2, 2]);
-    expect(out.files.has('scores/efl-cup-2026-27-semi-final-arsenal-newcastle.json')).toBe(false);
+    expect(out.files.has(scorePath('efl-cup-2026-27-semi-final-arsenal-newcastle'))).toBe(false);
     expect(out.meta.windowStart).toBe(new Date(now.getTime() - 21 * 86400000).toISOString());
     // 关于页显示的场数只数公开的
     expect(out.meta.sources[0]!.count).toBe(1);

@@ -7,6 +7,7 @@ import {
   getTeam,
   isKnockoutStage,
   redact,
+  scorePath,
   stageLabel,
   type DataMeta,
   type PublicMatch,
@@ -253,7 +254,8 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
 
   files.set('site-rules.json', DEFAULT_SITE_RULES_JSON);
   for (const { score } of merged) {
-    if (score) files.set(`scores/${score.id}.json`, score);
+    // 文件名是比赛 id 的哈希：上传日志和网址里不会出现队名（淘汰赛的对阵本身就会剧透谁晋级）
+    if (score) files.set(scorePath(score.id), score);
   }
   return { meta, matches, files, warnings, diagnostics: collectDiagnostics(all, matches) };
 }

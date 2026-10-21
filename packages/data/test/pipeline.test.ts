@@ -7,6 +7,7 @@ import {
   matchesInWindow,
   defaultUserState,
   nightWindow,
+  scorePath,
   type PublicMatch,
 } from '@sff/core';
 import { buildData, CONFIG_DIR, loadConfig, writeOutput } from '../src/build.ts';
@@ -48,7 +49,7 @@ describe('完整管线（示例数据）', () => {
     }
   });
 
-  it('比分只在 scores/<id>.json，且 id 与比赛对应', async () => {
+  it('比分只在 scores/<id 的哈希>.json，且 id 与比赛对应', async () => {
     const out = await sampleBuild();
     const ids = new Set(out.matches.map((m) => m.id));
     const scoreFiles = [...out.files.keys()].filter((k) => k.startsWith('scores/'));
@@ -56,7 +57,9 @@ describe('完整管线（示例数据）', () => {
     for (const f of scoreFiles) {
       const rec = out.files.get(f) as { id: string; home: number; away: number };
       expect(ids.has(rec.id)).toBe(true);
-      expect(f).toBe(`scores/${rec.id}.json`);
+      expect(f).toBe(scorePath(rec.id));
+      // 文件名里没有队名：上传日志会列出所有文件名，淘汰赛对阵本身就是剧透
+      expect(f).toMatch(/^scores\/[0-9a-f]{24}\.json$/);
       expect(typeof rec.home).toBe('number');
     }
     // 未来比赛不会有比分文件
@@ -64,7 +67,7 @@ describe('完整管线（示例数据）', () => {
       (m) => Date.parse(m.kickoff) > SAMPLE_NOW.getTime() + 86400000,
     );
     for (const m of future.filter((x) => x.competition === 'epl')) {
-      expect(out.files.has(`scores/${m.id}.json`)).toBe(false);
+      expect(out.files.has(scorePath(m.id))).toBe(false);
     }
   });
 

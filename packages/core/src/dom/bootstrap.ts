@@ -7,6 +7,7 @@ import {
   type SiteRulesDoc,
 } from '../rules/schema.ts';
 import type { TeamRef } from '../match/types.ts';
+import { scorePath } from '../match/score-file.ts';
 import {
   DEFAULT_SHIELD_PREFS,
   keepRootClasses,
@@ -319,7 +320,7 @@ export async function fetchScoreFrom(
   id: string,
   fetchImpl: typeof fetch = fetch,
 ) {
-  const url = new URL(`scores/${encodeURIComponent(id)}.json`, dataBase).href;
+  const url = new URL(scorePath(id), dataBase).href;
   const res = await fetchImpl(url, { cache: 'no-cache' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

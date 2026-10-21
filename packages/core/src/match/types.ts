@@ -1,6 +1,6 @@
 /**
  * 对外公开的数据结构。公开数据（matches.json 等）里绝不能出现比分、胜负、
- * 是否加时/点球、录像时长等任何能推断结果的信息；比分只放在 scores/<id>.json。
+ * 是否加时/点球、录像时长等任何能推断结果的信息；比分只放在 scores/<id 的哈希>.json（见 score-file.ts）。
  */
 
 export type Stage =

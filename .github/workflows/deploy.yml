@@ -1,11 +1,14 @@
 name: 数据更新与部署
 
-# 每天北京时间 06:20、08:20、20:20 跑一次数据管线：欧洲比赛大多在北京时间凌晨结束，
-# 早上两次拿赛果和比分，晚上一次更新当晚的开球时间。私有仓库每月只有 2000 分钟免费额度，所以不跑更多次
+# 每天北京时间 06:20、08:20、10:20、14:20、20:20 跑数据管线：欧洲比赛大多在北京时间凌晨结束，
+# 早上几次拿赛果和比分（数据源有时晚一两个小时才更新），晚上一次更新当晚的开球时间。
+# 私有仓库每月只有 2000 分钟免费额度，10:20 和 14:20 这两次在私有仓库里自动跳过（公开仓库不限量）
 on:
   schedule:
     - cron: '20 22 * * *'
     - cron: '20 0 * * *'
+    - cron: '20 2 * * *'
+    - cron: '20 6 * * *'
     - cron: '20 12 * * *'
   push:
     branches: [main]
@@ -37,6 +40,8 @@ jobs:
       pages: read
     outputs:
       pages: ${{ steps.check.outputs.pages }}
+      # 私有仓库里跳过额外的两次定时运行
+      skip: ${{ steps.quota.outputs.skip }}
       # 是否部署到 Cloudflare Pages（DEPLOY_TARGET 为 cloudflare 或 both；表达式里比较不区分大小写）
       cloudflare: ${{ vars.DEPLOY_TARGET == 'cloudflare' || vars.DEPLOY_TARGET == 'both' }}
     steps:
@@ -48,6 +53,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/deploy.yml/enable"
+
+      - id: quota
+        name: 私有仓库省 Actions 额度
+        if: >-
+          github.event_name == 'schedule' &&
+          (github.event.schedule == '20 2 * * *' || github.event.schedule == '20 6 * * *')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(gh api "repos/${{ github.repository }}" --jq .private)" = "true" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "私有仓库：这次额外的定时更新跳过（每天还有 3 次），以免超出每月免费额度"
+          fi
 
       - id: check
         name: 检查 GitHub Pages 是否已开启
@@ -80,7 +98,7 @@ jobs:
     # PR：只试跑数据管线。定时任务：GitHub Pages 或 Cloudflare Pages 至少配好一个才跑
     if: >-
       ${{ !cancelled() && (github.event_name == 'pull_request' ||
-      (needs.hosting.result == 'success' &&
+      (needs.hosting.result == 'success' && needs.hosting.outputs.skip != 'true' &&
       (needs.hosting.outputs.pages != 'false' || needs.hosting.outputs.cloudflare == 'true' ||
       github.event_name != 'schedule'))) }}
     runs-on: ubuntu-latest

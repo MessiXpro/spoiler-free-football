@@ -6,6 +6,7 @@ import {
   isFixtureLocked,
   postponedClearKey,
   programLockReasons,
+  scorePath,
   unwatchedRecent,
   type MatchLink,
   type Program,
@@ -126,11 +127,9 @@ describe('在「没看完」列表里显示比分', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
-        const id = decodeURIComponent(
-          String(url)
-            .split('/scores/')[1]!
-            .replace(/\.json$/, ''),
-        );
+        // 比分文件名是比赛 id 的哈希，按文件名找回是哪一场
+        const id = [recent, older].map((m) => m.id).find((x) => String(url).endsWith(scorePath(x)));
+        if (!id) return new Response('', { status: 404 });
         return new Response(
           JSON.stringify({ id, home: 2, away: 1, source: 'test', updatedAt: '' }),
           { headers: { 'content-type': 'application/json' } },

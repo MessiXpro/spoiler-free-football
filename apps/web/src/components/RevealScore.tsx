@@ -7,7 +7,7 @@ import { ConfirmDialog } from './Dialog.tsx';
 type Phase = 'idle' | 'asking' | 'loading' | 'shown' | 'missing' | 'error';
 
 /**
- * "看完了，显示比分"：二次确认后才请求 scores/<id>.json，同时记为已看。
+ * "看完了，显示比分"：二次确认后才请求这场的比分文件，同时记为已看。
  * 比分不在页面初始数据里，所以在点击之前页面上不可能出现比分。
  */
 export function RevealScore({ match, watched }: { match: PublicMatch; watched: boolean }) {

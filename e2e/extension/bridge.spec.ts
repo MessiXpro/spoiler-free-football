@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { scorePath } from '../../packages/core/src/index.ts';
 import { blockExternal, serveSite, sitePage } from '../helpers/flash.ts';
 import { SAMPLE_NOW } from '../helpers/spoilers.ts';
 import { expect, test } from './fixtures.ts';
@@ -7,7 +8,7 @@ import { expect, test } from './fixtures.ts';
 const CITY = 'epl-2026-27-man-city-sunderland';
 const score = JSON.parse(
   readFileSync(
-    join(import.meta.dirname, '..', '..', 'apps', 'web', 'dist', 'data', 'scores', `${CITY}.json`),
+    join(import.meta.dirname, '..', '..', 'apps', 'web', 'dist', 'data', scorePath(CITY)),
     'utf8',
   ),
 ) as { home: number; away: number };

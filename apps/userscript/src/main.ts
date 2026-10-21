@@ -1,4 +1,4 @@
-import { isNewerRules, matchSite, validateSiteRules } from '@sff/core';
+import { isNewerRules, matchSite, scorePath, validateSiteRules } from '@sff/core';
 import {
   applyWebWatched,
   bootShield,
@@ -233,9 +233,7 @@ async function runShield() {
           watched: { ...settings.watched, [m.id]: Math.floor(Date.now() / 1000) },
         });
         try {
-          const { status, json } = await getJson(
-            new URL(`scores/${encodeURIComponent(m.id)}.json`, settings.dataBase).href,
-          );
+          const { status, json } = await getJson(new URL(scorePath(m.id), settings.dataBase).href);
           const score = json as {
             id?: string;
             home?: number;

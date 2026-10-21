@@ -1,3 +1,4 @@
+import { scorePath } from '../../packages/core/src/index.ts';
 import { expectNoSpoilers, SAMPLE_NOW } from '../helpers/spoilers.ts';
 import { card, expect, MATCH_IDS, readSample, test } from './fixtures.ts';
 
@@ -98,13 +99,15 @@ test.describe('昨夜今晨 → 集锦/录像 → 看完显示比分', () => {
 
     await c.getByTestId('reveal-button').click();
     await page.getByTestId('confirm-ok').click();
-    const expected = readSample<{ home: number; away: number }>(`scores/${MATCH_IDS.city}.json`);
+    const expected = readSample<{ home: number; away: number }>(scorePath(MATCH_IDS.city));
     await expect(c.getByTestId('score-display')).toContainText(
       `${expected.home} - ${expected.away}`,
     );
     await expect(c.getByTestId('watched-badge')).toBeVisible();
     expect(scoreRequests).toHaveLength(1);
-    expect(scoreRequests[0]).toContain(`/data/scores/${MATCH_IDS.city}.json`);
+    expect(scoreRequests[0]).toContain(`/data/${scorePath(MATCH_IDS.city)}`);
+    // 请求地址里没有队名（比分文件名是哈希）
+    expect(scoreRequests[0]).not.toMatch(/city|sunderland/i);
 
     // 其他比赛的比分仍然不可见
     await expect(card(page, MATCH_IDS.derby).getByTestId('score-display')).toHaveCount(0);

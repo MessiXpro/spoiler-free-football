@@ -24,6 +24,17 @@ describe('数据更新与部署工作流', () => {
     expect(readme).toContain('Enable workflow');
   });
 
+  it('私有仓库跳过的定时运行都真的存在，且至少还剩早上两次和晚上一次', () => {
+    const crons = [...yml.matchAll(/- cron: '([^']+)'/g)].map((m) => m[1]);
+    const referenced = [...yml.matchAll(/github\.event\.schedule == '([^']+)'/g)].map((m) => m[1]);
+    for (const c of referenced) expect(crons).toContain(c);
+    const quota = /- id: quota\n([\s\S]*?)(?=\n {6}- )/.exec(yml)?.[1] ?? '';
+    const skipped = [...quota.matchAll(/github\.event\.schedule == '([^']+)'/g)].map((m) => m[1]);
+    expect(skipped.length).toBeGreaterThan(0);
+    expect(crons.filter((c) => !skipped.includes(c)).length).toBeGreaterThanOrEqual(3);
+    expect(yml).toContain("needs.hosting.outputs.skip != 'true'");
+  });
+
   it('定时任务的事件里没有 repository 信息：网页地址不能用 github.event.repository', () => {
     expect(yml).not.toContain('github.event.repository');
   });

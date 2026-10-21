@@ -10,6 +10,7 @@ import {
   serveSite,
   sitePage,
 } from '../helpers/flash.ts';
+import { scorePath } from '../../packages/core/src/index.ts';
 import { SAMPLE_NOW } from '../helpers/spoilers.ts';
 
 const DIST = join(import.meta.dirname, '..', '..', 'apps', 'userscript', 'dist');
@@ -208,8 +209,7 @@ test.describe('用户脚本（.user.js，document-start 注入）', () => {
           'web',
           'dist',
           'data',
-          'scores',
-          'epl-2026-27-man-city-sunderland.json',
+          scorePath('epl-2026-27-man-city-sunderland'),
         ),
         'utf8',
       ),

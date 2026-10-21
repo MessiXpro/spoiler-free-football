@@ -1,7 +1,7 @@
 import type { ScheduleStatus, ScoreRecord, Stage, TeamRef } from '@sff/core';
 import type { Fetcher } from './http.ts';
 
-/** adapter 输出的统一格式（比分单独放，最后只写进 scores/<id>.json） */
+/** adapter 输出的统一格式（比分单独放，最后只写进 scores/<id 的哈希>.json） */
 export interface RawFixture {
   source: string;
   /** 数据源自己的比赛 id */
