@@ -33,6 +33,11 @@ describe('数据更新与部署工作流', () => {
     expect(skipped.length).toBeGreaterThan(0);
     expect(crons.filter((c) => !skipped.includes(c)).length).toBeGreaterThanOrEqual(3);
     expect(yml).toContain("needs.hosting.outputs.skip != 'true'");
+    // 非 PR 的运行不能在整个工作流上共用一个队列：跳过的运行会顶掉正在排队的正式运行
+    const top = /\nconcurrency:\n {2}group: ([^\n]+)/.exec(yml)?.[1] ?? '';
+    expect(top).toContain('github.run_id');
+    const build = /\n {2}build:\n([\s\S]*?)(?=\n {2}\S|\n?$)/.exec(yml)?.[1] ?? '';
+    expect(build).toMatch(/concurrency:\n\s+group: deploy-build-/);
   });
 
   it('定时任务的事件里没有 repository 信息：网页地址不能用 github.event.repository', () => {

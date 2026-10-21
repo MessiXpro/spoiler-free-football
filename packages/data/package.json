@@ -1,6 +1,6 @@
 {
   "name": "@sff/data",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "数据管线：汇总赛程、录像/集锦入口、足球节目，产出不含比分的静态数据",

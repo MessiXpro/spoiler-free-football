@@ -96,8 +96,21 @@ test.describe('PWA', () => {
     });
     expect(registered).toBe(true);
     const sw = await (await request.get('sw.js')).text();
-    expect(sw).toContain('index.html');
-    expect(sw).not.toContain('scores/');
+    const precache = JSON.parse(/const PRECACHE = (\[.*?\]);/.exec(sw)![1]!) as string[];
+    expect(precache).toContain('index.html');
+    // 比分文件不预取
+    expect(precache.some((f) => f.includes('scores'))).toBe(false);
+
+    // 更新前打开的页面还在用旧版 JS，会按比赛 id 请求比分：service worker 换算成哈希文件名
+    const legacy = await page.evaluate(async (id) => {
+      if (!navigator.serviceWorker.controller) {
+        await new Promise((r) => navigator.serviceWorker.addEventListener('controllerchange', r));
+      }
+      const res = await fetch(`data/scores/${encodeURIComponent(id)}.json`);
+      return { status: res.status, body: res.ok ? ((await res.json()) as { id: string }) : null };
+    }, MATCH_IDS.city);
+    expect(legacy.status).toBe(200);
+    expect(legacy.body?.id).toBe(MATCH_IDS.city);
     await context.close();
   });
 });

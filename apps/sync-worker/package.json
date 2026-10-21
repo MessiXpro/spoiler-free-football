@@ -1,6 +1,6 @@
 {
   "name": "@sff/sync-worker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "可选的轻量同步服务（Cloudflare Workers + KV），默认不需要",

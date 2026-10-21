@@ -1,6 +1,6 @@
 {
   "name": "@sff/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "防剧透核心：比分/结果词识别、中性标题、球队与赛事目录、同步码、站点规则与 DOM 遮挡引擎",

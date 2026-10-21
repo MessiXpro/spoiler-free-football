@@ -34,6 +34,14 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== self.location.origin) return;
 
+  // 更新前打开、还在运行旧版 JS 的页面会按比赛 id 请求 data/scores/<id>.json；
+  // 换算成现在的文件名（比赛 id 的哈希，见 packages/core/src/match/score-file.ts），免得显示「没有比分」
+  const legacy = /\/data\/scores\/([^/]+)\.json$/.exec(url.pathname);
+  if (legacy && !/^[0-9a-f]{24}$/.test(legacy[1])) {
+    event.respondWith(legacyScore(url, legacy[1]));
+    return;
+  }
+
   // 数据：网络优先，离线时用上次的缓存
   if (url.pathname.includes('/data/')) {
     event.respondWith(
@@ -57,3 +65,20 @@ self.addEventListener('fetch', (event) => {
       .then((hit) => hit || fetch(event.request)),
   );
 });
+
+async function legacyScore(url, encodedId) {
+  let id;
+  try {
+    id = decodeURIComponent(encodedId);
+  } catch {
+    return fetch(url.href);
+  }
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`sff-score:${id}`));
+  const name = [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 24);
+  return fetch(new URL(`${name}.json`, url).href, { cache: 'no-cache' }).catch(() =>
+    Response.error(),
+  );
+}

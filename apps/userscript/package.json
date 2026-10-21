@@ -1,6 +1,6 @@
 {
   "name": "@sff/userscript",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "防剧透看球用户脚本（Tampermonkey / Violentmonkey / Via / X浏览器 / 狐猴 / iOS Userscripts）",
