@@ -121,7 +121,8 @@ export function TonightView({ data, state, now, offset }: ViewProps & { offset: 
         <MatchGrid matches={list} all={data.matches} state={state} now={now} />
       ) : (
         <p className="empty" data-testid="empty-night">
-          这一晚没有你订阅的比赛。可以在「设置」里增减订阅的球队和赛事。
+          这一晚没有你订阅的比赛。可以在
+          <a href={href({ name: 'settings' })}>设置</a>里增减订阅的球队和赛事。
         </p>
       )}
       {older.length > 0 && (
@@ -167,7 +168,12 @@ export function UpcomingView({ data, state, now }: ViewProps) {
           不显示积分榜；淘汰赛对阵在你看完上一轮之前会先藏起来
         </p>
       </div>
-      {list.length === 0 && <p className="empty">近期没有订阅的比赛。</p>}
+      {list.length === 0 && (
+        <p className="empty">
+          近期没有订阅的比赛。可以在<a href={href({ name: 'settings' })}>设置</a>
+          里增减订阅的球队和赛事，或者调整「即将开始」显示的天数。
+        </p>
+      )}
       {[...byDay.entries()].map(([day, matches]) => (
         <div key={day}>
           <h3 className="day-title">{dayLabel(Date.parse(`${day}T12:00:00+08:00`))}</h3>

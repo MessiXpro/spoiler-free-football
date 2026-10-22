@@ -112,7 +112,15 @@ export function ImportView({ code, state }: { code: string; state: UserState }) 
   return (
     <section className="view" data-testid="view-import">
       <h2>导入同步码</h2>
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <>
+          <p className="error">{error}</p>
+          <p className="muted small">
+            同步码在另一台设备的「设置 → 同步码（换设备用）」里生成，复制整段再打开；也可以直接去
+            <a href={href({ name: 'settings' })}>设置</a>。
+          </p>
+        </>
+      )}
       {done && (
         <p data-testid="import-done">
           导入完成。<a href={href({ name: 'today', offset: 0 })}>去看昨夜今晨</a>
