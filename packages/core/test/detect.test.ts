@@ -706,3 +706,69 @@ describe('redact 幂等：遮过的文字再遮一次不变', () => {
     }
   });
 });
+
+describe('回归：常见赛果写法补充（审计发现的漏网）', () => {
+  it('不需要语境：两个队名夹着胜/负/平，以及赛后常用词', () => {
+    for (const text of track([
+      '阿森纳胜切尔西',
+      '曼城负利物浦',
+      '热刺平维拉',
+      '拜仁告捷',
+      '多特败北',
+      '巴萨一轮游',
+      '曼联出线',
+      '先拔头筹',
+      '利物浦拿到三分',
+      '阿森纳收获三分',
+      '全场5球',
+      '两队合计四球',
+      '一球之差',
+      '十人应战',
+      '凯恩进2球',
+      'Arsenal see off Chelsea',
+      'Aston Villa hold Liverpool',
+      'Man City ease past Burnley',
+    ])) {
+      expectMasked(text);
+    }
+    // 只遮中间的字，对阵保留
+    expect(redact('阿森纳胜切尔西')).toBe(`阿森纳${M}${M}切尔西`);
+    expect(redact('Arsenal see off Chelsea')).toBe(`Arsenal ${M}${M} Chelsea`);
+  });
+
+  it('需要足球语境的说法', () => {
+    for (const text of track([
+      '哈兰德两球',
+      '皇马过关',
+      '狼队垫底',
+      '双方平手',
+      '萨卡失点',
+      'Madrid exit the Champions League',
+      'Liverpool take all three points',
+      'Saka opens the scoring',
+      'Rice sees red',
+    ])) {
+      expectMasked(text, FB);
+    }
+  });
+
+  it('不误伤：赛前的出线形势、篮球三分、博彩玩法名、日常用法', () => {
+    for (const text of track([
+      '小组出线形势分析',
+      '三分球命中率',
+      '买了两球衣',
+      '本轮两球',
+      '胜平负玩法说明',
+      '主胜 1.85 平 3.40 客胜 4.20',
+      '阿森纳 vs 切尔西 前瞻',
+      '新赛季出线名额增加到 8 个',
+    ])) {
+      expectNeutral(text);
+    }
+    // exit 只在足球语境里算结果词
+    expect(findSpoilers('Please exit the building')).toEqual([]);
+    expect(findSpoilers('三分球命中率', FB)).toEqual([]);
+    expect(findSpoilers('小组出线形势分析', FB)).toEqual([]);
+    expect(findSpoilers('买了两球衣', FB)).toEqual([]);
+  });
+});

@@ -4,11 +4,13 @@ import {
   CONTEXT_NAME_DENY,
   EN_CONTEXTUAL,
   EN_FOOTBALL_HINTS,
+  EN_PAIR_VERBS,
   EN_SAFE_PATTERNS,
   EN_SCORER_VERBS,
   EN_STRONG,
   ZH_CONTEXTUAL,
   ZH_FOOTBALL_HINTS,
+  ZH_PAIR_VERBS,
   ZH_SAFE,
   ZH_SCORER_SUFFIX,
   ZH_STRONG,
@@ -132,6 +134,18 @@ function validateZhScorer(m: RegExpExecArray, norm: string): boolean {
   return true;
 }
 
+/**
+ * "哈兰德两球""凯恩进2球" 是进球者提示；"本轮两球""全场5球""买了两球" 不是人名。
+ * 人名前面若是 场/轮/赛/队/共/计 等字，或者整个片段以这些常见词开头，就不算
+ */
+function validateZhGoals(m: RegExpExecArray): boolean {
+  const name = m[1] ?? '';
+  if (/[场轮赛队共计进打入以到第超甲乙杯联周季年月日有的了把个是在]$/.test(name)) return false;
+  return !/^(?:全场|本场|上半场|下半场|两队|双方|合计|共计|一共|总共|全部|最近|本轮|上轮|这场|那场|本赛季|本季|赛季|生涯)/.test(
+    name,
+  );
+}
+
 /** 紧跟比分的拉丁字母若是这些单位，就不是队名缩写（"内存2-4GB"） */
 const LATIN_UNIT_AFTER = /^(?:GB|MB|KB|TB|HZ|FPS|PM|AM|CM|MM|KM|KG|MP|HP|PS)(?![A-Za-z])/;
 
@@ -145,10 +159,12 @@ type Cache = {
 };
 let cached: Cache | null = null;
 
-function teamNames(): string[] {
+function teamNames(withZhAliases = false): string[] {
   const names = new Set<string>();
   for (const team of TEAMS) {
-    for (const name of [team.zh, team.zhFull, team.en, ...(team.aliases ?? [])]) {
+    const list = [team.zh, team.zhFull, team.en, ...(team.aliases ?? [])];
+    if (withZhAliases) list.push(...(team.zhAliases ?? []));
+    for (const name of list) {
       if (!name) continue;
       if (/^[A-Za-z]/.test(name) && name.length < 4) continue;
       names.add(name);
@@ -249,6 +265,8 @@ const ZH_MARGIN_SUFFIX = [
 
 function buildRules(): Rule[] {
   const teams = alt(teamNames());
+  // 中文昵称（维拉、枪手、红军）也算：两边都是队名、中间只有一个字时不会误伤
+  const zhPairTeams = alt(teamNames(true));
   const rules: Rule[] = [
     // (4)1-1(3)：点球写在两侧括号里
     { re: /\(\s*\d{1,2}\s*\)\s*\d{1,2}\s*[-:]\s*\d{1,2}\s*\(\s*\d{1,2}\s*\)/g, kind: 'score' },
@@ -291,18 +309,52 @@ function buildRules(): Rule[] {
       kind: 'score',
       digitsOnly: true,
     },
+    // 两个队名夹着结果字/词："阿森纳胜切尔西""曼城负利物浦"；只遮中间的字，对阵保留
+    {
+      re: new RegExp(
+        `(?<=(?:${zhPairTeams})\\s*)(?:${alt(ZH_PAIR_VERBS)})(?=\\s*(?:${zhPairTeams}))`,
+        'g',
+      ),
+      kind: 'result',
+    },
+    // "Arsenal see off Chelsea" "Villa hold Liverpool"：同样只遮动词
+    {
+      re: new RegExp(
+        `(?<=(?<![A-Za-z])(?:${teams})\\s+)(?:${alt(EN_PAIR_VERBS)})(?=\\s+(?:${teams})(?![A-Za-z]))`,
+        'gi',
+      ),
+      kind: 'result',
+    },
     // 进球数：3球大胜、两球领先、7球大战
     {
       re: new RegExp(`${NUM_ANY}\\s*(?:个|粒)?\\s*球\\s*(?:${alt(ZH_MARGIN_SUFFIX)})`, 'g'),
       kind: 'score',
     },
-    // 净胜两球、打进2球、丢了3球
+    // 净胜两球、打进2球、丢了3球、进2球
     {
       re: new RegExp(
-        `(?:净胜|领先|落后|狂灌|狂轰|攻入|打进|打入|攻进|轰入|射入|灌进|连进|连入|连扳|扳回|丢了?|失|狂进|独进|连丢|进了|再进|又进|共进|合计)\\s*${NUM_ANY}\\s*(?:个|粒)?\\s*(?:球|粒进球)`,
+        `(?:净胜|领先|落后|狂灌|狂轰|攻入|打进|打入|攻进|轰入|射入|灌进|连进|连入|连扳|扳回|丢了?|失|狂进|独进|连丢|进了|再进|又进|共进|合计|轰进|射进|踢进|罚进|进|入)\\s*${NUM_ANY}\\s*(?:个|粒)?\\s*(?:球|粒进球)`,
         'g',
       ),
       kind: 'score',
+    },
+    // 全场5球、两队合计4球、一球之差
+    {
+      re: new RegExp(
+        `(?:全场|本场|两队|双方|合计|共计|一共|总共)\\s*(?:共|合计|打进|攻入)?\\s*${NUM_ANY}\\s*(?:个|粒)?\\s*球|${NUM_ANY}\\s*球之差`,
+        'g',
+      ),
+      kind: 'score',
+    },
+    // 人名 + 进球数："哈兰德两球""凯恩进2球"（需要足球语境；"买了两球"不算）
+    {
+      re: new RegExp(
+        `((?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6}))\\s*(?:进|入|独进|打进|攻入)?\\s*(?:两|三|四|五|\\d)\\s*球(?![员迷队衣鞋场馆台星类技星赛])`,
+        'g',
+      ),
+      kind: 'scorer',
+      contextual: true,
+      validate: validateZhGoals,
     },
     // 5粒进球
     { re: new RegExp(`${NUM_ANY}\\s*(?:粒|个)\\s*进球`, 'g'), kind: 'score' },
