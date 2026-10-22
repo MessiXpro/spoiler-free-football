@@ -24,6 +24,8 @@ import {
   DEFAULT_TEAMS,
   type Program,
   type PublicMatch,
+  canShowAggregate,
+  firstLegOf,
 } from '../src/index.ts';
 
 function match(partial: Partial<PublicMatch> & Pick<PublicMatch, 'id' | 'kickoff'>): PublicMatch {
@@ -261,5 +263,44 @@ describe('同步码', () => {
     expect(s.teams).toEqual(['a']);
     expect(s.competitions).toEqual({ ucl: 'all' });
     expect(s.watched).toEqual({ b: 2 });
+  });
+});
+
+describe('两回合总比分只在首回合已看时显示', () => {
+  const leg = (id: string, l: 1 | 2, home: string, away: string, kickoff: string) =>
+    ({
+      id,
+      competition: 'ucl',
+      season: '2026-27',
+      stage: 'quarter-final',
+      leg: l,
+      kickoff,
+      home: { id: home, name: home },
+      away: { id: away, name: away },
+      status: 'scheduled',
+      links: [],
+    }) as unknown as PublicMatch;
+  const first = leg('ucl-qf-a-b', 1, 'a', 'b', '2027-04-07T19:00:00Z');
+  const second = leg('ucl-qf-b-a', 2, 'b', 'a', '2027-04-14T19:00:00Z');
+  const other = leg('ucl-qf-c-d', 1, 'c', 'd', '2027-04-07T19:00:00Z');
+
+  it('找首回合：同赛事同赛季同阶段、主客对调', () => {
+    expect(firstLegOf(second, [other, first, second])?.id).toBe(first.id);
+    expect(firstLegOf(first, [other, first, second])).toBeUndefined();
+    expect(firstLegOf(second, [other, second])).toBeUndefined();
+  });
+
+  it('首回合没看、或首回合不在数据里：不显示总比分；首回合已看才显示', () => {
+    const fresh = defaultUserState(0);
+    expect(canShowAggregate(second, [first, second], fresh)).toBe(false);
+    expect(canShowAggregate(second, [second], { ...fresh, watched: { [first.id]: 1 } })).toBe(
+      false,
+    );
+    expect(
+      canShowAggregate(second, [first, second], { ...fresh, watched: { [first.id]: 1 } }),
+    ).toBe(true);
+    // 首回合本身、单场淘汰赛：照常
+    expect(canShowAggregate(first, [first, second], fresh)).toBe(true);
+    expect(canShowAggregate(other, [other], fresh)).toBe(true);
   });
 });

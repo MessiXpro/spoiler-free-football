@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  canShowAggregate,
   competitionName,
   formatKickoff,
   isFixtureLocked,
@@ -164,7 +165,13 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
             </div>
           )}
 
-          {status === 'finished' && <RevealScore match={match} watched={watched} />}
+          {status === 'finished' && (
+            <RevealScore
+              match={match}
+              watched={watched}
+              showAggregate={canShowAggregate(match, all, state)}
+            />
+          )}
           {status === 'live' && <p className="muted">比赛进行中，结束后可以在这里显示比分。</p>}
           {/*
             延期/取消的比赛没有"显示比分"，开球时间过后让用户手动标记，解除相关节目和下一轮对阵的折叠。

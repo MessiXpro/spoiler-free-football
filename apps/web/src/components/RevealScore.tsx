@@ -10,7 +10,16 @@ type Phase = 'idle' | 'asking' | 'loading' | 'shown' | 'missing' | 'error';
  * "看完了，显示比分"：二次确认后才请求这场的比分文件，同时记为已看。
  * 比分不在页面初始数据里，所以在点击之前页面上不可能出现比分。
  */
-export function RevealScore({ match, watched }: { match: PublicMatch; watched: boolean }) {
+export function RevealScore({
+  match,
+  watched,
+  showAggregate = true,
+}: {
+  match: PublicMatch;
+  watched: boolean;
+  /** 次回合的两回合总比分会倒推出首回合比分，首回合没看完时不显示 */
+  showAggregate?: boolean;
+}) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [score, setScore] = useState<ScoreRecord | null>(null);
   const [error, setError] = useState('');
@@ -39,6 +48,7 @@ export function RevealScore({ match, watched }: { match: PublicMatch; watched: b
       <ScoreView
         match={match}
         score={score}
+        showAggregate={showAggregate}
         onHide={() => {
           actions.unmarkWatched(match.id);
           setPhase('idle');
@@ -87,10 +97,12 @@ export function RevealScore({ match, watched }: { match: PublicMatch; watched: b
 function ScoreView({
   match,
   score,
+  showAggregate,
   onHide,
 }: {
   match: PublicMatch;
   score: ScoreRecord;
+  showAggregate: boolean;
   onHide: () => void;
 }) {
   return (
@@ -121,10 +133,13 @@ function ScoreView({
             点球大战 {score.penalties[0]} - {score.penalties[1]}
           </li>
         )}
-        {score.aggregate && (
-          <li>
+        {score.aggregate && showAggregate && (
+          <li data-testid="score-aggregate">
             两回合总比分 {score.aggregate[0]} - {score.aggregate[1]}
           </li>
+        )}
+        {score.aggregate && !showAggregate && (
+          <li data-testid="score-aggregate-hidden">首回合还没看，两回合总比分先不显示</li>
         )}
         {score.note && <li>{score.note}</li>}
       </ul>

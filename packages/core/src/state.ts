@@ -277,6 +277,35 @@ export function isFixtureLocked(
   });
 }
 
+/** 两回合淘汰赛的次回合对应的首回合（同赛事、同赛季、同阶段，主客对调）；找不到返回 undefined */
+export function firstLegOf(match: PublicMatch, all: PublicMatch[]): PublicMatch | undefined {
+  if (match.leg !== 2) return undefined;
+  return all.find(
+    (m) =>
+      m.leg === 1 &&
+      m.id !== match.id &&
+      m.competition === match.competition &&
+      m.season === match.season &&
+      m.stage === match.stage &&
+      m.home.id === match.away.id &&
+      m.away.id === match.home.id,
+  );
+}
+
+/**
+ * 次回合的「两回合总比分」能倒推出首回合比分：只有首回合已看（或根本不是次回合）才显示。
+ * 首回合不在数据里（太早、不在订阅范围）时也不显示，宁可少看一个数字
+ */
+export function canShowAggregate(
+  match: PublicMatch,
+  all: PublicMatch[],
+  state: UserState,
+): boolean {
+  if (match.leg !== 2) return true;
+  const first = firstLegOf(match, all);
+  return Boolean(first && isWatched(state, first.id));
+}
+
 /** 节目是否锁定：关联赛事最近 coverageDays 天内有没看完的订阅比赛 */
 export function programLockReasons(
   program: Program,

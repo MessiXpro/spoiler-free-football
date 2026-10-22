@@ -363,3 +363,76 @@ describe('内嵌播放器全屏', () => {
     }
   });
 });
+
+describe('次回合的两回合总比分', () => {
+  const first = match({
+    id: 'ucl-2026-27-quarter-final-arsenal-real-madrid',
+    kickoff: '2026-10-08T19:00:00Z',
+    competition: 'ucl',
+    stage: 'quarter-final',
+    leg: 1,
+    home: { id: 'arsenal', name: 'Arsenal' },
+    away: { id: 'real-madrid', name: 'Real Madrid' },
+  } as Parameters<typeof match>[0]);
+  const second = match({
+    id: 'ucl-2026-27-quarter-final-real-madrid-arsenal',
+    kickoff: '2026-10-15T19:00:00Z',
+    competition: 'ucl',
+    stage: 'quarter-final',
+    leg: 2,
+    home: { id: 'real-madrid', name: 'Real Madrid' },
+    away: { id: 'arsenal', name: 'Arsenal' },
+  } as Parameters<typeof match>[0]);
+  const now = new Date('2026-10-16T01:00:00Z');
+  const data = appData([second, first]);
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const id = [first, second].map((m) => m.id).find((x) => String(url).endsWith(scorePath(x)));
+        if (!id) return new Response('', { status: 404 });
+        return new Response(
+          JSON.stringify({
+            id,
+            home: 2,
+            away: 1,
+            aggregate: [3, 3],
+            source: 'test',
+            updatedAt: '',
+          }),
+          { headers: { 'content-type': 'application/json' } },
+        );
+      }),
+    );
+  });
+
+  it('首回合没看时显示次回合比分但不显示总比分；首回合看过后才显示', async () => {
+    // 次回合直接显示：对阵不锁（测试里关掉淘汰赛锁定，只看总比分的逻辑）
+    setState({ ...getState(), settings: { ...getState().settings, lockKnockoutOpponents: false } });
+    const view = <WithStore>{(s) => <UnwatchedView data={data} state={s} now={now} />}</WithStore>;
+    const { el, unmount } = await render(view);
+    const card = cardOf(el, second.id)!;
+    await click(q(card, 'reveal-button'));
+    await click(q(document.body, 'confirm-ok'));
+    await settle();
+    const shown = cardOf(el, second.id)!;
+    expect(q(shown, 'score-display')).not.toBeNull();
+    expect(q(shown, 'score-aggregate')).toBeNull();
+    expect(q(shown, 'score-aggregate-hidden')).not.toBeNull();
+    expect(shown.textContent).not.toContain('3 - 3');
+    await unmount();
+
+    // 首回合看过之后（次回合已记为已看，「没看完」里不再有它，去详情页看）
+    setState({ ...getState(), watched: { ...getState().watched, [first.id]: 1 } });
+    const again = await render(
+      <WithStore>
+        {(s) => <MatchDetailView data={data} state={s} now={now} id={second.id} />}
+      </WithStore>,
+    );
+    const c2 = cardOf(again.el, second.id)!;
+    await click(q(c2, 'reveal-button'));
+    await settle();
+    expect(q(cardOf(again.el, second.id)!, 'score-aggregate')?.textContent).toContain('3 - 3');
+  });
+});
