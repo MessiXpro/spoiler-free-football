@@ -136,6 +136,9 @@ jobs:
       THESPORTSDB_KEY: ${{ secrets.THESPORTSDB_KEY }}
       APIFOOTBALL_KEY: ${{ secrets.APIFOOTBALL_KEY }}
       FOOTBALL_DATA_COMPETITIONS: ${{ vars.FOOTBALL_DATA_COMPETITIONS }}
+      # 可选：覆盖 TheSportsDB / API-Football 拉取的联赛（逗号分隔的联赛 ID，不设用默认列表）
+      THESPORTSDB_LEAGUES: ${{ vars.THESPORTSDB_LEAGUES }}
+      APIFOOTBALL_LEAGUES: ${{ vars.APIFOOTBALL_LEAGUES }}
       SFF_HTTP_CACHE: ${{ github.workspace }}/.http-cache
     steps:
       - uses: actions/checkout@v4
@@ -191,6 +194,8 @@ jobs:
         env:
           # 网页里「数据过期」提醒和「去哪看」页用它链接到仓库的 Actions 页面
           VITE_SFF_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          # 可选：网页还有别的地址（自定义域名、国内镜像）时，插件的桥接脚本也要在那些地址上运行
+          SFF_WEB_MATCHES: ${{ vars.SFF_WEB_MATCHES }}
         run: |
           pnpm --filter @sff/web build
           pnpm --filter @sff/extension build
