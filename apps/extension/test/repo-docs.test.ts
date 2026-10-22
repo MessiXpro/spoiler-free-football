@@ -45,6 +45,27 @@ describe('数据更新与部署工作流', () => {
   });
 });
 
+describe('版本号', () => {
+  it('所有 package.json 的版本号一致（用户脚本 @version、插件 manifest、发布标签都靠它）', () => {
+    const files = [
+      'package.json',
+      'apps/extension/package.json',
+      'apps/userscript/package.json',
+      'apps/web/package.json',
+      'apps/sync-worker/package.json',
+      'packages/core/package.json',
+      'packages/data/package.json',
+    ];
+    const versions = files.map(
+      (f) => (JSON.parse(read(...f.split('/'))) as { version: string }).version,
+    );
+    expect(new Set(versions).size, versions.join(', ')).toBe(1);
+    // 发布工作流检查的也是这几个文件
+    const release = read('.github', 'workflows', 'release.yml');
+    for (const f of files) expect(release).toContain(`'${f}'`);
+  });
+});
+
 describe('README', () => {
   it('开发命令能直接运行：pnpm 自带 ci 命令，脚本要用 pnpm run ci', () => {
     expect(readme).not.toMatch(/^pnpm ci\b/m);

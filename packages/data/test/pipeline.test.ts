@@ -139,6 +139,23 @@ describe('完整管线（示例数据）', () => {
 });
 
 describe('防泄露检查本身', () => {
+  it('链接的查询串、#片段、域名里的比分也拦下；平台的跟踪参数不误伤', () => {
+    expect(
+      findPublicDataLeaks({ url: 'https://v.example.com/watch?title=arsenal-2-1-chelsea' }),
+    ).toHaveLength(1);
+    expect(findPublicDataLeaks({ url: 'https://v.example.com/watch#2-1' })).toHaveLength(1);
+    expect(findPublicDataLeaks({ url: 'https://2-1.example.com/watch' })).toHaveLength(1);
+    expect(findPublicDataLeaks({ url: 'https://v.example.com/live?score=3:1' })).toHaveLength(1);
+    expect(
+      findPublicDataLeaks({
+        url: 'https://www.bilibili.com/video/BV1xx411c7mD?spm_id_from=333.999.0.0&vd_source=abc123&p=2&t=90',
+      }),
+    ).toEqual([]);
+    expect(
+      findPublicDataLeaks({ url: 'https://www.miguvideo.com/p/live/120000?from=2026-10-16' }),
+    ).toEqual([]);
+  });
+
   it('能抓到比分、结果词、比分字段名、带比分的链接', () => {
     expect(findPublicDataLeaks({ title: '阿森纳 2-1 切尔西' })).toHaveLength(1);
     expect(findPublicDataLeaks({ note: '曼城逆转' })).toHaveLength(1);

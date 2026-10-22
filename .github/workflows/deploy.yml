@@ -42,9 +42,11 @@ jobs:
     timeout-minutes: 5
     permissions:
       actions: write
-      pages: read
+      pages: write
+      id-token: write
     outputs:
-      pages: ${{ steps.check.outputs.pages }}
+      # 没开启时会先尝试自动开启；开启成功就当作已开启
+      pages: ${{ steps.enable.outcome == 'success' && 'true' || steps.check.outputs.pages }}
       # 私有仓库里跳过额外的两次定时运行
       skip: ${{ steps.quota.outputs.skip }}
       # 是否部署到 Cloudflare Pages（DEPLOY_TARGET 为 cloudflare 或 both；表达式里比较不区分大小写）
@@ -97,6 +99,20 @@ jobs:
             cat pages-error.txt
             echo "pages=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # GitHub Pages 还没开启：试着自动开启（来源设为 GitHub Actions），用户就不用自己去 Settings 里点了。
+      # 私有仓库没有付费套餐时会失败，这时沿用上面的提示，不影响后面的试跑
+      - id: enable
+        name: 自动开启 GitHub Pages
+        if: steps.check.outputs.pages == 'false' && github.event_name != 'schedule'
+        continue-on-error: true
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: 自动开启的结果
+        if: steps.enable.outcome == 'success'
+        run: echo "::notice title=已自动开启 GitHub Pages::网页会在这次运行结束后上线，地址见下方「部署」job。"
 
   build:
     needs: hosting

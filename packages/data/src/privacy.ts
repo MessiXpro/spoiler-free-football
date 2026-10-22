@@ -19,7 +19,7 @@ const NAME_PATHS = /\.(?:home|away)\.(?:name|id)$|\.matches\[\d+\]\.id$/;
 const NAME_DATE = /\d{4}-\d{2}-\d{2}|\d{4}-\d{2}(?!\d)/g;
 const NAME_SCORE = /(?<!\d)\d{1,2}\s*[-–—:：比]\s*\d{1,2}(?!\d)/;
 
-const URL_SCORE = /(?:^|[-_/])\d{1,2}[-_:]\d{1,2}(?:[-_/.]|$)/;
+const URL_SCORE = /(?:^|[-_/=#?&])\d{1,2}[-_:]\d{1,2}(?:[-_/.&#]|$)/;
 const URL_DATE = /\d{4}[-_]\d{2}[-_]\d{2}|\d{8}/g;
 
 export function findPublicDataLeaks(value: unknown, path = '$'): string[] {
@@ -34,13 +34,18 @@ export function findPublicDataLeaks(value: unknown, path = '$'): string[] {
         } catch {
           /* 保持原样 */
         }
-        let urlPath = '';
+        // 域名、路径、查询串、#片段都查（"?title=arsenal-2-1-chelsea" "#2-1" 一样会泄露）
+        let urlText = '';
         try {
-          urlPath = decodeURIComponent(new URL(v).pathname).replace(URL_DATE, '');
+          const u = new URL(v);
+          urlText = decodeURIComponent(`${u.hostname}${u.pathname}${u.search}${u.hash}`).replace(
+            URL_DATE,
+            '',
+          );
         } catch {
-          urlPath = v;
+          urlText = v;
         }
-        if (URL_SCORE.test(urlPath) || findSpoilers(urlPath).length) {
+        if (URL_SCORE.test(urlText) || findSpoilers(urlText).length) {
           leaks.push(`${p}: 链接疑似含比分 ${decoded}`);
         }
         return;

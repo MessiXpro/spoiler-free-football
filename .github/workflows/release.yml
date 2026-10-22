@@ -20,6 +20,26 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: 检查版本号（标签 vX.Y.Z 必须和 package.json 一致，各包版本必须相同）
+        env:
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          node - "$TAG" <<'EOF'
+          const { readFileSync } = require('node:fs');
+          const tag = process.argv[2];
+          const files = ['package.json', 'apps/extension/package.json', 'apps/userscript/package.json', 'apps/web/package.json', 'apps/sync-worker/package.json', 'packages/core/package.json', 'packages/data/package.json'];
+          const versions = new Map(files.map((f) => [f, JSON.parse(readFileSync(f, 'utf8')).version]));
+          const distinct = [...new Set(versions.values())];
+          if (distinct.length !== 1) {
+            console.error('::error title=各包版本号不一致::' + [...versions].map(([f, v]) => `${f}=${v}`).join('，'));
+            process.exit(1);
+          }
+          if (tag && tag !== `v${distinct[0]}`) {
+            console.error(`::error title=标签和版本号不一致::标签是 ${tag}，package.json 里是 ${distinct[0]}。请先把所有 package.json 的 version 改成 ${tag.replace(/^v/, '')}，再重新打标签。`);
+            process.exit(1);
+          }
+          console.log(`版本 ${distinct[0]}${tag ? `，标签 ${tag}` : ''}`);
+          EOF
       - name: 构建
         run: |
           owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
