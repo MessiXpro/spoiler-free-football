@@ -284,7 +284,7 @@ Pages 项目不用自己建，网页地址也不用自己填：第一次运行�
 | `packages/data/config/programs.json` | 节目列表、播出时间、链接、是否国内可看 |
 | `packages/data/config/links.json` | 给某场比赛加直达链接或 B 站集锦 BV 号（比赛编号在网页「比赛详情」页底部） |
 | `packages/data/config/manual-matches.json` | 数据源漏掉的比赛（比如临时加的友谊赛） |
-| `packages/core/src/rules/default-site-rules.json` | 插件/脚本的站点遮挡规则（发布后插件/脚本会自动下载新版）。改完把文件顶部的 `version` 改成当天日期（例如 `2026-10-17`，同一天改多次用 `2026-10-17.2`）；`version` 不能比原来的小，否则已安装的插件/脚本不会采用 |
+| `packages/core/src/rules/default-site-rules.json` | 插件/脚本的站点遮挡规则（发布后插件/脚本会自动下载新版）。不用改 `version`：部署时会自动用这个文件最后一次提交的时间作为版本号，已安装的插件/脚本会在 12 小时内采用 |
 
 `links.json` 示例：
 

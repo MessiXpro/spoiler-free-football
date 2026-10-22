@@ -6,6 +6,7 @@ import {
   FIXTURE_LOCK_LOOKBACK_DAYS,
   getTeam,
   isKnockoutStage,
+  isNewerRules,
   redact,
   scorePath,
   stageLabel,
@@ -253,12 +254,26 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
   // 页面初始会加载的公开数据必须通过防泄露检查；不通过就整个构建失败，宁可不发布
   for (const [name, content] of files) assertNoLeaks(content, name);
 
-  files.set('site-rules.json', DEFAULT_SITE_RULES_JSON);
+  // 版本号自动盖上规则文件最后一次提交的时间：改完规则不用手动改 version，已安装的插件/脚本也会采用
+  files.set('site-rules.json', stampRulesVersion(DEFAULT_SITE_RULES_JSON, env.SFF_RULES_STAMP));
   for (const { score } of merged) {
     // 文件名是比赛 id 的哈希：上传日志和网址里不会出现队名（淘汰赛的对阵本身就会剧透谁晋级）
     if (score) files.set(scorePath(score.id), score);
   }
   return { meta, matches, files, warnings, diagnostics: collectDiagnostics(all, matches) };
+}
+
+/**
+ * 站点规则的版本号：取「文件里写的 version」和「规则文件最后一次提交的时间」两者中较新的。
+ * 提交时间由部署工作流用 git log 取出，传进 SFF_RULES_STAMP（ISO 时间）；本地构建没有这个值时用文件里的。
+ * 版本号比较用 isNewerRules（按数字段比较），所以 "2026-10-22T10:36" 比 "2026-10-16" 新，
+ * 手动写的 "2026-10-23.2" 又比它新，两种写法可以混用
+ */
+export function stampRulesVersion<T extends { version: string }>(rules: T, stamp?: string): T {
+  const t = stamp ? Date.parse(stamp) : NaN;
+  if (!Number.isFinite(t)) return rules;
+  const version = new Date(t).toISOString().slice(0, 16);
+  return isNewerRules(version, rules.version) ? { ...rules, version } : rules;
 }
 
 /** 写入输出目录（先清空，避免留下过期的比分文件） */

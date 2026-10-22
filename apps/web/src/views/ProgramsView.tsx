@@ -161,6 +161,11 @@ export function ProgramsView({ data, state, now }: { data: AppData; state: UserS
         <h2>足球节目</h2>
         <p className="muted">节目默认按「可能剧透」处理：相关比赛没看完之前先折叠。</p>
       </div>
+      {data.programs.length === 0 && (
+        <p className="empty" data-testid="programs-empty">
+          节目信息没有加载出来（节目表是单独的文件，可能是网络问题）。刷新页面再试试。
+        </p>
+      )}
       <div className="match-grid">
         {available.map((p) => (
           <ProgramCard

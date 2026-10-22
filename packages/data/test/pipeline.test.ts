@@ -10,7 +10,7 @@ import {
   scorePath,
   type PublicMatch,
 } from '@sff/core';
-import { buildData, CONFIG_DIR, loadConfig, writeOutput } from '../src/build.ts';
+import { buildData, CONFIG_DIR, loadConfig, stampRulesVersion, writeOutput } from '../src/build.ts';
 import { mergeFixtures } from '../src/merge.ts';
 import { findPublicDataLeaks, assertNoLeaks } from '../src/privacy.ts';
 import { buildLinks, isOfficialUrl } from '../src/links.ts';
@@ -300,5 +300,33 @@ describe('链接与节目', () => {
     expect(ids).toEqual(
       expect.arrayContaining(['txzq', 'gjoz', 'motd', 'mnf', 'pl-official', 'overlap']),
     );
+  });
+});
+
+describe('站点规则的版本号自动盖上提交时间', () => {
+  const rules = { version: '2026-10-16', sites: [] };
+  it('提交时间比文件里的 version 新就用提交时间；旧的、没有的、格式不对的都用文件里的', () => {
+    expect(stampRulesVersion(rules, '2026-10-22T10:36:00+00:00').version).toBe('2026-10-22T10:36');
+    expect(stampRulesVersion(rules, '2026-10-16T09:00:00Z').version).toBe('2026-10-16T09:00');
+    expect(stampRulesVersion(rules, '2026-10-01T09:00:00Z').version).toBe('2026-10-16');
+    expect(
+      stampRulesVersion({ ...rules, version: '2026-10-23.2' }, '2026-10-22T10:36:00Z').version,
+    ).toBe('2026-10-23.2');
+    expect(stampRulesVersion(rules, undefined).version).toBe('2026-10-16');
+    expect(stampRulesVersion(rules, 'not a date').version).toBe('2026-10-16');
+    expect(stampRulesVersion(rules, '').version).toBe('2026-10-16');
+  });
+
+  it('管线输出的 site-rules.json 带盖过的版本号，其他内容不变', async () => {
+    const config = await loadConfig(CONFIG_DIR, { links: join(SAMPLE_DIR, 'links.sample.json') });
+    const out = await buildData({
+      now: SAMPLE_NOW,
+      fetcher: sampleFetcher(),
+      env: { ...SAMPLE_ENV, SFF_RULES_STAMP: '2099-01-02T03:04:05Z' },
+      config,
+    });
+    const doc = out.files.get('site-rules.json') as { version: string; sites: unknown[] };
+    expect(doc.version).toBe('2099-01-02T03:04');
+    expect(doc.sites.length).toBeGreaterThan(0);
   });
 });

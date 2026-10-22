@@ -142,6 +142,9 @@ jobs:
       SFF_HTTP_CACHE: ${{ github.workspace }}/.http-cache
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 要用 git log 取站点规则文件最后一次提交的时间（见下面），浅克隆取不到
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -187,6 +190,12 @@ jobs:
           path: .http-cache
           key: http-cache-v2-${{ github.run_id }}
           restore-keys: http-cache-v2-
+
+      - name: 站点规则的版本号用最后一次提交的时间
+        run: |
+          stamp="$(git log -1 --format=%cI -- packages/core/src/rules/default-site-rules.json)"
+          echo "SFF_RULES_STAMP=$stamp" >> "$GITHUB_ENV"
+          echo "站点规则最后提交于 $stamp"
 
       - name: 运行数据管线（公开数据含防泄露检查，不通过则不部署）
         run: pnpm data:build
