@@ -4,6 +4,9 @@ import type { AppData } from '../lib/data.ts';
 import { href } from '../lib/router.ts';
 import { ImportConfirm } from './SettingsView.tsx';
 
+/** 部署时由工作流传入（GitHub 仓库地址），本地开发时为空 */
+const REPO_URL = (import.meta.env.VITE_SFF_REPO_URL as string | undefined) || '';
+
 const CONFIDENCE: Record<string, string> = {
   high: '已核实',
   medium: '较可靠',
@@ -64,6 +67,17 @@ export function AboutView({ data }: { data: AppData }) {
               </li>
             ))}
           </ul>
+          {REPO_URL ? (
+            <p className="muted small">
+              <a href={REPO_URL} target="_blank" rel="noreferrer">
+                项目主页（GitHub）
+              </a>
+              {' · '}
+              <a href={`${REPO_URL}/actions`} target="_blank" rel="noreferrer">
+                数据更新记录（Actions）
+              </a>
+            </p>
+          ) : null}
         </div>
       )}
     </section>

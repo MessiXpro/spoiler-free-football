@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { href, parseHash } from '../src/lib/router.ts';
+import { describeDataError } from '../src/lib/data.ts';
 import { bilibiliEmbedUrl } from '../src/components/Embed.tsx';
 
 describe('路由', () => {
@@ -34,5 +35,17 @@ describe('B 站嵌入参数', () => {
     expect(u.searchParams.get('danmaku')).toBe('0');
     expect(u.searchParams.get('t')).toBe('0');
     expect(u.searchParams.get('autoplay')).toBe('1');
+  });
+});
+
+describe('数据加载失败的说明', () => {
+  it('把技术报错换成普通人看得懂的话；认不出的原样显示', () => {
+    expect(describeDataError('Failed to fetch')).toMatch(/连不上数据地址/);
+    expect(describeDataError('matches.json: HTTP 404')).toMatch(/还没有数据文件/);
+    expect(describeDataError('matches.json: HTTP 502')).toMatch(/服务器暂时出错/);
+    expect(describeDataError(`Unexpected token '<', "<!doctype" is not valid JSON`)).toMatch(
+      /不是数据文件/,
+    );
+    expect(describeDataError('something else')).toBe('something else');
   });
 });

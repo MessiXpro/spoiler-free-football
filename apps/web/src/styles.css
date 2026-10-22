@@ -137,15 +137,15 @@ a {
   width: 100%;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 16px 16px calc(var(--tabbar-h) + 32px);
+  padding: 16px;
 }
 
+/* 手机上也显示：这是进入「去哪看」和看到数据更新时间的入口；底部留出标签栏的高度 */
 .footer {
-  display: none;
   text-align: center;
   color: var(--muted);
   font-size: 13px;
-  padding: 16px;
+  padding: 8px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 24px);
 }
 
 @media (min-width: 768px) {
@@ -156,10 +156,10 @@ a {
     display: none;
   }
   .main {
-    padding: 24px 24px 48px;
+    padding: 24px 24px 32px;
   }
   .footer {
-    display: block;
+    padding: 16px;
   }
 }
 
@@ -425,17 +425,27 @@ a {
   background: var(--panel-2);
 }
 
+/* 队名各占一边、可以换行；比分在中间永远一行（长队名不会把 2 - 1 挤成两行） */
 .score-main {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  gap: 8px 12px;
   font-size: 18px;
+}
+
+.score-team:first-child {
+  text-align: right;
+}
+
+.score-team:last-child {
+  text-align: left;
 }
 
 .score-num {
   font-size: 28px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .score-extra {
@@ -714,5 +724,18 @@ select {
 
 .day-nav {
   display: flex;
+  gap: 8px;
+}
+
+/* 「可信度」一列只有三个字，不要竖着排 */
+.rights th:nth-child(3),
+.rights td:nth-child(3) {
+  white-space: nowrap;
+}
+
+.quick-links {
+  margin: 0 0 12px;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }

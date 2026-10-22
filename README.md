@@ -48,7 +48,7 @@
 ### 第 1 步：注册免费的赛程 API（推荐，5 分钟）
 
 不注册也能用：英超、西甲赛程来自免费公开数据 openfootball，杯赛和国家队比赛来自 TheSportsDB 的公开测试 Key。
-但 openfootball 的比分更新比较慢，而且**欧冠赛程需要 football-data.org**，所以强烈建议注册：
+但 openfootball 的比分更新比较慢，TheSportsDB 的免费 Key 又只有当前前后几轮（欧冠等杯赛早期轮次可能不全），所以强烈建议注册 football-data.org，赛程更完整、比分更及时：
 
 1. 打开 <https://www.football-data.org/client/register>，填邮箱注册（免费档）。
 2. 邮件里会收到一串 API Token。
@@ -328,7 +328,7 @@ Pages 项目不用自己建，网页地址也不用自己填：第一次运行�
 - 图片里的比分（封面截图）无法识别文字，只能整张换成占位图；综合视频站只换足球相关视频的封面。
 - B 站内嵌播放器结束时可能显示推荐视频，无法关闭，页面上有提醒。为了不露出时长和进度条，B 站播放器自己的全屏（双击画面、全屏键）已经禁用，请用我们页面上的「全屏」按钮（全屏后遮挡条仍然有效）；iPhone 的 Safari 不支持这种全屏，不显示这个按钮。
 - 入口链接大多是平台专区页，不是单场直达；全场回放是否需要会员、保留多久没有核实。
-- 免费 TheSportsDB Key 只拉当前前后几轮，杯赛早期轮次可能不全；没有 `FOOTBALL_DATA_TOKEN` 时没有欧冠赛程，比分也会延迟。
+- 免费 TheSportsDB Key 只拉当前前后几轮，杯赛早期轮次可能不全；没有 `FOOTBALL_DATA_TOKEN` 时欧冠等赛程只靠 TheSportsDB，比分也会延迟。
 - Firefox 的插件只在本地测试页上用 Chromium 测过，Firefox 本身没有自动化测试。
 - Via、X 浏览器、狐猴、iOS Userscripts 的脚本接口没有在真机上测过（测试里模拟了脚本管理器的存储接口）。
 

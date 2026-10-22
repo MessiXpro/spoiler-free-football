@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNow } from './lib/clock.ts';
 import { initBridge } from './lib/bridge.ts';
-import { useAppData } from './lib/data.ts';
+import { describeDataError, useAppData } from './lib/data.ts';
 import { href, useRoute, type Route } from './lib/router.ts';
 import { useUserState } from './lib/store.ts';
 import { AboutView, ImportView } from './views/AboutView.tsx';
@@ -24,6 +24,18 @@ const NAV: Array<{ route: Route; label: string; icon: string; match: Route['name
 
 /** 数据超过这么久没更新就提醒 */
 const STALE_MS = 48 * 60 * 60 * 1000;
+
+/** 部署时由工作流传入（GitHub 仓库地址），本地开发时为空 */
+const REPO_URL = (import.meta.env.VITE_SFF_REPO_URL as string | undefined) || '';
+
+const formatUpdated = (t: number) =>
+  new Date(t).toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
 const TITLES: Record<Route['name'], string> = {
   today: '昨夜今晨',
@@ -60,9 +72,15 @@ export function App() {
     body = <p className="empty">加载中…</p>;
   } else if (data.status === 'error') {
     body = (
-      <div className="empty">
-        <p>数据加载失败：{data.error}</p>
-        <p className="muted">如果是刚部署，请确认数据管线已经跑过一次。</p>
+      <div className="empty" data-testid="data-error">
+        <p>数据加载失败</p>
+        <p className="muted">{describeDataError(data.error)}</p>
+        <p>
+          <button type="button" className="btn" onClick={data.reload} data-testid="data-retry">
+            重试
+          </button>
+        </p>
+        <p className="muted small">{data.error}</p>
       </div>
     );
   } else {
@@ -118,7 +136,18 @@ export function App() {
       <main className="main">
         {stale && route.name !== 'settings' && route.name !== 'import' ? (
           <p className="stale-banner" role="status" data-testid="stale-banner">
-            数据已经超过两天没有更新，请检查 GitHub Actions 里的「数据更新与部署」是否被停用。
+            数据已经超过两天没有更新（最后更新：{formatUpdated(generatedAt)}）。自动更新可能停了：
+            {REPO_URL ? (
+              <>
+                打开
+                <a href={`${REPO_URL}/actions`} target="_blank" rel="noreferrer">
+                  仓库的 Actions 页面
+                </a>
+                看看「数据更新与部署」是否被停用、最近一次运行有没有失败。
+              </>
+            ) : (
+              '到仓库的 Actions 页面看看「数据更新与部署」是否被停用、最近一次运行有没有失败。'
+            )}
           </p>
         ) : null}
         {body}
@@ -137,6 +166,9 @@ export function App() {
       </nav>
       <footer className="footer">
         只链接正版平台，不托管、不转播任何视频 · <a href={href({ name: 'about' })}>去哪看</a>
+        {Number.isFinite(generatedAt) ? (
+          <span data-testid="data-updated"> · 数据更新于 {formatUpdated(generatedAt)}</span>
+        ) : null}
       </footer>
     </div>
   );

@@ -185,3 +185,30 @@ test.describe('数据过期提醒', () => {
     await expectNoSpoilers(page);
   });
 });
+
+test.describe('加载失败与数据更新时间', () => {
+  test('页脚显示数据更新时间；设置页能进「去哪看」', async ({ page }) => {
+    await page.goto('./#/today');
+    await expect(page.getByTestId('data-updated')).toContainText('数据更新于');
+    await page.goto('./#/settings');
+    await page
+      .getByRole('link', { name: /去哪看/ })
+      .first()
+      .click();
+    await expect(page.getByTestId('view-about')).toBeVisible();
+    await expect(page.getByTestId('view-about')).toContainText('数据来源');
+  });
+
+  test('数据加载失败：中文说明和「重试」按钮，重试成功后正常显示', async ({ page }) => {
+    let fail = true;
+    await page.route('**/data/matches.json', (route) => (fail ? route.abort() : route.continue()));
+    await page.goto('./#/today');
+    const err = page.getByTestId('data-error');
+    await expect(err).toContainText('数据加载失败');
+    await expect(err).toContainText('连不上数据地址');
+    fail = false;
+    await page.getByTestId('data-retry').click();
+    await expect(page.getByTestId('view-today')).toBeVisible();
+    await expectNoSpoilers(page);
+  });
+});

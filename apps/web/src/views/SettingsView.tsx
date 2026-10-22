@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { href } from '../lib/router.ts';
 import {
   COMPETITIONS,
   COMPETITION_KIND_LABELS,
@@ -364,6 +365,21 @@ export function SettingsView({ state }: { state: UserState }) {
               ? '已检测到用户脚本'
               : '未检测到'}
         </p>
+        <p className="quick-links">
+          <button
+            type="button"
+            className="btn btn-small"
+            data-testid="goto-install"
+            onClick={() =>
+              document.getElementById('install-block')?.scrollIntoView({ behavior: 'smooth' })
+            }
+          >
+            安装插件/脚本 ↓
+          </button>
+          <a className="btn btn-small" href={href({ name: 'about' })}>
+            去哪看：正版渠道、数据来源 →
+          </a>
+        </p>
       </div>
       <TeamPicker state={state} />
       <CompetitionPicker state={state} />
@@ -403,7 +419,7 @@ export function SettingsView({ state }: { state: UserState }) {
       </div>
       <SyncCodePanel state={state} />
       <SyncServerPanel state={state} />
-      <div className="settings-block" data-testid="install-block">
+      <div className="settings-block" id="install-block" data-testid="install-block">
         <h3>安装插件/脚本</h3>
         <ul className="plain-list small">
           <li>

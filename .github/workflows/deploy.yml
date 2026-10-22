@@ -154,6 +154,8 @@ jobs:
             owner="$(echo "${GITHUB_REPOSITORY%%/*}" | tr '[:upper:]' '[:lower:]')"
             url="https://${owner}.github.io/${GITHUB_REPOSITORY#*/}/"
           fi
+          # 末尾统一带一个 /：插件默认数据地址和用户脚本的 @updateURL 都按目录地址拼接
+          url="${url%/}/"
           echo "SFF_WEB_URL=$url" >> "$GITHUB_ENV"
           echo "网页地址：$url"
 
@@ -168,6 +170,9 @@ jobs:
         run: pnpm data:build
 
       - name: 构建网页、插件、用户脚本
+        env:
+          # 网页里「数据过期」提醒和「去哪看」页用它链接到仓库的 Actions 页面
+          VITE_SFF_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           pnpm --filter @sff/web build
           pnpm --filter @sff/extension build
