@@ -47,6 +47,8 @@ jobs:
           owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
           export SFF_WEB_URL="${{ vars.SFF_WEB_URL || '' }}"
           [ -z "$SFF_WEB_URL" ] && export SFF_WEB_URL="https://${owner}.github.io/${{ github.event.repository.name }}/"
+          # 和部署工作流一样：末尾统一带一个 /
+          export SFF_WEB_URL="${SFF_WEB_URL%/}/"
           pnpm --filter @sff/extension build
           pnpm --filter @sff/userscript build
       - uses: softprops/action-gh-release@v2

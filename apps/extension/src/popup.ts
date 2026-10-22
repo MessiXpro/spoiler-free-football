@@ -138,7 +138,9 @@ async function main() {
             }${score.extraTime ? '（经过加时）' : ''}`
           : '数据源还没有这场的比分，已记为已看';
       } catch (err) {
-        out.textContent = `比分加载失败：${(err as Error).message}`;
+        out.textContent = `比分加载失败：${(err as Error).message}（已记为已看，可以再试一次）`;
+        reveal.textContent = '再试一次';
+        reveal.hidden = false;
       }
     };
   }

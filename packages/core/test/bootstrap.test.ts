@@ -258,11 +258,12 @@ describe('控制器跟着设置和时段走', () => {
       expect(c.active).toBe(true);
       expect(document.body.textContent).toBe('Arsenal ■-■ Chelsea');
 
+      // 时段结束：不再算工作中，但已经遮住的内容不会突然露出来（保持到刷新）
       vi.setSystemTime(new Date(2026, 9, 17, 12, 0));
       vi.advanceTimersByTime(60_000);
       expect(c.active).toBe(false);
       expect(c.reason).toBe('不在全网防剧透时段');
-      expect(document.body.textContent).toBe('Arsenal 2-1 Chelsea');
+      expect(document.body.textContent).toBe('Arsenal ■-■ Chelsea');
 
       vi.setSystemTime(new Date(2026, 9, 18, 6, 0));
       vi.advanceTimersByTime(60_000);
@@ -284,7 +285,13 @@ describe('控制器跟着设置和时段走', () => {
     expect(document.body.textContent).toBe('曼联 ■-■ 利物浦');
     c.update({ ...alwaysOn(), disabledHosts: ['localhost'] });
     expect(document.body.textContent).toBe('曼联 2-1 利物浦');
+    // 状态也要跟着变（弹窗/面板据此显示），不能显示成「已临时显示」
+    expect(c.active).toBe(false);
+    expect(c.reason).toBe('此站点已停用');
+    c.update({ ...alwaysOn(), enabled: false });
+    expect(c.reason).toBe('已关闭');
     c.update(alwaysOn());
+    expect(c.active).toBe(true);
     expect(document.body.textContent).toBe('曼联 ■-■ 利物浦');
     c.shield?.stop();
   });

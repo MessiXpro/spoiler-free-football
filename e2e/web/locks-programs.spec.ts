@@ -56,8 +56,14 @@ test.describe('淘汰赛对阵锁定', () => {
     await page.goto('./#/upcoming');
     const locked = card(page, qf.id);
     await expect(locked.getByTestId('locked-teams')).toBeVisible();
+    // 对阵本身不显示（对手「拜仁」不出现）；锁定卡列出的是没看完的上一轮（1/8决赛 PSV vs 阿森纳），
+    // 这是用户自己订阅的那场、赛前就公开的对阵，不是剧透
     await expect(locked).not.toContainText('拜仁');
-    await expect(locked).not.toContainText('阿森纳');
+    await expect(locked.getByTestId('lock-blockers')).toContainText('1/8决赛');
+    await expect(locked.getByTestId('lock-blockers').locator('a')).toHaveAttribute(
+      'href',
+      /#\/match\/ucl-2026-27-round-of-16-psv-arsenal/,
+    );
     await expectNoSpoilers(page, '（锁定的对阵）');
 
     await locked.getByTestId('unlock-fixture').click();

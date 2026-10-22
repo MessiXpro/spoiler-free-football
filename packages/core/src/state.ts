@@ -276,10 +276,37 @@ function stageLockActive(
   now: Date,
   sameTeamOnly: boolean,
 ): boolean {
+  return stageLockBlockers(match, all, state, now, sameTeamOnly).length > 0;
+}
+
+/** 让这场对阵被锁定的那些「上一轮没看完的订阅比赛」（给锁定卡列出来，用户知道该去看哪场） */
+export function lockBlockers(
+  match: PublicMatch,
+  all: PublicMatch[],
+  state: UserState,
+  now: Date,
+): PublicMatch[] {
+  if (!isFixtureLocked(match, all, state, now)) return [];
+  return stageLockBlockers(
+    match,
+    all,
+    state,
+    now,
+    competitionMode(state, match.competition) !== 'teams',
+  ).sort(byKickoff);
+}
+
+function stageLockBlockers(
+  match: PublicMatch,
+  all: PublicMatch[],
+  state: UserState,
+  now: Date,
+  sameTeamOnly: boolean,
+): PublicMatch[] {
   const kickoff = Date.parse(match.kickoff);
   const order = stageOrder(match.stage);
   const teams = new Set([match.home.id, match.away.id]);
-  return all.some((prev) => {
+  return all.filter((prev) => {
     if (prev.id === match.id || prev.competition !== match.competition) return false;
     if (prev.season !== match.season) return false;
     if (sameTeamOnly && !teams.has(prev.home.id) && !teams.has(prev.away.id)) return false;
@@ -360,7 +387,8 @@ export function programLockReasons(
       Date.parse(m.kickoff) <= now.getTime() &&
       liveStatus(m, now) !== 'upcoming' &&
       !isPostponedCleared(state, m) &&
-      isSubscribed(m, state) &&
+      // 和列表一样用 isShown：「只看订阅球队」时淘汰赛的占位卡也算，否则节目是否折叠会泄露订阅球队有没有晋级
+      isShown(m, matches, state, now) &&
       !isWatched(state, m.id),
   );
 }

@@ -81,9 +81,12 @@ describe('README', () => {
     expect(pkg.scripts.ci).toBeDefined();
   });
 
-  it('改站点规则时提醒修改 version', () => {
+  it('改站点规则不用手动改 version（部署时自动盖上提交时间）', () => {
     const row = readme.split('\n').find((l) => l.includes('default-site-rules.json')) ?? '';
-    expect(row).toContain('`version`');
+    expect(row).toContain('不用改 `version`');
+    const yml = read('.github', 'workflows', 'deploy.yml');
+    expect(yml).toContain('SFF_RULES_STAMP=');
+    expect(yml).toMatch(/fetch-depth: 0/);
   });
 });
 

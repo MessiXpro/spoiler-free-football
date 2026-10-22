@@ -8,6 +8,7 @@ import {
   isWatched,
   LIVE_STATUS_LABELS,
   liveStatus,
+  lockBlockers,
   neutralTitle,
   postponedClearKey,
   stageLabel,
@@ -38,6 +39,7 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
   // 延期/取消的比赛手动标记过（按原定开球时间记，改期后的那场不算）
   const cleared = isPostponedCleared(state, match);
   const locked = isFixtureLocked(match, all, state, now);
+  const blockers = locked ? lockBlockers(match, all, state, now) : [];
   const [open, setOpen] = useState(expanded);
   const [askUnlock, setAskUnlock] = useState(false);
   const [askMark, setAskMark] = useState(false);
@@ -93,7 +95,22 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
 
       {locked ? (
         <div className="locked-note">
-          <p>这是淘汰赛，对阵会透露上一轮的结果。你还有上一轮的订阅比赛没看完。</p>
+          <p>这是淘汰赛，对阵会透露上一轮的结果。你还有上一轮的订阅比赛没看完：</p>
+          <ul className="reason-list" data-testid="lock-blockers">
+            {blockers.slice(0, 5).map((m) => (
+              <li key={m.id}>
+                {isFixtureLocked(m, all, state, now) ? (
+                  <span>{neutralTitle(m, { lockedTeams: true })}</span>
+                ) : (
+                  <a href={href({ name: 'match', id: m.id })}>{neutralTitle(m)}</a>
+                )}
+              </li>
+            ))}
+            {blockers.length > 5 && <li>……共 {blockers.length} 场</li>}
+          </ul>
+          <p className="muted small">
+            看完它们（在详情页点「显示比分」或标记为已看）后，这里会自动显示对阵。
+          </p>
           <button
             type="button"
             className="btn btn-small"

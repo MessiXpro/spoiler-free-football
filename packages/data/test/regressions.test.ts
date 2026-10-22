@@ -1252,7 +1252,7 @@ describe('数据源用时上限', () => {
       }),
     );
     expect(res.fixtures.length).toBeGreaterThan(0);
-    expect(res.notes.join()).toMatch(/超过用时上限.*失败.*fa-cup.*efl-cup/);
+    expect(res.notes.join()).toMatch(/超过用时上限.*失败.*足总杯.*联赛杯/);
     expect(urls.some((u) => u.includes('id=4482'))).toBe(false);
     expect(sourceStatus({ ok: true, count: res.fixtures.length, note: res.notes.join('；') })).toBe(
       'warn',
@@ -1447,7 +1447,16 @@ describe('数据源全部失败时不发布空数据；部分失败有黄色注�
       ],
     });
     expect(out.meta.sources[0]!.note).toBe('失败：ECONNRESET');
-    expect(sourceStatus(out.meta.sources[0]!)).toBe('off');
+    // 整个数据源出错要显示 ⚠️，不能和「未设置 KEY，跳过」一样显示 —
+    expect(sourceStatus(out.meta.sources[0]!)).toBe('warn');
+    expect(sourceStatus({ ok: false, count: 0, note: '未设置 KEY，跳过' })).toBe('off');
+    expect(
+      sourceStatus({
+        ok: true,
+        count: 0,
+        note: 'epl：openfootball 还没发布 2026-27 赛季文件，暂用上赛季',
+      }),
+    ).toBe('ok');
     expect(emptyDataReason(out)).toMatch(/会炸的数据源 出错/);
   });
 
@@ -1494,5 +1503,39 @@ describe('数据源全部失败时不发布空数据；部分失败有黄色注�
       expect(res.notes.join('；')).toMatch(/联赛 4482.*失败：数据源返回报错：Invalid/);
       expect(sourceStatus({ ok: true, count: 0, note: res.notes.join('；') })).toBe('warn');
     }
+  });
+});
+
+describe('TheSportsDB 单独一轮出错不影响其他轮次', () => {
+  it('某一轮返回报错体：记一笔「失败」，其他轮次照常', async () => {
+    const event = (round: number) => ({
+      idEvent: `e${round}`,
+      idLeague: '4328',
+      strSeason: '2026-2027',
+      intRound: String(round),
+      strHomeTeam: 'Arsenal',
+      strAwayTeam: 'Chelsea',
+      dateEvent: '2026-10-10',
+      strTime: '15:00:00',
+      strStatus: 'Match Finished',
+      intHomeScore: '2',
+      intAwayScore: '1',
+    });
+    const res = await createTheSportsDbAdapter().fetch(
+      ctx({
+        env: { THESPORTSDB_LEAGUES: '4328' },
+        fetcher: createFixtureFetcher([
+          ['eventsnextleague', () => JSON.stringify({ events: [event(8)] })],
+          ['eventspastleague', () => JSON.stringify({ events: [event(7)] })],
+          [/eventsround\.php\?id=4328&r=7&/, () => JSON.stringify({ events: 'Invalid round' })],
+          [/eventsround\.php/, () => JSON.stringify({ events: [event(9)] })],
+        ]),
+      }),
+    );
+    expect(res.fixtures.length).toBeGreaterThan(0);
+    expect(res.notes.join('；')).toMatch(
+      /英超 2026-2027 第 7 轮失败：数据源返回报错：Invalid round/,
+    );
+    expect(res.notes.filter((n) => /第 \d+ 轮失败/.test(n))).toHaveLength(1);
   });
 });

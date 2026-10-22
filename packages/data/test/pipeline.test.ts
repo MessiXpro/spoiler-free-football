@@ -151,6 +151,13 @@ describe('防泄露检查本身', () => {
         url: 'https://www.bilibili.com/video/BV1xx411c7mD?spm_id_from=333.999.0.0&vd_source=abc123&p=2&t=90',
       }),
     ).toEqual([]);
+    // 地址栏复制的 B 站链接：跟踪参数里的 2-3-6 不是比分
+    expect(
+      findPublicDataLeaks({
+        url: 'https://www.bilibili.com/video/BV1xx411c7mD/?spm_id_from=333.1007.tianma.2-3-6.click&vd_source=a1',
+      }),
+    ).toEqual([]);
+    expect(findPublicDataLeaks({ url: 'https://x.example/a?ref=1-2-3' })).toEqual([]);
     expect(
       findPublicDataLeaks({ url: 'https://www.miguvideo.com/p/live/120000?from=2026-10-16' }),
     ).toEqual([]);

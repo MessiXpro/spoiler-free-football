@@ -10,10 +10,12 @@ export function sourceStatus(s: {
   count: number;
   note?: string;
 }): 'ok' | 'warn' | 'off' {
-  if (!s.ok) return 'off';
-  if (/失败/.test(s.note ?? '')) return 'warn';
-  // 手工补充平时就是空的
-  if (s.count === 0 && s.id !== 'manual') return 'warn';
+  const note = s.note ?? '';
+  // 整个数据源出错（note 以「失败」开头）要显示 ⚠️；没设 Key 跳过的才是 —
+  if (!s.ok) return /失败/.test(note) ? 'warn' : 'off';
+  if (/失败/.test(note)) return 'warn';
+  // 手工补充平时就是空的；夏天 openfootball 退回上赛季文件、窗口里没比赛也不算有问题
+  if (s.count === 0 && s.id !== 'manual' && !/还没发布/.test(note)) return 'warn';
   return 'ok';
 }
 

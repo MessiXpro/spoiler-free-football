@@ -27,6 +27,7 @@ import {
   canShowAggregate,
   firstLegOf,
   isShown,
+  lockBlockers,
 } from '../src/index.ts';
 
 function match(partial: Partial<PublicMatch> & Pick<PublicMatch, 'id' | 'kickoff'>): PublicMatch {
@@ -336,6 +337,11 @@ describe('只看订阅球队：淘汰赛占位卡不泄露上一轮结果', () =
       expect(isFixtureLocked(qf, all, base, now)).toBe(true);
       expect(upcomingMatches(all, base, now, 30).map((m) => m.id)).toEqual([qf.id]);
     }
+  });
+
+  it('锁定卡能列出是哪场上一轮比赛没看', () => {
+    expect(lockBlockers(qfB, [r16, qfB], base, now).map((m) => m.id)).toEqual([r16.id]);
+    expect(lockBlockers(qfB, [r16, qfB], { ...base, watched: { [r16.id]: 1 } }, now)).toEqual([]);
   });
 
   it('看完上一轮后：不是订阅球队的占位卡消失，自己球队的正常显示', () => {

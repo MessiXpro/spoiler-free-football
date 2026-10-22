@@ -1,3 +1,4 @@
+import { competitionName } from '@sff/core';
 import type { AdapterContext, AdapterResult, FixtureAdapter, RawFixture } from '../types.ts';
 import { isNationalCompetition, pair, stageFromApiFootball, teamRef } from '../normalize.ts';
 import { isoDate } from '../time.ts';
@@ -156,7 +157,7 @@ export function createApiFootballAdapter(): FixtureAdapter {
         const competition = API_FOOTBALL_LEAGUES[id]!;
         // 超过用时上限：剩下的赛事这次不拉（和 TheSportsDB 一样）
         if (overBudget()) {
-          skipped.push(competition);
+          skipped.push(competitionName(competition));
           continue;
         }
         // 赛季 = 开始年份；国家队/世俱杯按自然年

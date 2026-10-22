@@ -237,27 +237,24 @@ export function bootShield(
     latest.enabled &&
     !latest.disabledHosts.some((h) => hostDisabledBy(host, h)) &&
     (inner.site !== null || options.siteMode ? true : inSchedule(latest.global));
-  /** 时段外用 update(enabled:false) 让遮挡解除；时段内再恢复 */
+  /**
+   * 时段结束后不再算「工作中」，但这个页面上已经遮住的内容保持到刷新（不突然把比分露出来）；
+   * 之后新打开的页面不会启动，时段再开始时这里照常
+   */
   let heldBySchedule = false;
+  /** 总开关关了 / 此站点停用：遮挡由 inner.update 解除，状态也要对应 */
+  const userDisabled = (): string | null =>
+    !latest.enabled
+      ? '已关闭'
+      : latest.disabledHosts.some((h) => hostDisabledBy(host, h))
+        ? '此站点已停用'
+        : null;
   const sync = () => {
     if (!inner.active) {
       if (wanted()) inner = startShield(doc, latest, options);
       return;
     }
-    if (!options.siteMode && !inner.site) {
-      const inWindow = inSchedule(latest.global);
-      if (!inWindow && !heldBySchedule) {
-        heldBySchedule = true;
-        inner.update({ ...latest, enabled: false });
-        return;
-      }
-      if (inWindow && heldBySchedule) {
-        heldBySchedule = false;
-        inner.update(latest);
-        return;
-      }
-      if (heldBySchedule) return;
-    }
+    if (!options.siteMode && !inner.site) heldBySchedule = !inSchedule(latest.global);
     inner.update(latest);
   };
   if (!options.siteMode) {
@@ -273,10 +270,10 @@ export function bootShield(
       return inner.site;
     },
     get active() {
-      return inner.active && !heldBySchedule;
+      return inner.active && !heldBySchedule && !userDisabled();
     },
     get reason() {
-      return heldBySchedule ? '不在全网防剧透时段' : inner.reason;
+      return userDisabled() ?? (heldBySchedule ? '不在全网防剧透时段' : inner.reason);
     },
     get currentMatch() {
       return inner.currentMatch;

@@ -19,7 +19,11 @@ const NAME_PATHS = /\.(?:home|away)\.(?:name|id)$|\.matches\[\d+\]\.id$/;
 const NAME_DATE = /\d{4}-\d{2}-\d{2}|\d{4}-\d{2}(?!\d)/g;
 const NAME_SCORE = /(?<!\d)\d{1,2}\s*[-–—:：比]\s*\d{1,2}(?!\d)/;
 
-const URL_SCORE = /(?:^|[-_/=#?&])\d{1,2}[-_:]\d{1,2}(?:[-_/.&#]|$)/;
+/** "2-1" 这类片段；前后不能再接数字段（"2-3-6" 是 B 站 spm 之类的跟踪编号，不是比分） */
+const URL_SCORE = /(?<![\d.][-_:.]?)(?:^|[-_/=#?&])\d{1,2}[-_:]\d{1,2}(?:[-_/.&#]|$)(?![-_:.]?\d)/;
+/** 平台的跟踪参数，值里常有点号和短横线连起来的数字串，先去掉再查 */
+const TRACKING_PARAMS =
+  /^(?:spm|spm_id_from|from_spmid|vd_source|share_source|share_medium|share_plat|share_session_id|share_tag|unique_k|bbid|ts|from|seid|buvid|mid|p|t|timestamp|refer_from|share_from|share_times)$/i;
 const URL_DATE = /\d{4}[-_]\d{2}[-_]\d{2}|\d{8}/g;
 
 export function findPublicDataLeaks(value: unknown, path = '$'): string[] {
@@ -38,6 +42,8 @@ export function findPublicDataLeaks(value: unknown, path = '$'): string[] {
         let urlText = '';
         try {
           const u = new URL(v);
+          for (const k of [...u.searchParams.keys()])
+            if (TRACKING_PARAMS.test(k)) u.searchParams.delete(k);
           urlText = decodeURIComponent(`${u.hostname}${u.pathname}${u.search}${u.hash}`).replace(
             URL_DATE,
             '',

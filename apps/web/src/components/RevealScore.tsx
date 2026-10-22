@@ -120,7 +120,7 @@ function ScoreView({
             半场 {score.halfTime[0]} - {score.halfTime[1]}
           </li>
         )}
-        {score.extraTime && (
+        {score.extraTime && showAggregate && (
           <li>
             经过加时
             {score.regularTime
@@ -128,7 +128,7 @@ function ScoreView({
               : ''}
           </li>
         )}
-        {score.penalties && (
+        {score.penalties && showAggregate && (
           <li>
             点球大战 {score.penalties[0]} - {score.penalties[1]}
           </li>
@@ -138,8 +138,10 @@ function ScoreView({
             两回合总比分 {score.aggregate[0]} - {score.aggregate[1]}
           </li>
         )}
-        {score.aggregate && !showAggregate && (
-          <li data-testid="score-aggregate-hidden">首回合还没看，两回合总比分先不显示</li>
+        {!showAggregate && (
+          <li data-testid="score-aggregate-hidden">
+            首回合还没看，两回合总比分、加时和点球情况先不显示（能倒推出首回合比分）
+          </li>
         )}
         {score.note && <li>{score.note}</li>}
       </ul>

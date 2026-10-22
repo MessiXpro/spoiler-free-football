@@ -207,7 +207,7 @@ async function runShield() {
     if (!siteMode) location.reload();
   };
 
-  if (isTop && controller.active) {
+  const activateUi = () => {
     const panel = mountPanel({
       controller: withFrames,
       currentMatch: () => currentMatchFor(settings, location.hostname),
@@ -265,7 +265,16 @@ async function runShield() {
       settings = await save({ disabledHosts: [...settings.disabledHosts, location.hostname] });
       controller.update(settings);
     });
-  }
+  };
+  // 面板和菜单在遮挡启动后才挂：全网版可能在时段开始前就打开了页面，时段到了遮挡自动启动，这时也要有面板
+  let uiMounted = false;
+  const ensureUi = () => {
+    if (uiMounted || !isTop || !controller.active) return;
+    uiMounted = true;
+    activateUi();
+  };
+  ensureUi();
+  if (__SFF_VARIANT__ === 'global' && isTop && !uiMounted) setInterval(ensureUi, 60 * 1000);
   registerMenu('防剧透：在此站点重新启用', async () => {
     // 只去掉覆盖当前域名的停用项（和插件弹窗的「在此站点启用」一致）
     const list = settings.disabledHosts.filter((h) => !hostDisabledBy(location.hostname, h));

@@ -1,3 +1,4 @@
+import { competitionName } from '@sff/core';
 import type { AdapterContext, AdapterResult, FixtureAdapter, RawFixture } from '../types.ts';
 import { envList, envValue } from '../env.ts';
 import {
@@ -289,7 +290,7 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
       for (const id of leagues) {
         // 超过用时上限：剩下的赛事这次不拉（已经拿到的照常用，下次运行有缓存会快很多）
         if (overBudget()) {
-          skipped.push(THESPORTSDB_LEAGUES[id]!);
+          skipped.push(competitionName(THESPORTSDB_LEAGUES[id]!));
           continue;
         }
         const before = fixtures.size;
@@ -340,18 +341,29 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
             for (const r of [...rounds].sort((a, b) => a - b)) {
               if (overBudget()) break;
               requests++;
-              add(
-                eventsOf(
-                  checked(await get(`eventsround.php?id=${id}&r=${r}&s=${encodeURIComponent(s)}`)),
-                ),
-              );
+              // 单独一轮出错（偶发的报错体或请求失败）只记一笔，其他轮次照常拉
+              try {
+                add(
+                  eventsOf(
+                    checked(
+                      await get(`eventsround.php?id=${id}&r=${r}&s=${encodeURIComponent(s)}`),
+                    ),
+                  ),
+                );
+              } catch (err) {
+                notes.push(
+                  `${competitionName(THESPORTSDB_LEAGUES[id]!)} ${s} 第 ${r} 轮失败：${(err as Error).message}`,
+                );
+              }
             }
           }
           ctx.log(
             `thesportsdb ${THESPORTSDB_LEAGUES[id]}：${fixtures.size - before} 场，${requests} 次请求`,
           );
         } catch (err) {
-          notes.push(`联赛 ${id}（${THESPORTSDB_LEAGUES[id]}）失败：${(err as Error).message}`);
+          notes.push(
+            `${competitionName(THESPORTSDB_LEAGUES[id]!)}（联赛 ${id}）失败：${(err as Error).message}`,
+          );
         }
       }
       if (skipped.length) {

@@ -1,7 +1,7 @@
 // 把用户脚本和插件 zip 放进网页构建产物，一起部署：
 //   <网页>/userscript/spoiler-free-football.user.js
 //   <网页>/downloads/spoiler-free-football-chrome-<版本>.zip
-import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = join(import.meta.dirname, '..');
@@ -34,6 +34,12 @@ writeFileSync(
     '',
   ].join('\n'),
 );
+// 404 页面「回到首页」要指向网页根目录（可能在子目录下），构建时填进去；本地构建没有地址就用相对路径
+const notFound = join(site, '404.html');
+if (existsSync(notFound)) {
+  const home = process.env.SFF_WEB_URL ? `${process.env.SFF_WEB_URL.replace(/\/+$/, '')}/` : './';
+  writeFileSync(notFound, readFileSync(notFound, 'utf8').replaceAll('__SFF_WEB_URL__', home));
+}
 // GitHub Pages 不要用 Jekyll 处理
 writeFileSync(join(site, '.nojekyll'), '');
 console.log('✓ 已把用户脚本和插件 zip 放进', site);

@@ -90,6 +90,8 @@ interface Rule {
   contextual?: boolean;
   /** 只取某个捕获组作为遮挡范围 */
   group?: number;
+  /** 捕获组的位置按前面各组的长度累加（group 前面的组必须都紧挨着），不用 indexOf 找（队名里可能也含这个字） */
+  groupByLength?: boolean;
   digitsOnly?: boolean;
 }
 
@@ -309,21 +311,28 @@ function buildRules(): Rule[] {
       kind: 'score',
       digitsOnly: true,
     },
-    // 两个队名夹着结果字/词："阿森纳胜切尔西""曼城负利物浦"；只遮中间的字，对阵保留
+    // 两个队名夹着结果字/词："阿森纳胜切尔西""曼城负利物浦"；只遮中间的字，对阵保留。
+    // 正向匹配队名再取第 2 组（不用 lookbehind：几百个队名的 lookbehind 在每个位置都要回头试一遍，整页识别慢十倍）
     {
       re: new RegExp(
-        `(?<=(?:${zhPairTeams})\\s*)(?:${alt(ZH_PAIR_VERBS)})(?=\\s*(?:${zhPairTeams}))`,
+        `((?:${zhPairTeams})\\s*)(${alt(ZH_PAIR_VERBS)})(?=\\s*(?:${zhPairTeams}))`,
         'g',
       ),
       kind: 'result',
+      group: 2,
+      groupByLength: true,
+      contextual: true,
     },
-    // "Arsenal see off Chelsea" "Villa hold Liverpool"：同样只遮动词
+    // "Arsenal see off Chelsea" "Villa hold Liverpool"：同样只遮动词（区分大小写，队名按原样写才算）
     {
       re: new RegExp(
-        `(?<=(?<![A-Za-z])(?:${teams})\\s+)(?:${alt(EN_PAIR_VERBS)})(?=\\s+(?:${teams})(?![A-Za-z]))`,
-        'gi',
+        `((?<![A-Za-z])(?:${teams})\\s+)(${alt(EN_PAIR_VERBS)})(?=\\s+(?:${teams})(?![A-Za-z]))`,
+        'g',
       ),
       kind: 'result',
+      group: 2,
+      groupByLength: true,
+      contextual: true,
     },
     // 进球数：3球大胜、两球领先、7球大战
     {
@@ -338,18 +347,19 @@ function buildRules(): Rule[] {
       ),
       kind: 'score',
     },
-    // 全场5球、两队合计4球、一球之差
+    // 全场5球、两队合计4球、一球之差（"一共三球"也可能是毛线球，需要足球语境）
     {
       re: new RegExp(
         `(?:全场|本场|两队|双方|合计|共计|一共|总共)\\s*(?:共|合计|打进|攻入)?\\s*${NUM_ANY}\\s*(?:个|粒)?\\s*球|${NUM_ANY}\\s*球之差`,
         'g',
       ),
       kind: 'score',
+      contextual: true,
     },
     // 人名 + 进球数："哈兰德两球""凯恩进2球"（需要足球语境；"买了两球"不算）
     {
       re: new RegExp(
-        `((?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6}))\\s*(?:进|入|独进|打进|攻入)?\\s*(?:两|三|四|五|\\d)\\s*球(?![员迷队衣鞋场馆台星类技星赛])`,
+        `((?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,4}?))\\s*(?:进|入|独进|打进|攻入)?\\s*(?:两|三|四|五|\\d)\\s*球(?![员迷队衣鞋场馆台星类技星赛])`,
         'g',
       ),
       kind: 'scorer',
@@ -503,7 +513,13 @@ export function findSpoilers(text: string, options: DetectOptions = {}): Spoiler
       let end = m.index + m[0].length;
       if (rule.group !== undefined && m[rule.group]) {
         const inner = m[rule.group] as string;
-        start = m.index + m[0].indexOf(inner);
+        if (rule.groupByLength) {
+          let offset = 0;
+          for (let g = 1; g < rule.group; g++) offset += (m[g] ?? '').length;
+          start = m.index + offset;
+        } else {
+          start = m.index + m[0].indexOf(inner);
+        }
         end = start + inner.length;
       }
       // 完全落在球队名/赛事名/保护词里的命中是误报（"欧洲冠军联赛"里的"冠军"）

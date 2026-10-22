@@ -708,22 +708,16 @@ describe('redact 幂等：遮过的文字再遮一次不变', () => {
 });
 
 describe('回归：常见赛果写法补充（审计发现的漏网）', () => {
-  it('不需要语境：两个队名夹着胜/负/平，以及赛后常用词', () => {
+  it('带队名就有足球语境：两个队名夹着胜/负/平，以及队名 + 赛后常用词', () => {
     for (const text of track([
       '阿森纳胜切尔西',
       '曼城负利物浦',
       '热刺平维拉',
       '拜仁告捷',
-      '多特败北',
-      '巴萨一轮游',
+      '多特蒙德败北',
       '曼联出线',
-      '先拔头筹',
       '利物浦拿到三分',
       '阿森纳收获三分',
-      '全场5球',
-      '两队合计四球',
-      '一球之差',
-      '十人应战',
       '凯恩进2球',
       'Arsenal see off Chelsea',
       'Aston Villa hold Liverpool',
@@ -736,19 +730,33 @@ describe('回归：常见赛果写法补充（审计发现的漏网）', () => {
     expect(redact('Arsenal see off Chelsea')).toBe(`Arsenal ${M}${M} Chelsea`);
   });
 
-  it('需要足球语境的说法', () => {
+  it('需要足球语境的说法（财经、电商、篮球页面上同样的词不遮）', () => {
     for (const text of track([
       '哈兰德两球',
-      '皇马过关',
       '狼队垫底',
       '双方平手',
       '萨卡失点',
-      'Madrid exit the Champions League',
+      '巴萨一轮游',
+      '先拔头筹',
+      '全场5球',
+      '两队合计四球',
+      '一球之差',
+      '十人应战',
       'Liverpool take all three points',
       'Saka opens the scoring',
       'Rice sees red',
     ])) {
       expectMasked(text, FB);
+    }
+    // 没有语境时这些词不遮（"告捷"也用于销售，"出线"也用于选秀，"三分"是篮球）
+    for (const text of [
+      '双十一首日告捷',
+      '海选出线名单',
+      '先拔头筹的是国产品牌',
+      '全场5球',
+      '一轮游',
+    ]) {
+      expect(findSpoilers(text), text).toEqual([]);
     }
   });
 
@@ -765,8 +773,19 @@ describe('回归：常见赛果写法补充（审计发现的漏网）', () => {
     ])) {
       expectNeutral(text);
     }
-    // exit 只在足球语境里算结果词
-    expect(findSpoilers('Please exit the building')).toEqual([]);
+    // 足球页面上也不遮：三分钟、体检过关、退出按钮、转会竞争领先
+    for (const text of [
+      '开场三分钟',
+      '牛排三分熟',
+      '赛前三分之一',
+      '体检过关',
+      'Exit',
+      'Arsenal take the lead in the race to sign him',
+    ]) {
+      expect(findSpoilers(text, FB), text).toEqual([]);
+    }
+    // 两个国家名夹着"胜"，没有足球语境时不遮（历史、政治文章）
+    expect(findSpoilers('法国胜德国的那场战役')).toEqual([]);
     expect(findSpoilers('三分球命中率', FB)).toEqual([]);
     expect(findSpoilers('小组出线形势分析', FB)).toEqual([]);
     expect(findSpoilers('买了两球衣', FB)).toEqual([]);
