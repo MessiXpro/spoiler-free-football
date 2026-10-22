@@ -7,6 +7,14 @@ import { ImportConfirm } from './SettingsView.tsx';
 /** 部署时由工作流传入（GitHub 仓库地址），本地开发时为空 */
 const REPO_URL = (import.meta.env.VITE_SFF_REPO_URL as string | undefined) || '';
 
+/** 数据来源的官网（署名/说明用） */
+const SOURCE_URLS: Record<string, string> = {
+  openfootball: 'https://github.com/openfootball/football.json',
+  'football-data': 'https://www.football-data.org/',
+  thesportsdb: 'https://www.thesportsdb.com/',
+  'api-football': 'https://www.api-football.com/',
+};
+
 const CONFIDENCE: Record<string, string> = {
   high: '已核实',
   medium: '较可靠',
@@ -63,7 +71,15 @@ export function AboutView({ data }: { data: AppData }) {
           <ul className="plain-list">
             {data.meta.sources.map((s) => (
               <li key={s.id}>
-                {s.ok ? '✓' : '·'} {s.name}：{s.count} 场{s.note ? `（${s.note}）` : ''}
+                {s.ok ? '✓' : '·'}{' '}
+                {SOURCE_URLS[s.id] ? (
+                  <a href={SOURCE_URLS[s.id]} target="_blank" rel="noreferrer">
+                    {s.name}
+                  </a>
+                ) : (
+                  s.name
+                )}
+                ：{s.count} 场{s.note ? `（${s.note}）` : ''}
               </li>
             ))}
           </ul>

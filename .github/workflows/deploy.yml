@@ -180,8 +180,9 @@ jobs:
           echo "SFF_WEB_URL=$url" >> "$GITHUB_ENV"
           echo "网页地址：$url"
 
+      # 拆成 restore / save 两步：管线失败时也把这次拿到的响应存下来，连续失败期间不会每次都重新请求全部数据源
       - name: 恢复数据源缓存（减少 API 请求）
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: .http-cache
           key: http-cache-v2-${{ github.run_id }}
@@ -189,6 +190,13 @@ jobs:
 
       - name: 运行数据管线（公开数据含防泄露检查，不通过则不部署）
         run: pnpm data:build
+
+      - name: 保存数据源缓存（失败时也保存）
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .http-cache
+          key: http-cache-v2-${{ github.run_id }}
 
       - name: 构建网页、插件、用户脚本
         env:
@@ -231,7 +239,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID="$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | tr -d '[:space:]')"
           CLOUDFLARE_API_TOKEN="$(printf %s "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')"
           export CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN
-          npx --yes wrangler@4 pages deploy apps/web/dist --project-name "$PROJECT" --branch main
+          # 锁定版本：部署这一步能拿到 Cloudflare Token，不让 npx 每次拉未知的最新版
+          npx --yes wrangler@4.151.3 pages deploy apps/web/dist --project-name "$PROJECT" --branch main
 
   # 推送或手动运行时 GitHub Pages 还没开启、也没配 Cloudflare：数据管线照常试跑（上面的 build），这里给出明确的失败提示
   pages-missing:

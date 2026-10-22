@@ -267,6 +267,7 @@ Pages 项目不用自己建，网页地址也不用自己填：第一次运行�
 | `config/manual-matches.json` | 手工补充 | — | — |
 
 - 只调用官方提供给程序使用的接口和公开数据，不爬视频网站页面；网页抓取工具层内置 robots.txt 检查。
+- TheSportsDB 没设 `THESPORTSDB_KEY` 时用的是官方公开的测试 Key，它是给开发测试用的：请求慢、只给当前前后几轮。长期使用请到 [thesportsdb.com](https://www.thesportsdb.com/) 申请自己的 Key（免费档也可以）填进 `THESPORTSDB_KEY`，既符合对方的使用条件，数据也更全。网页「去哪看 → 数据来源」里列出了各数据源的名字和链接，算是对它们的署名。
 - 带本地缓存（ETag 条件请求）和按域名限速（football-data 每次间隔 6.5 秒，TheSportsDB 2.2 秒）；GitHub Actions 里缓存跨次运行保留。
 - B 站：社区整理的 B 站接口文档 2026 年初收到律师函后已下线，接口属于非公开接口，所以**本项目不调用 B 站接口**，B 站集锦只通过手工填写 BV 号嵌入，以及链接官方账号主页。
 - 数据只保留最近 60 天和未来一个月的比赛。
