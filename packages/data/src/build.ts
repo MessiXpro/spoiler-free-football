@@ -70,7 +70,7 @@ export interface BuildOptions {
   pastDays?: number;
   futureDays?: number;
   log?: (msg: string) => void;
-  /** 每个数据源的用时上限，默认 8 分钟 */
+  /** 每个数据源的用时上限，默认 10 分钟（TheSportsDB 免费 Key 跑完全部赛事约 8～9 分钟） */
   adapterBudgetMs?: number;
   clock?: () => number;
 }
@@ -101,7 +101,7 @@ export interface BuildDiagnostics {
 const revealsAdvancement = (stage: Stage | undefined) => !stage || isKnockoutStage(stage);
 
 const DUPLICATE_WINDOW_MS = 3 * 60 * 60 * 1000;
-const DEFAULT_ADAPTER_BUDGET_MS = 8 * 60 * 1000;
+const DEFAULT_ADAPTER_BUDGET_MS = 10 * 60 * 1000;
 
 function collectDiagnostics(all: RawFixture[], matches: PublicMatch[]): BuildDiagnostics {
   const seen = new Set<string>();
