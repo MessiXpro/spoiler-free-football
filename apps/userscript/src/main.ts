@@ -1,4 +1,4 @@
-import { isNewerRules, matchSite, scorePath, validateSiteRules } from '@sff/core';
+import { isNewerRules, matchSite, NOT_SCORE_DATA, scorePath, validateSiteRules } from '@sff/core';
 import {
   applyWebWatched,
   bootShield,
@@ -159,7 +159,7 @@ async function runShield() {
     document.documentElement.classList.add('sff-ready');
     return;
   }
-  let controller: ShieldController = bootShield(document, settings, { siteMode });
+  const controller: ShieldController = bootShield(document, settings, { siteMode });
   const isTop = window === window.top;
 
   // 临时显示/恢复也传给页面里的 iframe（播放器、评论区常放在 iframe 里，每个 frame 各跑一份脚本）
@@ -241,6 +241,7 @@ async function runShield() {
             extraTime?: boolean;
             penalties?: [number, number];
           } | null;
+          if (status === 200 && json === null) return `${NOT_SCORE_DATA}。已记为已看`;
           if (status !== 200 || !score || score.id !== m.id || typeof score.home !== 'number') {
             return '数据源还没有这场的比分，已记为已看';
           }
@@ -270,8 +271,7 @@ async function runShield() {
     const list = settings.disabledHosts.filter((h) => !hostDisabledBy(location.hostname, h));
     if (list.length === settings.disabledHosts.length) return;
     settings = await save({ disabledHosts: list });
-    if (controller.active) controller.update(settings);
-    else controller = bootShield(document, settings, { siteMode });
+    controller.update(settings);
   });
   if (__SFF_VARIANT__ === 'global' && isTop) {
     const g = settings.global;

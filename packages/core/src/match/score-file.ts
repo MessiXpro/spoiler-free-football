@@ -17,6 +17,9 @@ export function scorePath(matchId: string): string {
   return `scores/${scoreFileName(matchId)}.json`;
 }
 
+/** 数据地址返回的不是比分数据（网页、登录页）时的提示；网页、插件、用户脚本共用 */
+export const NOT_SCORE_DATA = '拿到的不是比分数据：数据地址可能不对，或者当前网络需要先登录';
+
 const K = new Uint32Array([
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
   0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,

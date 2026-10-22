@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  NOT_SCORE_DATA,
   scorePath,
   type DataMeta,
   type Program,
@@ -137,12 +138,12 @@ export async function fetchScore(id: string): Promise<ScoreRecord | null> {
   const res = await fetch(dataUrl(scorePath(id)), { cache: 'no-cache' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  // 有的静态服务器找不到文件时会返回首页 HTML，当作"没有比分"处理
-  if (!(res.headers.get('content-type') ?? '').includes('json')) return null;
+  // 网站自带 404.html，找不到的文件会返回 404；200 却不是 JSON 说明拿到的是别的网页（劫持、登录页）
+  let score: ScoreRecord | null;
   try {
-    const score = (await res.json()) as ScoreRecord;
-    return score && typeof score.home === 'number' && score.id === id ? score : null;
+    score = (await res.json()) as ScoreRecord;
   } catch {
-    return null;
+    throw new Error(NOT_SCORE_DATA);
   }
+  return score && typeof score.home === 'number' && score.id === id ? score : null;
 }

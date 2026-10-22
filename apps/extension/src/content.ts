@@ -39,15 +39,10 @@ async function main() {
       void ext.runtime.sendMessage({ type: 'badge', count: pending }).catch(() => {});
     }, 1000);
   };
-  let controller: ShieldController = bootShield(document, settings, { siteMode, onStats });
+  const controller: ShieldController = bootShield(document, settings, { siteMode, onStats });
 
-  onSettingsChanged((next) => {
-    if (!controller.active && next.enabled) {
-      controller = bootShield(document, next, { siteMode, onStats });
-    } else {
-      controller.update(next);
-    }
-  });
+  // 控制器自己会在设置从关闭变为开启、或进入全网时段时重新启动
+  onSettingsChanged((next) => controller.update(next));
 
   ext.runtime.onMessage.addListener((msg: TabMessage, _sender, sendResponse) => {
     // 临时显示/恢复对所有 frame 生效（B 站等把播放器、评论放在 iframe 里）；状态只由顶层页面回复

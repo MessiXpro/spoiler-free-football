@@ -7,7 +7,7 @@ import {
   type SiteRulesDoc,
 } from '../rules/schema.ts';
 import type { TeamRef } from '../match/types.ts';
-import { scorePath } from '../match/score-file.ts';
+import { NOT_SCORE_DATA, scorePath } from '../match/score-file.ts';
 import {
   DEFAULT_SHIELD_PREFS,
   keepRootClasses,
@@ -220,8 +220,78 @@ export interface ShieldController {
   update(settings: ShieldSettings): void;
 }
 
-/** 根据设置启动遮挡；不需要工作时立即显示页面 */
+/**
+ * 根据设置启动遮挡；不需要工作时立即显示页面。
+ * 返回的控制器会跟着设置走：之后调用 update() 时，关闭→开启、停用→启用都会自动重新启动；
+ * 全网模式下每分钟看一次时段，时段开始就自动启动、结束就自动解除（页面可能一直开着跨过时段边界）
+ */
 export function bootShield(
+  doc: Document,
+  settings: ShieldSettings,
+  options: BootOptions,
+): ShieldController {
+  let latest = settings;
+  let inner = startShield(doc, latest, options);
+  const host = doc.location?.hostname ?? '';
+  const wanted = () =>
+    latest.enabled &&
+    !latest.disabledHosts.some((h) => hostDisabledBy(host, h)) &&
+    (inner.site !== null || options.siteMode ? true : inSchedule(latest.global));
+  /** 时段外用 update(enabled:false) 让遮挡解除；时段内再恢复 */
+  let heldBySchedule = false;
+  const sync = () => {
+    if (!inner.active) {
+      if (wanted()) inner = startShield(doc, latest, options);
+      return;
+    }
+    if (!options.siteMode && !inner.site) {
+      const inWindow = inSchedule(latest.global);
+      if (!inWindow && !heldBySchedule) {
+        heldBySchedule = true;
+        inner.update({ ...latest, enabled: false });
+        return;
+      }
+      if (inWindow && heldBySchedule) {
+        heldBySchedule = false;
+        inner.update(latest);
+        return;
+      }
+      if (heldBySchedule) return;
+    }
+    inner.update(latest);
+  };
+  if (!options.siteMode) {
+    // 全网模式：时段边界是按分钟定义的，每分钟检查一次就够
+    const win = doc.defaultView ?? globalThis;
+    win.setInterval(sync, 60 * 1000);
+  }
+  return {
+    get shield() {
+      return inner.shield;
+    },
+    get site() {
+      return inner.site;
+    },
+    get active() {
+      return inner.active && !heldBySchedule;
+    },
+    get reason() {
+      return heldBySchedule ? '不在全网防剧透时段' : inner.reason;
+    },
+    get currentMatch() {
+      return inner.currentMatch;
+    },
+    pause: (ms) => inner.pause(ms),
+    resume: () => inner.resume(),
+    update(next) {
+      latest = next;
+      sync();
+    },
+  };
+}
+
+/** 按当前设置启动一次（不管后续变化） */
+function startShield(
   doc: Document,
   settings: ShieldSettings,
   options: BootOptions,
@@ -324,15 +394,14 @@ export async function fetchScoreFrom(
   const res = await fetchImpl(url, { cache: 'no-cache' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  let data: ({ id?: string; home?: number; away?: number } & Record<string, unknown>) | null;
   try {
-    const data = (await res.json()) as { id?: string; home?: number; away?: number } & Record<
-      string,
-      unknown
-    >;
-    return data && data.id === id && typeof data.home === 'number' ? data : null;
+    data = (await res.json()) as typeof data;
   } catch {
-    return null;
+    // 返回的是网页而不是 JSON：数据地址填错、运营商劫持、公共 Wi‑Fi 的登录页等，不能当成「还没有比分」
+    throw new Error(NOT_SCORE_DATA);
   }
+  return data && data.id === id && typeof data.home === 'number' ? data : null;
 }
 
 /** 下载远程规则并做格式校验（只是数据，不含代码）；要不要采用、版本是否更新由调用方判断 */

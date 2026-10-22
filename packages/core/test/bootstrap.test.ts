@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   applyWebWatched,
   bootShield,
   currentMatchFor,
   defaultRules,
   defaultShieldSettings,
+  fetchScoreFrom,
   hostDisabledBy,
   hostMatches,
   inSchedule,
@@ -13,6 +14,7 @@ import {
   type ShieldSettings,
 } from '../src/dom/index.ts';
 import { CLASS_READY } from '../src/dom/css.ts';
+import { NOT_SCORE_DATA } from '../src/index.ts';
 
 const BASE = 'https://example.github.io/app/data/';
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -232,5 +234,74 @@ describe('applyWebWatched：网页发来的已看记录', () => {
       applyWebWatched({ a: 1 }, { type: 'state', watched: { b: 2, c: 'x' }, unwatched: { a: 5 } }),
     ).toEqual({ watched: { a: 1, b: 2 }, changed: true });
     expect(applyWebWatched({ a: 1 }, { type: 'state', watched: { a: 9 } }).changed).toBe(false);
+  });
+});
+
+describe('控制器跟着设置和时段走', () => {
+  const week = [0, 1, 2, 3, 4, 5, 6];
+
+  it('全网模式：页面一直开着，跨过时段开始/结束时自动启动、自动解除', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 9, 17, 5, 59));
+      document.documentElement.className = '';
+      document.body.innerHTML = '<p>Arsenal 2-1 Chelsea</p>';
+      const s = defaultShieldSettings(BASE);
+      s.global = { enabled: true, start: '06:00', end: '12:00', days: week };
+      const c = bootShield(document, s, { siteMode: false });
+      expect(c.active).toBe(false);
+      expect(c.reason).toBe('不在全网防剧透时段');
+      expect(document.body.textContent).toBe('Arsenal 2-1 Chelsea');
+
+      vi.setSystemTime(new Date(2026, 9, 17, 6, 0));
+      vi.advanceTimersByTime(60_000);
+      expect(c.active).toBe(true);
+      expect(document.body.textContent).toBe('Arsenal ■-■ Chelsea');
+
+      vi.setSystemTime(new Date(2026, 9, 17, 12, 0));
+      vi.advanceTimersByTime(60_000);
+      expect(c.active).toBe(false);
+      expect(c.reason).toBe('不在全网防剧透时段');
+      expect(document.body.textContent).toBe('Arsenal 2-1 Chelsea');
+
+      vi.setSystemTime(new Date(2026, 9, 18, 6, 0));
+      vi.advanceTimersByTime(60_000);
+      expect(c.active).toBe(true);
+      expect(document.body.textContent).toBe('Arsenal ■-■ Chelsea');
+      c.shield?.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('设置从关闭改为开启、从停用改为启用时，不用重新启动就开始遮挡', () => {
+    document.documentElement.className = '';
+    document.body.innerHTML = '<p>曼联 2-1 利物浦</p>';
+    const c = bootShield(document, { ...alwaysOn(), enabled: false }, { siteMode: false });
+    expect(c.active).toBe(false);
+    c.update(alwaysOn());
+    expect(c.active).toBe(true);
+    expect(document.body.textContent).toBe('曼联 ■-■ 利物浦');
+    c.update({ ...alwaysOn(), disabledHosts: ['localhost'] });
+    expect(document.body.textContent).toBe('曼联 2-1 利物浦');
+    c.update(alwaysOn());
+    expect(document.body.textContent).toBe('曼联 ■-■ 利物浦');
+    c.shield?.stop();
+  });
+
+  it('下载比分：404 是还没有比分；200 却不是 JSON 要报错，不能当成「没有比分」', async () => {
+    const reply = (body: string, status = 200) =>
+      (async () => new Response(body, { status })) as unknown as typeof fetch;
+    expect(await fetchScoreFrom(BASE, 'm1', reply('', 404))).toBeNull();
+    expect(
+      await fetchScoreFrom(BASE, 'm1', reply(JSON.stringify({ id: 'm1', home: 2, away: 1 }))),
+    ).toMatchObject({ home: 2, away: 1 });
+    expect(
+      await fetchScoreFrom(BASE, 'm1', reply(JSON.stringify({ id: 'other', home: 2, away: 1 }))),
+    ).toBeNull();
+    await expect(
+      fetchScoreFrom(BASE, 'm1', reply('<!doctype html><title>请先登录</title>')),
+    ).rejects.toThrow(NOT_SCORE_DATA);
+    await expect(fetchScoreFrom(BASE, 'm1', reply('x', 500))).rejects.toThrow('HTTP 500');
   });
 });
