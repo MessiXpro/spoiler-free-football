@@ -1,12 +1,13 @@
 // 插件 manifest 和防剧透网页的匹配规则（build.mjs 用；单独放一个文件，方便单元测试）
 
-/** 默认部署地址（GitHub Pages、Cloudflare Pages、本地开发） */
-export const DEFAULT_WEB_MATCHES = [
+/** 默认部署地址（GitHub Pages、Cloudflare Pages） */
+export const PROD_WEB_MATCHES = [
   'https://messixpro.github.io/spoiler-free-football/*',
   'https://spoiler-free-football.pages.dev/*',
-  'http://localhost/*',
-  'http://127.0.0.1/*',
 ];
+/** 本地开发时的网页地址：正式构建（SFF_RELEASE=1）不带，免得任何本机网页都能给插件发消息 */
+export const DEV_WEB_MATCHES = ['http://localhost/*', 'http://127.0.0.1/*'];
+export const DEFAULT_WEB_MATCHES = [...PROD_WEB_MATCHES, ...DEV_WEB_MATCHES];
 
 /** 网页地址 → match pattern：match pattern 不能带端口，路径取到最后一个 / */
 export function webUrlPattern(webUrl) {
@@ -19,11 +20,14 @@ export function webUrlPattern(webUrl) {
  * 换了域名（国内对象存储、自定义域名）或 fork 到别的账号后，桥接脚本照样能注入。
  * extra 是逗号分隔的额外地址（环境变量 SFF_WEB_MATCHES），不设时用默认地址。
  */
-export function webMatchesFor(webUrl, extra) {
-  const list = (extra || DEFAULT_WEB_MATCHES.join(','))
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+export function webMatchesFor(webUrl, extra, { release = false } = {}) {
+  // 设了 SFF_WEB_MATCHES 就完全按它来；没设时用默认地址，开发构建再加本机地址
+  const list = extra
+    ? extra
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [...PROD_WEB_MATCHES, ...(release ? [] : DEV_WEB_MATCHES)];
   return [...new Set([webUrlPattern(webUrl), ...list])];
 }
 

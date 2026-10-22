@@ -184,7 +184,15 @@ export function createFootballDataAdapter(): FixtureAdapter {
       // http.ts 里「5xx/网络错误时用旧缓存」和 ETag 304 就永远用不上。多拉的几天在 build.ts 里按时间窗过滤掉
       const SEGMENT_MS = 10 * DAY_MS;
       const start = Math.floor(ctx.windowStart.getTime() / SEGMENT_MS) * SEGMENT_MS;
+      const clock = ctx.clock ?? Date.now;
+      const overBudget = () => ctx.deadline !== undefined && clock() > ctx.deadline;
+      let skipped = 0;
       for (let t = start; t < ctx.windowEnd.getTime(); t += SEGMENT_MS) {
+        // 超过用时上限（数据源挂住不响应）：剩下的日期段这次不拉，别把整个构建拖到超时
+        if (overBudget()) {
+          skipped++;
+          continue;
+        }
         const from = isoDate(new Date(t));
         const to = isoDate(new Date(Math.min(t + SEGMENT_MS, ctx.windowEnd.getTime() + DAY_MS)));
         const url = `${BASE}/matches?competitions=${codes.join(',')}&dateFrom=${from}&dateTo=${to}`;
@@ -211,6 +219,7 @@ export function createFootballDataAdapter(): FixtureAdapter {
           notes.push(`football-data ${from}~${to} 失败：${(err as Error).message}`);
         }
       }
+      if (skipped) notes.push(`超过用时上限，还有 ${skipped} 段日期这次没拉取（失败）`);
       ctx.log(`football-data: ${fixtures.length} 场`);
       return { fixtures, notes };
     },

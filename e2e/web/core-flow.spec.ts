@@ -59,6 +59,9 @@ test.describe('昨夜今晨 → 集锦/录像 → 看完显示比分', () => {
     await page.goto('./#/today');
     const c = card(page, MATCH_IDS.city);
     await c.getByTestId('play-highlights').click();
+    // 没装插件/脚本：页内播放前同样先提醒
+    await expect(page.getByTestId('confirm-dialog')).toContainText('还没有开启防剧透插件或脚本');
+    await page.getByTestId('confirm-ok').click();
     const cover = c.getByTestId('embed-play');
     await expect(cover).toBeVisible();
     await expect(cover).toContainText('曼城 vs 桑德兰');

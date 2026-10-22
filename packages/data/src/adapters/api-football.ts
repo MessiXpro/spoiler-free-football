@@ -149,8 +149,16 @@ export function createApiFootballAdapter(): FixtureAdapter {
       const notes: string[] = [];
       const from = isoDate(ctx.windowStart);
       const to = isoDate(ctx.windowEnd);
+      const clock = ctx.clock ?? Date.now;
+      const overBudget = () => ctx.deadline !== undefined && clock() > ctx.deadline;
+      const skipped: string[] = [];
       for (const id of leagues) {
         const competition = API_FOOTBALL_LEAGUES[id]!;
+        // 超过用时上限：剩下的赛事这次不拉（和 TheSportsDB 一样）
+        if (overBudget()) {
+          skipped.push(competition);
+          continue;
+        }
         // 赛季 = 开始年份；国家队/世俱杯按自然年
         const year = ctx.now.getUTCFullYear();
         const clubSeason = ctx.now.getUTCMonth() >= 6 ? year : year - 1;
@@ -194,6 +202,9 @@ export function createApiFootballAdapter(): FixtureAdapter {
         }
       }
       ctx.log(`api-football: ${fixtures.length} 场`);
+      if (skipped.length) {
+        notes.push(`超过用时上限，这次没拉取（失败）：${[...new Set(skipped)].join('、')}`);
+      }
       return { fixtures, notes };
     },
   };

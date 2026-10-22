@@ -41,6 +41,8 @@ jobs:
           console.log(`版本 ${distinct[0]}${tag ? `，标签 ${tag}` : ''}`);
           EOF
       - name: 构建
+        env:
+          SFF_RELEASE: '1'
         run: |
           owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
           export SFF_WEB_URL="${{ vars.SFF_WEB_URL || '' }}"

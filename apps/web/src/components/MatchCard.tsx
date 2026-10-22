@@ -15,6 +15,7 @@ import {
   type PublicMatch,
   type UserState,
 } from '@sff/core';
+import { detectShield } from '../lib/bridge.ts';
 import { href } from '../lib/router.ts';
 import { actions } from '../lib/store.ts';
 import { ConfirmDialog } from './Dialog.tsx';
@@ -42,6 +43,12 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
   const [askMark, setAskMark] = useState(false);
   const [player, setPlayer] = useState<'none' | 'highlights' | 'live'>('none');
   const [liveOpen, setLiveOpen] = useState(false);
+  // 没装插件/脚本时，页内播放前也提醒一次（B 站播放器自己的标题浮层和播完后的推荐可能带比分）
+  const [askEmbed, setAskEmbed] = useState<'none' | 'highlights' | 'live'>('none');
+  const startPlayer = (kind: 'highlights' | 'live') => {
+    if (detectShield()) setPlayer(kind);
+    else setAskEmbed(kind);
+  };
 
   const replays = match.links.filter((l) => l.kind === 'replay' || l.kind === 'live');
   const highlights = match.links.filter((l) => l.kind === 'highlights');
@@ -104,7 +111,9 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
                 type="button"
                 className="btn btn-primary"
                 data-testid="play-highlights"
-                onClick={() => setPlayer(player === 'highlights' ? 'none' : 'highlights')}
+                onClick={() =>
+                  player === 'highlights' ? setPlayer('none') : startPlayer('highlights')
+                }
               >
                 ▶ 页内播放集锦
               </button>
@@ -203,6 +212,22 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
         </>
       )}
 
+      {askEmbed !== 'none' && (
+        <ConfirmDialog
+          title="还没有开启防剧透插件或脚本"
+          confirmText="仍然播放"
+          onCancel={() => setAskEmbed('none')}
+          onConfirm={() => {
+            setPlayer(askEmbed);
+            setAskEmbed('none');
+          }}
+        >
+          <p>
+            页内播放器来自视频平台，它自己的标题浮层和播完后的推荐卡片可能带比分；装了插件或脚本后这些也会被遮住。建议先安装（见「设置
+            → 安装插件/脚本」）。
+          </p>
+        </ConfirmDialog>
+      )}
       {liveOpen && (
         <div className="dialog-backdrop" onClick={() => setLiveOpen(false)}>
           <div
@@ -217,7 +242,9 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
               从开球前开始看全场录像，像看直播一样。总时长和进度条会被遮住，看不出这场比赛一共打了多久。
             </p>
             <ul className="tips">
-              <li>页内播放：遮挡条盖住播放器底部的时间和进度条，点画面暂停/继续。</li>
+              <li>
+                页内播放：遮挡条盖住播放器底部的时间和进度条，点画面暂停/继续；装了插件/脚本还会遮住播放器里的标题和播完后的推荐。
+              </li>
               <li>
                 跳转到平台播放：需要已安装防剧透插件或脚本，它会隐藏平台播放器的时长、进度条预览、弹幕和评论。
               </li>
@@ -229,8 +256,8 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
                   type="button"
                   className="btn btn-primary"
                   onClick={() => {
-                    setPlayer('live');
                     setLiveOpen(false);
+                    startPlayer('live');
                   }}
                 >
                   ▶ 页内从头播放

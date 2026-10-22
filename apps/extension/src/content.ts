@@ -1,4 +1,5 @@
-import { bootShield, type ShieldController } from '@sff/core/dom';
+import { matchSite } from '@sff/core';
+import { bootShield, defaultRules, type ShieldController } from '@sff/core/dom';
 import {
   ext,
   loadSettings,
@@ -15,15 +16,18 @@ import { isWebAppUrl } from './web-match.ts';
  * 全网防剧透模式下由后台用 scripting.registerContentScripts 注入同一个脚本。
  */
 async function main() {
-  // manifest 静态注入的是站点模式；后台动态注册的全网模式会先运行 global-flag.js 设置这个标记
-  const siteMode = !(globalThis as unknown as { __sffGlobal?: boolean }).__sffGlobal;
+  // manifest 静态注入的是站点模式；后台动态注册的全网脚本会先运行 global-flag.js 设置这个标记
+  const injectedGlobal = Boolean((globalThis as unknown as { __sffGlobal?: boolean }).__sffGlobal);
   // 全网模式不处理防剧透网页本身：用户点「看完了，显示比分」后显示的比分不能再被遮住
   // （后台注册时已经排除了这些地址，这里再兜一次底，和用户脚本的 isWebApp() 一致）
-  if (!siteMode && isWebAppUrl(location.href, WEB_MATCHES)) {
+  if (injectedGlobal && isWebAppUrl(location.href, WEB_MATCHES)) {
     document.documentElement?.classList.add('sff-ready');
     return;
   }
   const settings = await loadSettings();
+  // 全网脚本注入的页面若在下载来的规则里已有站点规则（规则发布后新增的站点），仍按站点模式工作，和用户脚本一致
+  const siteMode =
+    !injectedGlobal || Boolean(matchSite(settings.rules ?? defaultRules(), location.hostname));
   // 角标最多每秒更新一次（弹幕等内容会频繁触发）
   let lastBadge = -1;
   let badgeTimer: ReturnType<typeof setTimeout> | null = null;

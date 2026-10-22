@@ -199,11 +199,12 @@ export function matchesInWindow(
   matches: PublicMatch[],
   state: UserState,
   window: { start: number; end: number },
+  now: Date = new Date(),
 ): PublicMatch[] {
   return matches
     .filter((m) => {
       const t = Date.parse(m.kickoff);
-      return t >= window.start && t < window.end && isSubscribed(m, state);
+      return t >= window.start && t < window.end && isShown(m, matches, state, now);
     })
     .sort(byKickoff);
 }
@@ -221,7 +222,7 @@ export function unwatchedRecent(
       (m) =>
         Date.parse(m.kickoff) >= since &&
         liveStatus(m, now) === 'finished' &&
-        isSubscribed(m, state) &&
+        isShown(m, matches, state, now) &&
         !isWatched(state, m.id),
     )
     .sort(byKickoff);
@@ -237,7 +238,7 @@ export function upcomingMatches(
   return matches
     .filter((m) => {
       const t = Date.parse(m.kickoff);
-      return t > now.getTime() && t <= until && isSubscribed(m, state);
+      return t > now.getTime() && t <= until && isShown(m, matches, state, now);
     })
     .sort(byKickoff);
 }
@@ -259,13 +260,29 @@ export function isFixtureLocked(
   if (!isKnockoutStage(match.stage)) return false;
   if (state.unlocked[`fixture:${match.id}`]) return false;
   if (isWatched(state, match.id)) return false;
+  // 「只看订阅球队」时按阶段锁（见 isShown），否则按球队锁
+  const sameTeamOnly = competitionMode(state, match.competition) !== 'teams';
+  return stageLockActive(match, all, state, now, sameTeamOnly);
+}
+
+/**
+ * 同赛事、同赛季里，比这场更早的阶段还有已开球、没看完、也没手动标记过的订阅比赛。
+ * sameTeamOnly：只看和这场有共同球队的（「全部比赛」模式下的老逻辑）
+ */
+function stageLockActive(
+  match: PublicMatch,
+  all: PublicMatch[],
+  state: UserState,
+  now: Date,
+  sameTeamOnly: boolean,
+): boolean {
   const kickoff = Date.parse(match.kickoff);
   const order = stageOrder(match.stage);
   const teams = new Set([match.home.id, match.away.id]);
   return all.some((prev) => {
     if (prev.id === match.id || prev.competition !== match.competition) return false;
     if (prev.season !== match.season) return false;
-    if (!teams.has(prev.home.id) && !teams.has(prev.away.id)) return false;
+    if (sameTeamOnly && !teams.has(prev.home.id) && !teams.has(prev.away.id)) return false;
     const t = Date.parse(prev.kickoff);
     if (t >= kickoff || kickoff - t > FIXTURE_LOCK_LOOKBACK_DAYS * DAY) return false;
     // 同一轮的首回合不暴露次回合对阵
@@ -275,6 +292,24 @@ export function isFixtureLocked(
     if (isPostponedCleared(state, prev)) return false;
     return isSubscribed(prev, state) && !isWatched(state, prev.id);
   });
+}
+
+/**
+ * 列表里该不该出现这场比赛。
+ * 「只看订阅球队」时，淘汰赛卡片「在不在」本身就会泄露上一轮结果（你的球队晋级了才有下一轮的卡）：
+ * 所以上一轮订阅比赛没看完时，这一阶段的所有比赛都以「对阵待揭晓」占位卡出现，看不出哪一张是你的球队。
+ * 看完上一轮后，不是订阅球队的占位卡自动消失
+ */
+export function isShown(
+  match: PublicMatch,
+  all: PublicMatch[],
+  state: UserState,
+  now: Date,
+): boolean {
+  if (isSubscribed(match, state)) return true;
+  if (competitionMode(state, match.competition) !== 'teams') return false;
+  if (!state.settings.lockKnockoutOpponents || !isKnockoutStage(match.stage)) return false;
+  return stageLockActive(match, all, state, now, false);
 }
 
 /** 两回合淘汰赛的次回合对应的首回合（同赛事、同赛季、同阶段，主客对调）；找不到返回 undefined */

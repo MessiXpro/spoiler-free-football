@@ -204,6 +204,8 @@ jobs:
           VITE_SFF_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           # 可选：网页还有别的地址（自定义域名、国内镜像）时，插件的桥接脚本也要在那些地址上运行
           SFF_WEB_MATCHES: ${{ vars.SFF_WEB_MATCHES }}
+          # 正式构建：插件和脚本不带本机开发地址（localhost）
+          SFF_RELEASE: '1'
         run: |
           pnpm --filter @sff/web build
           pnpm --filter @sff/extension build

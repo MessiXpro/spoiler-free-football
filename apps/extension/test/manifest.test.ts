@@ -54,3 +54,18 @@ describe('Firefox manifest', () => {
     expect(manifestFor('chrome', 'https://x.example/').browser_specific_settings).toBeUndefined();
   });
 });
+
+describe('正式构建不带本机开发地址', () => {
+  it('release 时去掉 localhost / 127.0.0.1，开发构建保留', () => {
+    const release = webMatchesFor('https://messixpro.github.io/spoiler-free-football/', undefined, {
+      release: true,
+    });
+    expect(release.some((m: string) => /localhost|127\.0\.0\.1/.test(m))).toBe(false);
+    expect(release).toContain('https://messixpro.github.io/spoiler-free-football/*');
+    const dev = webMatchesFor('https://messixpro.github.io/spoiler-free-football/');
+    expect(dev).toContain('http://localhost/*');
+    // 设了额外地址的正式构建同样不带 localhost
+    const extra = webMatchesFor('https://a.example/', 'https://b.example/*', { release: true });
+    expect(extra).toEqual(['https://a.example/*', 'https://b.example/*']);
+  });
+});

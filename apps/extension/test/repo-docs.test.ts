@@ -40,6 +40,13 @@ describe('数据更新与部署工作流', () => {
     expect(build).toMatch(/concurrency:\n\s+group: deploy-build-/);
   });
 
+  it('正式构建插件/脚本时设置 SFF_RELEASE=1（不带 localhost 地址）', () => {
+    for (const f of ['deploy.yml', 'release.yml']) {
+      const text = read('.github', 'workflows', f);
+      expect(text, f).toMatch(/SFF_RELEASE: '1'/);
+    }
+  });
+
   it('定时任务的事件里没有 repository 信息：网页地址不能用 github.event.repository', () => {
     expect(yml).not.toContain('github.event.repository');
   });

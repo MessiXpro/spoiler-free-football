@@ -10,14 +10,12 @@ mkdirSync(dist, { recursive: true });
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
 const WEB_URL = process.env.SFF_WEB_URL || 'https://messixpro.github.io/spoiler-free-football/';
+// 正式构建（SFF_RELEASE=1）不带本机开发地址
+const RELEASE = process.env.SFF_RELEASE === '1';
+const DEV_PREFIXES = RELEASE ? [] : ['http://localhost:', 'http://127.0.0.1:'];
 const WEB_PREFIXES = (
   process.env.SFF_WEB_PREFIXES ||
-  [
-    WEB_URL,
-    'https://spoiler-free-football.pages.dev/',
-    'http://localhost:',
-    'http://127.0.0.1:',
-  ].join(',')
+  [WEB_URL, 'https://spoiler-free-football.pages.dev/', ...DEV_PREFIXES].join(',')
 )
   .split(',')
   .map((s) => s.trim())
@@ -44,15 +42,13 @@ const hosts = [...new Set(info.DEFAULT_SITE_RULES_JSON.sites.flatMap((s) => s.ho
 const webMatches = [
   `${WEB_URL}*`,
   'https://spoiler-free-football.pages.dev/*',
-  'http://localhost/*',
-  'http://127.0.0.1/*',
+  ...(RELEASE ? [] : ['http://localhost/*', 'http://127.0.0.1/*']),
 ];
 const connectHosts = [
   ...new Set([
     new URL(WEB_URL).hostname,
     'spoiler-free-football.pages.dev',
-    'localhost',
-    '127.0.0.1',
+    ...(RELEASE ? [] : ['localhost', '127.0.0.1']),
   ]),
 ];
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   beijingDate,
   isFixtureLocked,
-  isSubscribed,
+  isShown,
   isWatched,
   liveStatus,
   matchesInWindow,
@@ -64,14 +64,17 @@ function MatchGrid({
 
 export function TonightView({ data, state, now, offset }: ViewProps & { offset: number }) {
   const w = nightWindow(now, offset);
-  const list = matchesInWindow(data.matches, state, w);
+  const list = matchesInWindow(data.matches, state, w, now);
   const inWindow = new Set(list.map((m) => m.id));
   // 北京时间中午到午夜开球的比赛要到午夜才进"昨夜今晨"的时间窗，进行中时单独列出来
   const live =
     offset === 0
       ? data.matches
           .filter(
-            (m) => !inWindow.has(m.id) && liveStatus(m, now) === 'live' && isSubscribed(m, state),
+            (m) =>
+              !inWindow.has(m.id) &&
+              liveStatus(m, now) === 'live' &&
+              isShown(m, data.matches, state, now),
           )
           .sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff))
       : [];

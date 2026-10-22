@@ -12,7 +12,9 @@ const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
 const WEB_URL = process.env.SFF_WEB_URL || 'https://messixpro.github.io/spoiler-free-football/';
 // 网页地址（SFF_WEB_URL）本身一定在桥接脚本的匹配范围里；SFF_WEB_MATCHES 可以再加别的地址
-const WEB_MATCHES = webMatchesFor(WEB_URL, process.env.SFF_WEB_MATCHES);
+const WEB_MATCHES = webMatchesFor(WEB_URL, process.env.SFF_WEB_MATCHES, {
+  release: process.env.SFF_RELEASE === '1',
+});
 
 // 从 core 里读出遮罩 CSS 和站点域名，保证插件和用户脚本用的是同一份
 const infoFile = join(dist, '.build-info.mjs');

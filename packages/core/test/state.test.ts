@@ -26,6 +26,7 @@ import {
   type PublicMatch,
   canShowAggregate,
   firstLegOf,
+  isShown,
 } from '../src/index.ts';
 
 function match(partial: Partial<PublicMatch> & Pick<PublicMatch, 'id' | 'kickoff'>): PublicMatch {
@@ -302,5 +303,56 @@ describe('两回合总比分只在首回合已看时显示', () => {
     // 首回合本身、单场淘汰赛：照常
     expect(canShowAggregate(first, [first, second], fresh)).toBe(true);
     expect(canShowAggregate(other, [other], fresh)).toBe(true);
+  });
+});
+
+describe('只看订阅球队：淘汰赛占位卡不泄露上一轮结果', () => {
+  const mk = (id: string, stage: string, home: string, away: string, kickoff: string) =>
+    ({
+      id,
+      competition: 'ucl',
+      season: '2026-27',
+      stage,
+      kickoff,
+      home: { id: home, name: home },
+      away: { id: away, name: away },
+      status: 'scheduled',
+      links: [],
+    }) as unknown as PublicMatch;
+  const now = new Date('2027-03-25T12:00:00Z');
+  const r16 = mk('r16-ars', 'round-of-16', 'arsenal', 'inter', '2027-03-10T20:00:00Z');
+  const qfA = mk('qf-ars', 'quarter-final', 'arsenal', 'bayern', '2027-04-07T19:00:00Z');
+  const qfB = mk('qf-psv', 'quarter-final', 'psv', 'bayern', '2027-04-07T19:00:00Z');
+  const base = {
+    ...defaultUserState(0),
+    teams: ['arsenal'],
+    competitions: { ucl: 'teams' as const },
+  };
+
+  it('上一轮没看完：不管订阅球队在不在下一轮，列表里都是一张「对阵待揭晓」', () => {
+    for (const qf of [qfA, qfB]) {
+      const all = [r16, qf];
+      expect(isShown(qf, all, base, now)).toBe(true);
+      expect(isFixtureLocked(qf, all, base, now)).toBe(true);
+      expect(upcomingMatches(all, base, now, 30).map((m) => m.id)).toEqual([qf.id]);
+    }
+  });
+
+  it('看完上一轮后：不是订阅球队的占位卡消失，自己球队的正常显示', () => {
+    const watched = { ...base, watched: { [r16.id]: 1 } };
+    expect(isShown(qfA, [r16, qfA], watched, now)).toBe(true);
+    expect(isFixtureLocked(qfA, [r16, qfA], watched, now)).toBe(false);
+    expect(isShown(qfB, [r16, qfB], watched, now)).toBe(false);
+    expect(upcomingMatches([r16, qfB], watched, now, 30)).toEqual([]);
+  });
+
+  it('「全部比赛」模式、关闭淘汰赛锁定、非淘汰赛：和以前一样', () => {
+    expect(isShown(qfB, [r16, qfB], { ...base, competitions: { ucl: 'all' as const } }, now)).toBe(
+      true,
+    );
+    const off = { ...base, settings: { ...base.settings, lockKnockoutOpponents: false } };
+    expect(isShown(qfB, [r16, qfB], off, now)).toBe(false);
+    const league = mk('md30', 'regular', 'psv', 'bayern', '2027-04-07T19:00:00Z');
+    expect(isShown(league, [r16, league], base, now)).toBe(false);
   });
 });

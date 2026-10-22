@@ -1,6 +1,7 @@
 import { getCompetition, type Stage } from '@sff/core';
 import type { AdapterContext, AdapterResult, FixtureAdapter, RawFixture } from '../types.ts';
 import { isNationalCompetition, pair, stageFromApiFootball, teamRef } from '../normalize.ts';
+import { HttpError } from '../http.ts';
 import { offsetTimeToUtc, seasonOf, zonedToUtc } from '../time.ts';
 
 /**
@@ -32,24 +33,33 @@ export interface OpenfootballSource {
   url: string;
   /** 数据里的时间是当地时间 */
   timeZone: string;
+  /** 赛季刚切换、新赛季文件还没建好时退回去用的上赛季文件 */
+  fallback?: { season: string; url: string };
 }
 
 const RAW = 'https://raw.githubusercontent.com/openfootball';
 
 export function defaultOpenfootballSources(now: Date): OpenfootballSource[] {
   const season = seasonOf(now);
+  // 7～9 月：新赛季文件往往 7 月底～8 月下旬才建好，404 时退回上赛季的文件（夏天还要看上赛季末的比赛）
+  const month = now.getUTCMonth();
+  const summer = month >= 6 && month <= 8;
+  const lastSeason = seasonOf(new Date(Date.UTC(now.getUTCFullYear() - 1, month, 1)));
+  const file = (code: string) => (s: string) => `${RAW}/football.json/master/${s}/${code}.json`;
   const sources: OpenfootballSource[] = [
     {
       competition: 'epl',
       season,
-      url: `${RAW}/football.json/master/${season}/en.1.json`,
+      url: file('en.1')(season),
       timeZone: 'Europe/London',
+      ...(summer ? { fallback: { season: lastSeason, url: file('en.1')(lastSeason) } } : {}),
     },
     {
       competition: 'laliga',
       season,
-      url: `${RAW}/football.json/master/${season}/es.1.json`,
+      url: file('es.1')(season),
       timeZone: 'Europe/Madrid',
+      ...(summer ? { fallback: { season: lastSeason, url: file('es.1')(lastSeason) } } : {}),
     },
   ];
   const year = now.getUTCFullYear();
@@ -151,18 +161,29 @@ export function createOpenfootballAdapter(
     async fetch(ctx: AdapterContext): Promise<AdapterResult> {
       const fixtures: RawFixture[] = [];
       const notes: string[] = [];
+      const load = (url: string) =>
+        ctx.fetcher.getJson<OfFile>(url, { kind: 'api', ttlMs: 2 * 60 * 60 * 1000 });
       for (const src of (sources ?? defaultOpenfootballSources)(ctx.now)) {
         try {
-          const json = await ctx.fetcher.getJson<OfFile>(src.url, {
-            kind: 'api',
-            ttlMs: 2 * 60 * 60 * 1000,
-          });
-          const parsed = parseOpenfootball(json, src).filter((f) => {
+          let used = src;
+          let json: OfFile;
+          try {
+            json = await load(src.url);
+          } catch (err) {
+            // 新赛季文件还没发布：用上赛季的，说明里不带「失败」（这不是故障）
+            if (!(err instanceof HttpError && err.status === 404 && src.fallback)) throw err;
+            json = await load(src.fallback.url);
+            used = { ...src, season: src.fallback.season, url: src.fallback.url };
+            notes.push(
+              `${src.competition}：openfootball 还没发布 ${src.season} 赛季文件，暂用上赛季（${src.fallback.season}）；新赛季联赛赛程这期间由其他数据源提供`,
+            );
+          }
+          const parsed = parseOpenfootball(json, used).filter((f) => {
             const t = Date.parse(f.kickoff);
             return t >= ctx.windowStart.getTime() && t <= ctx.windowEnd.getTime();
           });
           fixtures.push(...parsed);
-          ctx.log(`openfootball ${src.competition}: ${parsed.length} 场`);
+          ctx.log(`openfootball ${used.competition}: ${parsed.length} 场`);
         } catch (err) {
           notes.push(`${src.competition} 拉取失败：${(err as Error).message}`);
         }

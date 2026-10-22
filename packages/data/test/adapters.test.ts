@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseOpenfootball, createOpenfootballAdapter } from '../src/adapters/openfootball.ts';
+import {
+  createOpenfootballAdapter,
+  defaultOpenfootballSources,
+  parseOpenfootball,
+} from '../src/adapters/openfootball.ts';
 import {
   parseFootballDataMatch,
   type FdMatch,
@@ -367,5 +371,52 @@ describe('手工补充', () => {
     expect(out[0]!.home.id).toBe('nt-england');
     expect(out[0]!.away.id).toBe('nt-brazil');
     expect(out[0]!.stage).toBe('friendly');
+  });
+});
+
+describe('openfootball 赛季刚切换时退回上赛季文件', () => {
+  it('7～9 月：新赛季文件 404 就用上赛季的，说明里不带「失败」；其他月份照常报失败', async () => {
+    const july = new Date('2026-07-15T12:00:00Z');
+    const srcs = defaultOpenfootballSources(july);
+    expect(srcs[0]!.season).toBe('2026-27');
+    expect(srcs[0]!.fallback).toMatchObject({ season: '2025-26' });
+    expect(
+      defaultOpenfootballSources(new Date('2026-11-15T12:00:00Z'))[0]!.fallback,
+    ).toBeUndefined();
+
+    const urls: string[] = [];
+    const res = await createOpenfootballAdapter().fetch(
+      ctx({
+        now: july,
+        // 只有上赛季的文件存在（fixture 内容无所谓，只要能解析）
+        fetcher: createFixtureFetcher(
+          [
+            ['2025-26/en.1.json', () => fixture('openfootball/en.1-2026-27.json')],
+            ['2025-26/es.1.json', () => fixture('openfootball/es.1-2026-27.json')],
+            // 2026 年 7 月世界杯数据源也在拉取范围内
+            ['2026/worldcup.json', () => fixture('openfootball/worldcup-2026.subset.json')],
+          ],
+          (u) => urls.push(u),
+        ),
+        windowStart: new Date('2020-01-01T00:00:00Z'),
+        windowEnd: new Date('2030-01-01T00:00:00Z'),
+      }),
+    );
+    expect(urls.filter((u) => u.includes('2026-27'))).toHaveLength(2);
+    expect(urls.filter((u) => u.includes('2025-26'))).toHaveLength(2);
+    expect(res.fixtures.length).toBeGreaterThan(0);
+    expect(
+      res.fixtures
+        .filter((f) => f.competition !== 'world-cup')
+        .every((f) => f.season === '2025-26'),
+    ).toBe(true);
+    expect(res.notes.join('；')).toMatch(/还没发布 2026-27 赛季文件/);
+    expect(res.notes.join('；')).not.toMatch(/失败/);
+
+    // 11 月的 404 是真故障
+    const nov = await createOpenfootballAdapter().fetch(
+      ctx({ now: new Date('2026-11-15T12:00:00Z'), fetcher: createFixtureFetcher([]) }),
+    );
+    expect(nov.notes.join('；')).toMatch(/拉取失败/);
   });
 });
