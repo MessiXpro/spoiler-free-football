@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { href } from '../lib/router.ts';
 import {
   COMPETITIONS,
@@ -350,6 +350,102 @@ function SyncServerPanel({ state }: { state: UserState }) {
   );
 }
 
+type Device = 'ios' | 'android' | 'desktop';
+
+/** 按当前设备把最适合的装法排在最前面（手机用户不用先看「下载插件 zip」） */
+export function detectDevice(ua = navigator.userAgent, touchMac = false): Device {
+  if (/iPhone|iPad|iPod/.test(ua) || touchMac) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  return 'desktop';
+}
+
+function InstallGuide() {
+  const device = useMemo(
+    () =>
+      detectDevice(
+        navigator.userAgent,
+        /Mac/.test(navigator.userAgent) && navigator.maxTouchPoints > 1,
+      ),
+    [],
+  );
+  const items: Array<{ key: Device | 'firefox' | 'pwa'; for: Device[]; body: ReactNode }> = [
+    {
+      key: 'ios',
+      for: ['ios'],
+      body: (
+        <>
+          iPhone / iPad：在 App Store 装{' '}
+          <a
+            href="https://apps.apple.com/app/userscripts/id1463298887"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Userscripts
+          </a>
+          （免费），在 Safari 的扩展设置里打开它，然后点{' '}
+          <a href="./userscript/spoiler-free-football.user.js">用户脚本</a> 安装。
+        </>
+      ),
+    },
+    {
+      key: 'android',
+      for: ['android'],
+      body: (
+        <>
+          Android（Via、X 浏览器、狐猴等支持脚本的浏览器）：安装{' '}
+          <a href="./userscript/spoiler-free-football.user.js">用户脚本</a>；想在所有网站生效可以装{' '}
+          <a href="./userscript/spoiler-free-football-global.user.js">全网版</a>。
+        </>
+      ),
+    },
+    {
+      key: 'desktop',
+      for: ['desktop'],
+      body: (
+        <>
+          电脑（Chrome、Microsoft Edge）：下载{' '}
+          <a href="./downloads/spoiler-free-football-chrome.zip">插件 zip</a>
+          ，解压后在扩展程序页面打开「开发者模式」，点「加载已解压的扩展程序」。 不想装插件也可以用
+          Tampermonkey / Violentmonkey 装{' '}
+          <a href="./userscript/spoiler-free-football.user.js">用户脚本</a>。
+        </>
+      ),
+    },
+    {
+      key: 'firefox',
+      for: ['desktop'],
+      body: (
+        <>
+          Firefox：下载 <a href="./downloads/spoiler-free-football-firefox.zip">Firefox 版 zip</a>
+          ，在 about:debugging 里临时加载。
+        </>
+      ),
+    },
+    {
+      key: 'pwa',
+      for: ['ios', 'android', 'desktop'],
+      body: <>把本页「添加到主屏幕」，用起来像 App。</>,
+    },
+  ];
+  const ordered = [
+    ...items.filter((i) => i.for.includes(device)),
+    ...items.filter((i) => !i.for.includes(device)),
+  ];
+  return (
+    <div className="settings-block" id="install-block" data-testid="install-block">
+      <h3>安装插件/脚本</h3>
+      <ul className="plain-list small">
+        {ordered.map((i, idx) => (
+          <li key={i.key} data-testid={`install-${i.key}`}>
+            {idx === 0 ? <span className="tag">你的设备</span> : null} {i.body}
+          </li>
+        ))}
+      </ul>
+      <p className="muted small">每一步的详细说明见项目 README。</p>
+    </div>
+  );
+}
+
 export function SettingsView({ state }: { state: UserState }) {
   const [askReset, setAskReset] = useState(false);
   const shield = useMemo(detectShield, []);
@@ -419,29 +515,7 @@ export function SettingsView({ state }: { state: UserState }) {
       </div>
       <SyncCodePanel state={state} />
       <SyncServerPanel state={state} />
-      <div className="settings-block" id="install-block" data-testid="install-block">
-        <h3>安装插件/脚本</h3>
-        <ul className="plain-list small">
-          <li>
-            电脑（Chrome、Microsoft Edge）：下载
-            <a href="./downloads/spoiler-free-football-chrome.zip">插件 zip</a>
-            ，解压后在扩展程序页面打开「开发者模式」，点「加载已解压的扩展程序」。
-          </li>
-          <li>
-            Firefox：下载 <a href="./downloads/spoiler-free-football-firefox.zip">Firefox 版 zip</a>
-            ，在 about:debugging 里临时加载。
-          </li>
-          <li>
-            Android（Via、X 浏览器、狐猴等）和电脑上的 Tampermonkey / Violentmonkey：安装
-            <a href="./userscript/spoiler-free-football.user.js">用户脚本</a>
-            ；想在所有网站生效可以装{' '}
-            <a href="./userscript/spoiler-free-football-global.user.js">全网版</a>。
-          </li>
-          <li>iPhone / iPad：在 Safari 里装 Userscripts App，再添加上面的用户脚本。</li>
-          <li>把本页「添加到主屏幕」，用起来像 App。</li>
-        </ul>
-        <p className="muted small">每一步的详细说明见项目 README。</p>
-      </div>
+      <InstallGuide />
       <div className="settings-block">
         <button type="button" className="btn btn-danger" onClick={() => setAskReset(true)}>
           清空本机数据

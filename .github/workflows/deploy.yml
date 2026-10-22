@@ -37,6 +37,7 @@ concurrency:
 jobs:
   # 网页托管有没有配置好。GitHub Pages 还没开启时：定时任务不白跑（省 Actions 额度），推送/手动运行时用中文说明要做什么
   hosting:
+    name: 检查网页托管
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -115,6 +116,7 @@ jobs:
         run: echo "::notice title=已自动开启 GitHub Pages::网页会在这次运行结束后上线，地址见下方「部署」job。"
 
   build:
+    name: 数据管线与构建
     needs: hosting
     # PR：只试跑数据管线。定时任务：GitHub Pages 或 Cloudflare Pages 至少配好一个才跑
     if: >-
@@ -228,6 +230,7 @@ jobs:
 
   # 推送或手动运行时 GitHub Pages 还没开启、也没配 Cloudflare：数据管线照常试跑（上面的 build），这里给出明确的失败提示
   pages-missing:
+    name: 网页还没上线
     needs: hosting
     if: >-
       needs.hosting.outputs.pages == 'false' && needs.hosting.outputs.cloudflare != 'true' &&
@@ -243,6 +246,7 @@ jobs:
           exit 1
 
   deploy-pages:
+    name: 部署到 GitHub Pages
     needs: [hosting, build]
     if: needs.hosting.outputs.pages == 'true'
     concurrency:

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { href, parseHash } from '../src/lib/router.ts';
 import { describeDataError } from '../src/lib/data.ts';
+import { detectDevice } from '../src/views/SettingsView.tsx';
 import { bilibiliEmbedUrl } from '../src/components/Embed.tsx';
 
 describe('路由', () => {
@@ -47,5 +48,19 @@ describe('数据加载失败的说明', () => {
       /不是数据文件/,
     );
     expect(describeDataError('something else')).toBe('something else');
+  });
+});
+
+describe('安装说明按设备排序', () => {
+  it('识别 iPhone / iPad（含桌面模式的 iPad）、Android、电脑', () => {
+    expect(detectDevice('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)')).toBe('ios');
+    expect(detectDevice('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari', true)).toBe(
+      'ios',
+    );
+    expect(detectDevice('Mozilla/5.0 (Linux; Android 14; Pixel 8)')).toBe('android');
+    expect(detectDevice('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130')).toBe('desktop');
+    expect(detectDevice('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari', false)).toBe(
+      'desktop',
+    );
   });
 });

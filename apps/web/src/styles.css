@@ -739,3 +739,13 @@ select {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* 触屏上的点击目标不小于 44px（小按钮、球队标签、下拉框） */
+@media (pointer: coarse) {
+  .btn-small,
+  .chip,
+  select,
+  .input {
+    min-height: 44px;
+  }
+}

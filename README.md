@@ -261,9 +261,9 @@ Pages 项目不用自己建，网页地址也不用自己填：第一次运行�
 | 来源 | 用来拿什么 | 需要 Key | 是否在云端实测 |
 |---|---|---|---|
 | [openfootball](https://github.com/openfootball/football.json)（公有领域） | 英超、西甲赛程和比分；世界杯 | 不需要 | ✅ 实测抓取成功（101 场） |
-| [football-data.org](https://www.football-data.org/) v4 | 英超、西甲、欧冠、欧洲杯、世界杯 | `FOOTBALL_DATA_TOKEN`（免费） | ⚠️ 云端无法访问，用他人录制的真实响应测试，需在 GitHub Actions 验证 |
-| [TheSportsDB](https://www.thesportsdb.com/) v1 | 足总杯、联赛杯、社区盾、国王杯、西超杯、欧联、欧协联、欧国联、友谊赛、预选赛、世俱杯 | 免费测试 Key 或 `THESPORTSDB_KEY` | ⚠️ 同上 |
-| [API-Football](https://www.api-football.com/) v3 | 可选补充 | `APIFOOTBALL_KEY` | ⚠️ 同上 |
+| [football-data.org](https://www.football-data.org/) v4 | 英超、西甲、欧冠、欧洲杯、世界杯 | `FOOTBALL_DATA_TOKEN`（免费） | ✅ 已在 GitHub Actions 用真实数据运行 |
+| [TheSportsDB](https://www.thesportsdb.com/) v1 | 足总杯、联赛杯、社区盾、国王杯、西超杯、欧联、欧协联、欧国联、友谊赛、预选赛、世俱杯 | 免费测试 Key 或 `THESPORTSDB_KEY` | ✅ 已在 GitHub Actions 用真实数据运行（免费 Key） |
+| [API-Football](https://www.api-football.com/) v3 | 可选补充 | `APIFOOTBALL_KEY` | ⚠️ 没有 Key，只用录制的真实响应测试过 |
 | `config/manual-matches.json` | 手工补充 | — | — |
 
 - 只调用官方提供给程序使用的接口和公开数据，不爬视频网站页面；网页抓取工具层内置 robots.txt 检查。
@@ -320,6 +320,13 @@ Pages 项目不用自己建，网页地址也不用自己填：第一次运行�
 4. 需要同步时点按钮：「**上传到服务器**」会先把服务器上已有的记录合并进来再上传，不会冲掉其他设备的已看记录；在另一台设备上点「**从服务器合并**」，把服务器上的记录合并到本机。
 
 ---
+
+## 隐私说明
+
+- 订阅的球队/赛事、已看记录、设置都只存在你自己的设备上（网页存浏览器本地存储，插件存浏览器的扩展存储，用户脚本存脚本管理器）。没有账号，没有统计代码，不收集、不上传任何数据。
+- 网页、插件、脚本只会访问网页的数据地址：打开时下载不含比分的赛程，你点「显示比分」时才下载那一场的比分文件（文件名是哈希，不含队名），插件/脚本每 12 小时下载一次站点规则。
+- 「同步码」是你自己复制粘贴的；可选的同步服务器只在你点「上传到服务器」时才发送数据，按随机密钥存放 180 天后自动删除，不与任何第三方共享。
+- 发布到应用商店时，这一节可以作为隐私政策链接。
 
 ## 已知限制
 
