@@ -162,3 +162,27 @@ describe('SpoilerShield', () => {
     expect(css).not.toContain('#danmukuBox');
   });
 });
+
+describe('站点规则里的无效选择器', () => {
+  it('一个写错的选择器只会被跳过，其他遮挡规则照常生效', () => {
+    setup('<div class="card"><p>阿森纳 2-1 切尔西 全场集锦</p></div>', '英超集锦');
+    shield = new SpoilerShield(document, {
+      site: {
+        ...bilibili,
+        cardSelectors: ['div[', '.card'],
+        contextSelectors: ['span[', ...(bilibili.contextSelectors ?? [])],
+      },
+    });
+    expect(() => shield!.start()).not.toThrow();
+    expect(document.querySelector('.card')!.hasAttribute(ATTR_CARD)).toBe(true);
+    expect(document.querySelector('p')!.textContent).toBe('阿森纳 ■-■ 切尔西 全场集锦');
+    shield.stop();
+
+    // 全是无效的：不报错，只是没有卡片遮挡
+    setup('<div class="card"><p>阿森纳 2-1 切尔西 全场集锦</p></div>', '英超集锦');
+    shield = new SpoilerShield(document, { site: { ...bilibili, cardSelectors: ['div['] } });
+    expect(() => shield!.start()).not.toThrow();
+    expect(document.querySelector('.card')!.hasAttribute(ATTR_CARD)).toBe(false);
+    expect(document.querySelector('p')!.textContent).toBe('阿森纳 ■-■ 切尔西 全场集锦');
+  });
+});

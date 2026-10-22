@@ -91,13 +91,18 @@ async function syncGlobalScript() {
   }
 }
 
+/** 规则每 12 小时检查一次。同名 alarm 重复创建会覆盖，所以安装、启动、后台脚本每次唤醒时都确保它在 */
+const ensureAlarm = () => void ext.alarms.create(ALARM, { periodInMinutes: 12 * 60 });
+
 ext.runtime.onInstalled.addListener(() => {
-  void ext.alarms.create(ALARM, { periodInMinutes: 12 * 60 });
+  ensureAlarm();
   void updateRules(true);
   void syncGlobalScript();
 });
 
 ext.runtime.onStartup?.addListener(() => {
+  // Firefox 的事件页重启后不一定还保留 alarm，这里再建一次
+  ensureAlarm();
   void updateRules();
   void syncGlobalScript();
 });

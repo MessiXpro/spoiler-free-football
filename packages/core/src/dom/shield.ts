@@ -240,8 +240,19 @@ export class SpoilerShield {
 
   private computeSelectors() {
     const site = this.opts.site;
-    this.cardSelector = site?.cardSelectors?.length ? `:is(${site.cardSelectors.join(',')})` : null;
-    const ctx = [...(site?.contextSelectors ?? []), 'h1'];
+    // 一个写错的选择器会让整个 :is(...) 查询抛错，站点其他规则就全失效了：先逐个检查，跳过无效的
+    const valid = (list: readonly string[] | undefined) =>
+      (list ?? []).filter((sel) => {
+        try {
+          this.doc.createDocumentFragment().querySelector(sel);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+    const cards = valid(site?.cardSelectors);
+    this.cardSelector = cards.length ? `:is(${cards.join(',')})` : null;
+    const ctx = [...valid(site?.contextSelectors), 'h1'];
     this.contextSelector = `:is(${ctx.join(',')})`;
   }
 

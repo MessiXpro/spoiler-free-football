@@ -1,12 +1,14 @@
-import { fetchScoreFrom, hostDisabledBy, hostMatches } from '@sff/core/dom';
+import { currentMatchFor, fetchScoreFrom, hostDisabledBy } from '@sff/core/dom';
 import {
   DEFAULT_WEB_URL,
   ext,
   loadSettings,
   saveSettings,
+  WEB_MATCHES,
   type TabMessage,
   type TabStatus,
 } from './api.ts';
+import { isWebAppUrl } from './web-match.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -66,8 +68,16 @@ async function main() {
   enabled.checked = settings.enabled;
   enabled.addEventListener('change', () => void saveSettings({ enabled: enabled.checked }));
 
-  const status = tabId !== undefined ? await send(tabId, { type: 'status' }) : null;
-  renderStatus(status, host);
+  // 防剧透网页本身不需要遮挡（用户点「显示比分」后比分要能看到），弹窗里说明一下就好
+  const isWebApp = Boolean(tab?.url) && isWebAppUrl(tab!.url!, WEB_MATCHES);
+  const status = tabId !== undefined && !isWebApp ? await send(tabId, { type: 'status' }) : null;
+  if (isWebApp) {
+    $('site-status').textContent = '这是防剧透看球网页本身，不需要遮挡';
+    $<HTMLButtonElement>('pause').hidden = true;
+    $<HTMLButtonElement>('resume').hidden = true;
+  } else {
+    renderStatus(status, host);
+  }
 
   $('pause').addEventListener('click', async () => {
     if (tabId === undefined) return;
@@ -81,7 +91,7 @@ async function main() {
   const toggleSite = $<HTMLButtonElement>('toggle-site');
   const disabled = Boolean(host) && settings.disabledHosts.some((h) => hostDisabledBy(host, h));
   toggleSite.textContent = disabled ? '在此站点启用' : '在此站点停用';
-  toggleSite.hidden = !host;
+  toggleSite.hidden = !host || isWebApp;
   toggleSite.addEventListener('click', async () => {
     const s = await loadSettings();
     const list = disabled
@@ -91,12 +101,8 @@ async function main() {
     window.close();
   });
 
-  // 从网页跳转过来的比赛：可以在这里直接显示比分
-  const match =
-    status?.currentMatch ??
-    (settings.currentMatch && host && hostMatches(host, settings.currentMatch.host)
-      ? settings.currentMatch
-      : null);
+  // 从网页跳转过来的比赛：可以在这里直接显示比分（和内容脚本一样，只认同平台、6 小时内的）
+  const match = status?.currentMatch ?? (host ? currentMatchFor(settings, host) : null);
   if (match) {
     $('match-card').hidden = false;
     $('match-title').textContent = match.title;
