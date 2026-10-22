@@ -205,7 +205,8 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
         name: adapter.name,
         ok: false,
         count: 0,
-        note: (err as Error).message,
+        // 带「失败」：和「未设置 KEY，跳过」区分开，小结和空数据守卫都靠这个词判断
+        note: `失败：${(err as Error).message}`,
       });
     }
   }

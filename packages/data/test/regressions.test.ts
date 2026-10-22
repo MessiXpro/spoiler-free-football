@@ -27,7 +27,7 @@ import { mergeFixtures } from '../src/merge.ts';
 import { stageFromTheSportsDb, teamRef } from '../src/normalize.ts';
 import { findPublicDataLeaks } from '../src/privacy.ts';
 import { fixture, SAMPLE_DIR, SAMPLE_ENV, SAMPLE_NOW, sampleFetcher } from '../src/sample.ts';
-import { sourceStatus, stepSummary } from '../src/summary.ts';
+import { actionsAnnotations, emptyDataReason, sourceStatus, stepSummary } from '../src/summary.ts';
 import type { AdapterContext, FixtureAdapter, RawFixture } from '../src/types.ts';
 
 const json = <T>(path: string) => JSON.parse(fixture(path)) as T;
@@ -1369,5 +1369,130 @@ describe('TheSportsDB 已经踢完的轮次缓存更久', () => {
     expect(again).toMatchObject({ body: 'v1', fromCache: true });
     expect(seen).toEqual(['v1']);
     expect(n).toBe(1);
+  });
+});
+
+describe('数据源全部失败时不发布空数据；部分失败有黄色注解', () => {
+  const meta = (
+    sources: Array<{ id: string; name: string; ok: boolean; count: number; note?: string }>,
+  ) => ({ matches: [], meta: { sources } }) as unknown as Parameters<typeof emptyDataReason>[0];
+
+  it('全部出错、0 场：给出原因（含数据源名和报错）', () => {
+    const reason = emptyDataReason(
+      meta([
+        {
+          id: 'openfootball',
+          name: 'openfootball',
+          ok: true,
+          count: 0,
+          note: '拉取失败：HTTP 503',
+        },
+        { id: 'thesportsdb', name: 'TheSportsDB', ok: false, count: 0, note: '失败：连不上' },
+        {
+          id: 'api-football',
+          name: 'API-Football',
+          ok: false,
+          count: 0,
+          note: '未设置 APIFOOTBALL_KEY，跳过',
+        },
+        { id: 'manual', name: '手工补充', ok: true, count: 0 },
+      ]),
+    );
+    expect(reason).toMatch(/openfootball、TheSportsDB 出错/);
+    expect(reason).toMatch(/HTTP 503/);
+    expect(reason).not.toMatch(/API-Football 出错/);
+  });
+
+  it('淡季各数据源正常返回 0 场：照常发布', () => {
+    expect(
+      emptyDataReason(
+        meta([
+          { id: 'openfootball', name: 'openfootball', ok: true, count: 0 },
+          {
+            id: 'thesportsdb',
+            name: 'TheSportsDB',
+            ok: true,
+            count: 0,
+            note: '使用免费测试 Key：只拉取当前前后几轮',
+          },
+          { id: 'manual', name: '手工补充', ok: true, count: 0 },
+        ]),
+      ),
+    ).toBeNull();
+  });
+
+  it('有比赛就不算空，哪怕有数据源失败', () => {
+    const out = meta([
+      { id: 'thesportsdb', name: 'TheSportsDB', ok: false, count: 0, note: '失败：x' },
+    ]);
+    (out as { matches: unknown[] }).matches = [{}];
+    expect(emptyDataReason(out)).toBeNull();
+  });
+
+  it('整个数据源抛异常时，说明以「失败」开头，不会和「跳过」混在一起', async () => {
+    const out = await buildData({
+      now: new Date('2026-10-16T12:00:00Z'),
+      fetcher: createFixtureFetcher([]),
+      env: {},
+      config: await loadConfig(),
+      adapters: [
+        {
+          id: 'boom',
+          name: '会炸的数据源',
+          priority: 1,
+          fetch: async () => {
+            throw new Error('ECONNRESET');
+          },
+        },
+      ],
+    });
+    expect(out.meta.sources[0]!.note).toBe('失败：ECONNRESET');
+    expect(sourceStatus(out.meta.sources[0]!)).toBe('off');
+    expect(emptyDataReason(out)).toMatch(/会炸的数据源 出错/);
+  });
+
+  it('注解：只给有问题的数据源，一行，换行和特殊字符转义，正常时没有注解', () => {
+    const ok = meta([{ id: 'openfootball', name: 'openfootball', ok: true, count: 12 }]);
+    expect(actionsAnnotations(ok)).toEqual([]);
+    const bad = meta([
+      { id: 'openfootball', name: 'openfootball', ok: true, count: 12 },
+      {
+        id: 'thesportsdb',
+        name: 'TheSportsDB',
+        ok: true,
+        count: 3,
+        note: '联赛 4480 失败：HTTP 429\n重试过',
+      },
+      {
+        id: 'api-football',
+        name: 'API-Football',
+        ok: false,
+        count: 0,
+        note: '未设置 APIFOOTBALL_KEY，跳过',
+      },
+    ]);
+    const lines = actionsAnnotations(bad);
+    expect(lines).toHaveLength(1);
+    // 标题里是全角冒号，不需要转义；半角的 : 和 , 才要
+    expect(lines[0]).toMatch(/^::warning title=1 个数据源有问题：TheSportsDB::/);
+    expect(lines[0]).toContain('TheSportsDB（3 场）：联赛 4480 失败：HTTP 429%0A重试过');
+    expect(lines[0]).not.toContain('API-Football');
+  });
+
+  it('TheSportsDB 用 HTTP 200 返回的报错算该联赛失败，不算「没有比赛」', async () => {
+    for (const body of [
+      '{"Message":"Invalid Premium API key"}',
+      '{"events":"Invalid League ID"}',
+    ]) {
+      const res = await createTheSportsDbAdapter().fetch(
+        ctx({
+          fetcher: createFixtureFetcher([['thesportsdb.com', () => body]]),
+          env: { THESPORTSDB_LEAGUES: '4482' },
+        }),
+      );
+      expect(res.fixtures).toEqual([]);
+      expect(res.notes.join('；')).toMatch(/联赛 4482.*失败：数据源返回报错：Invalid/);
+      expect(sourceStatus({ ok: true, count: 0, note: res.notes.join('；') })).toBe('warn');
+    }
   });
 });

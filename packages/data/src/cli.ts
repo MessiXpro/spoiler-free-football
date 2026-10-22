@@ -4,7 +4,7 @@ import { buildData, CONFIG_DIR, loadConfig, writeOutput } from './build.ts';
 import { envValue } from './env.ts';
 import { createHttpFetcher } from './http.ts';
 import { SAMPLE_DIR, SAMPLE_ENV, SAMPLE_NOW, sampleFetcher } from './sample.ts';
-import { sourceStatus, stepSummary } from './summary.ts';
+import { actionsAnnotations, emptyDataReason, sourceStatus, stepSummary } from './summary.ts';
 
 /**
  * 用法：
@@ -48,8 +48,25 @@ async function main() {
     pastDays: arg('past-days') ? Number(arg('past-days')) : undefined,
     futureDays: Number(arg('future-days') ?? 30),
   });
-  await writeOutput(outDir, output);
+  const summaryPath = envValue(process.env, 'GITHUB_STEP_SUMMARY');
+  const inActions = Boolean(envValue(process.env, 'GITHUB_ACTIONS')) && !sample;
   const scores = [...output.files.keys()].filter((k) => k.startsWith('scores/')).length;
+
+  // 数据源全出错、一场都没拿到：不写输出、让这一步失败，部署就不会把空数据顶掉网页上原有的数据
+  const empty = emptyDataReason(output);
+  if (empty) {
+    console.error(`\n${empty}`);
+    if (inActions)
+      console.log(`::error title=数据源全部失败，这次不发布::${empty.replace(/\n/g, ' ')}`);
+    if (summaryPath && !sample) {
+      await appendFile(
+        summaryPath,
+        `## ❌ 数据源全部失败，这次不发布\n\n${empty}\n\n${stepSummary(output, scores)}`,
+      );
+    }
+    process.exit(1);
+  }
+  await writeOutput(outDir, output);
   console.log(`\n写入 ${outDir}`);
   console.log(`比赛 ${output.matches.length} 场，比分文件 ${scores} 个`);
   for (const s of output.meta.sources) {
@@ -69,9 +86,10 @@ async function main() {
     console.warn(`\n可能重复的比赛 ${possibleDuplicates.length} 组：`);
     for (const d of possibleDuplicates) console.warn(`  ! [${d.competition}] ${d.a} ／ ${d.b}`);
   }
-  // GitHub Actions：在运行页面上显示一份中文小结（只有场数和球队名，没有比分）
-  const summaryPath = envValue(process.env, 'GITHUB_STEP_SUMMARY');
+  // GitHub Actions：在运行页面上显示一份中文小结（只有场数和球队名，没有比分）；
+  // 有数据源出问题时再加一条黄色注解，不用翻到小结最下面才看到
   if (summaryPath && !sample) await appendFile(summaryPath, stepSummary(output, scores));
+  if (inActions) for (const line of actionsAnnotations(output)) console.log(line);
 }
 
 main().catch((err) => {

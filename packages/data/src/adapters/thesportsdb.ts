@@ -195,12 +195,23 @@ type EventsResponse = { events?: TsdbEvent[] | string | null };
 
 const eventsOf = (r: EventsResponse): TsdbEvent[] => (Array.isArray(r.events) ? r.events : []);
 
-/** 正常响应：events 是数组或 null；{"Message": "..."}、events 是字符串的都是报错，不缓存 */
+/**
+ * 数据源用 HTTP 200 返回的报错原话：{"Message": "..."}（Key 无效、超额）或 events 是字符串（联赛 ID 不对）。
+ * 正常响应（events 是数组或 null）返回 null
+ */
+export function theSportsDbErrorOf(j: unknown): string | null {
+  if (!j || typeof j !== 'object') return '返回内容不是 JSON 对象';
+  const r = j as Record<string, unknown>;
+  if ('Message' in r) return String(r.Message);
+  if (typeof r.events === 'string') return r.events;
+  if (r.events != null && !Array.isArray(r.events)) return 'events 字段格式不对';
+  return null;
+}
+
+/** 正常响应才缓存；报错的不缓存，修好 Key 后下一次运行就能拿到数据 */
 function isEventsBody(body: string): boolean {
   try {
-    const j = JSON.parse(body) as Record<string, unknown> | null;
-    if (!j || typeof j !== 'object' || 'Message' in j) return false;
-    return j.events == null || Array.isArray(j.events);
+    return theSportsDbErrorOf(JSON.parse(body)) === null;
   } catch {
     return false;
   }
@@ -265,6 +276,12 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
           ttlMs: path.startsWith('eventsround') ? settledRoundTtl : RECENT_TTL_MS,
           cacheable: isEventsBody,
         });
+      // HTTP 200 的报错（Key 无效、超额、联赛 ID 不对）不能当成「这轮没有比赛」，要算这个联赛失败
+      const checked = (res: EventsResponse): EventsResponse => {
+        const err = theSportsDbErrorOf(res);
+        if (err) throw new Error(`数据源返回报错：${err}`);
+        return res;
+      };
 
       const now = ctx.clock ?? Date.now;
       const overBudget = () => ctx.deadline !== undefined && now() > ctx.deadline;
@@ -278,11 +295,14 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
         const before = fixtures.size;
         let requests = 2;
         try {
-          const [next, past] = await Promise.all([
-            get(`eventsnextleague.php?id=${id}`),
-            get(`eventspastleague.php?id=${id}`),
-          ]);
-          const seed = [...eventsOf(next), ...eventsOf(past)];
+          // 两个请求都等完再检查报错，不让一个还在排队的请求白白发出去
+          const [next, past] = (
+            await Promise.all([
+              get(`eventsnextleague.php?id=${id}`),
+              get(`eventspastleague.php?id=${id}`),
+            ])
+          ).map(checked);
+          const seed = [...eventsOf(next!), ...eventsOf(past!)];
           add(seed);
           const seasons = [
             ...new Set(seed.map((e) => e.strSeason).filter((s): s is string => Boolean(s))),
@@ -290,7 +310,11 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
           if (!seasons.length) continue;
           if (premium) {
             for (const s of seasons)
-              add(eventsOf(await get(`eventsseason.php?id=${id}&s=${encodeURIComponent(s)}`)));
+              add(
+                eventsOf(
+                  checked(await get(`eventsseason.php?id=${id}&s=${encodeURIComponent(s)}`)),
+                ),
+              );
             continue;
           }
           // 每场"最近一场/下一场"只拉它自己赛季的前后几轮（不把每个赛季的轮次都拉一遍）；
@@ -317,7 +341,9 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
               if (overBudget()) break;
               requests++;
               add(
-                eventsOf(await get(`eventsround.php?id=${id}&r=${r}&s=${encodeURIComponent(s)}`)),
+                eventsOf(
+                  checked(await get(`eventsround.php?id=${id}&r=${r}&s=${encodeURIComponent(s)}`)),
+                ),
               );
             }
           }

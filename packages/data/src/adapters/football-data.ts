@@ -179,10 +179,14 @@ export function createFootballDataAdapter(): FixtureAdapter {
       );
       const fixtures: RawFixture[] = [];
       const notes: string[] = [];
-      // 每次最多 10 天；dateTo 不包含
-      for (let t = ctx.windowStart.getTime(); t < ctx.windowEnd.getTime(); t += 10 * DAY_MS) {
+      // 每次最多 10 天；dateTo 不包含。
+      // 分段起点对齐到固定的 10 天网格：缓存按 URL 存，起点跟着当天滚动的话每天的 URL 都不一样，
+      // http.ts 里「5xx/网络错误时用旧缓存」和 ETag 304 就永远用不上。多拉的几天在 build.ts 里按时间窗过滤掉
+      const SEGMENT_MS = 10 * DAY_MS;
+      const start = Math.floor(ctx.windowStart.getTime() / SEGMENT_MS) * SEGMENT_MS;
+      for (let t = start; t < ctx.windowEnd.getTime(); t += SEGMENT_MS) {
         const from = isoDate(new Date(t));
-        const to = isoDate(new Date(Math.min(t + 10 * DAY_MS, ctx.windowEnd.getTime() + DAY_MS)));
+        const to = isoDate(new Date(Math.min(t + SEGMENT_MS, ctx.windowEnd.getTime() + DAY_MS)));
         const url = `${BASE}/matches?competitions=${codes.join(',')}&dateFrom=${from}&dateTo=${to}`;
         try {
           const data = await ctx.fetcher.getJson<{

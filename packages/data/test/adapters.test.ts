@@ -167,7 +167,7 @@ describe('football-data adapter（真实响应样本）', () => {
     expect(f).toBeNull();
   });
 
-  it('按 10 天一段请求、带 Token 头；没有 Token 时不可用', async () => {
+  it('按固定的 10 天网格分段请求（起点不随当天滚动，缓存才用得上）；没有 Token 时不可用', async () => {
     const adapter = createFootballDataAdapter();
     expect(adapter.unavailableReason?.({})).toMatch(/FOOTBALL_DATA_TOKEN/);
     const urls: string[] = [];
@@ -183,9 +183,24 @@ describe('football-data adapter（真实响应样本）', () => {
         windowEnd: new Date('2026-10-25T00:00:00Z'),
       }),
     );
-    expect(urls).toHaveLength(3);
+    // 2026-10-01 所在的网格从 09-24 开始：09-24、10-04、10-14、10-24（最后一段到 windowEnd 后一天）
+    expect(urls).toHaveLength(4);
     expect(urls[0]).toContain('competitions=PL,PD,CL,EC,WC');
-    expect(urls[0]).toContain('dateFrom=2026-10-01&dateTo=2026-10-11');
+    expect(urls[0]).toContain('dateFrom=2026-09-24&dateTo=2026-10-04');
+    expect(urls[3]).toContain('dateFrom=2026-10-24&dateTo=2026-10-26');
+    // 两天后再跑：起点一样，前几段的地址不变，断网/限流时才有旧缓存可用
+    const later: string[] = [];
+    await adapter.fetch(
+      ctx({
+        fetcher: createFixtureFetcher([['football-data.org', () => '{"matches":[]}']], (u) =>
+          later.push(u),
+        ),
+        env: { FOOTBALL_DATA_TOKEN: 'x' },
+        windowStart: new Date('2026-10-03T00:00:00Z'),
+        windowEnd: new Date('2026-10-27T00:00:00Z'),
+      }),
+    );
+    expect(later.slice(0, 3)).toEqual(urls.slice(0, 3));
   });
 });
 
