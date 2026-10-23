@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test as base, type Page } from '@playwright/test';
+import { scoreFileName } from '../../packages/core/src/index.ts';
 import { SAMPLE_NOW } from '../helpers/spoilers.ts';
 
 export const DIST_DATA = join(import.meta.dirname, '..', '..', 'apps', 'web', 'dist', 'data');
@@ -39,5 +40,6 @@ export const MATCH_IDS = {
   united: 'epl-2026-27-fulham-man-utd',
 };
 
+/** 按比赛定位卡片：锁定的卡片不带 data-match-id（编号里有队名），统一用哈希的 data-match-key */
 export const card = (page: Page, id: string) =>
-  page.locator(`[data-testid=match-card][data-match-id="${id}"]`);
+  page.locator(`[data-testid=match-card][data-match-key="${scoreFileName(id)}"]`);

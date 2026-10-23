@@ -35,8 +35,15 @@ jobs:
           pnpm data:sample
           pnpm build
 
+      # 浏览器下载偶尔卡住不动（曾经把整个 job 拖到 30 分钟超时）：每次最多等 5 分钟，失败重试一次
       - name: 安装 Playwright 浏览器
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 12
+        run: |
+          for i in 1 2; do
+            timeout 300 pnpm exec playwright install --with-deps chromium && exit 0
+            echo "::warning::Playwright 浏览器下载失败或超时，第 $i 次，重试"
+          done
+          exit 1
       - name: 端到端测试（网页三种视口 + 插件 + 用户脚本）
         run: pnpm e2e
 

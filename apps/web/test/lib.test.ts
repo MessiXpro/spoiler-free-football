@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { href, parseHash } from '../src/lib/router.ts';
 import { describeDataError } from '../src/lib/data.ts';
+import { notifyOpenMatch } from '../src/lib/bridge.ts';
 import { detectDevice } from '../src/views/SettingsView.tsx';
 import { bilibiliEmbedUrl } from '../src/components/Embed.tsx';
 
@@ -62,5 +63,29 @@ describe('安装说明按设备排序', () => {
     expect(detectDevice('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari', false)).toBe(
       'desktop',
     );
+  });
+});
+
+describe('跳转平台时告诉插件/脚本的比赛信息', () => {
+  it('次回合、首回合没看时带上 hideExtras，插件/脚本据此不显示加时和点球', () => {
+    const spy = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+    const match = {
+      id: 'ucl-2026-27-quarter-final-real-madrid-arsenal',
+      competition: 'ucl',
+      season: '2026-27',
+      stage: 'quarter-final',
+      leg: 2,
+      kickoff: '2026-10-15T19:00:00Z',
+      home: { id: 'real-madrid', name: 'Real Madrid' },
+      away: { id: 'arsenal', name: 'Arsenal' },
+      status: 'scheduled',
+      links: [],
+      sources: [],
+    } as const;
+    notifyOpenMatch(match as never, 'https://www.miguvideo.com/x', false, true);
+    notifyOpenMatch(match as never, 'https://www.miguvideo.com/x');
+    const sent = spy.mock.calls.map((c) => (c[0] as { match: { hideExtras: boolean } }).match);
+    expect(sent.map((m) => m.hideExtras)).toEqual([true, false]);
+    spy.mockRestore();
   });
 });

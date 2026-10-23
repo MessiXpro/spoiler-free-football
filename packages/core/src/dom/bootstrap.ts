@@ -47,6 +47,8 @@ export interface CurrentMatch {
   host: string;
   at: number;
   liveMode?: boolean;
+  /** 两回合的次回合、首回合还没看：显示比分时不带加时/点球/总比分（能倒推出首回合比分） */
+  hideExtras?: boolean;
 }
 
 export function defaultShieldSettings(dataBase: string): ShieldSettings {

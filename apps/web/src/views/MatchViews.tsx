@@ -144,7 +144,9 @@ export function UnwatchedView({ data, state, now }: ViewProps) {
     <section className="view" data-testid="view-unwatched">
       <div className="view-head">
         <h2>还没看完</h2>
-        <p className="muted">最近三周已结束、还没点「显示比分」的订阅比赛</p>
+        <p className="muted">
+          最近三周已结束、还没点「显示比分」的订阅比赛。上一轮没看完时，下一轮的淘汰赛会以「对阵待揭晓」出现。
+        </p>
       </div>
       {list.length ? (
         <MatchGrid matches={list} all={data.matches} state={state} now={now} />
@@ -193,7 +195,7 @@ export function MatchDetailView({ data, state, now, id }: ViewProps & { id: stri
     return (
       <section className="view">
         <h2>找不到这场比赛</h2>
-        <p className="muted">数据只保留最近三周和未来一个月的比赛。</p>
+        <p className="muted">数据只保留最近 60 天和未来一个月的比赛。</p>
         <a className="btn" href={href({ name: 'today', offset: 0 })}>
           回到昨夜今晨
         </a>

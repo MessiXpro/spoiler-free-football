@@ -194,6 +194,11 @@ test.describe('用户脚本（.user.js，document-start 注入）', () => {
     await expect
       .poll(() => (store.get('settings') as { currentMatch?: { id: string } })?.currentMatch?.id)
       .toBe('epl-2026-27-man-city-sunderland');
+    // 联赛不是两回合：比分照常带加时/点球信息
+    expect(
+      (store.get('settings') as { currentMatch?: { hideExtras?: boolean } }).currentMatch
+        ?.hideExtras,
+    ).toBe(false);
 
     await platform.getByTestId('sff-fab').click();
     await expect(platform.getByTestId('sff-match')).toContainText('曼城 vs 桑德兰');

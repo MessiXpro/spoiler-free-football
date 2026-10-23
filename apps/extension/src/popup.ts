@@ -130,12 +130,16 @@ async function main() {
       await saveSettings({ watched: { ...s.watched, [match.id]: Math.floor(Date.now() / 1000) } });
       try {
         const score = await fetchScoreFrom(s.dataBase, match.id);
-        out.textContent = score
-          ? `${match.home.name} ${score.home} - ${score.away} ${match.away.name}${
-              Array.isArray(score.penalties)
-                ? `（点球 ${score.penalties[0]} - ${score.penalties[1]}）`
+        // 次回合、首回合还没看：不带加时/点球（能倒推出首回合比分）
+        const extras = match.hideExtras
+          ? '（首回合还没看，加时和点球情况先不显示）'
+          : `${
+              Array.isArray(score?.penalties)
+                ? `（点球 ${score!.penalties[0]} - ${score!.penalties[1]}）`
                 : ''
-            }${score.extraTime ? '（经过加时）' : ''}`
+            }${score?.extraTime ? '（经过加时）' : ''}`;
+        out.textContent = score
+          ? `${match.home.name} ${score.home} - ${score.away} ${match.away.name}${extras}`
           : '数据源还没有这场的比分，已记为已看';
       } catch (err) {
         out.textContent = `比分加载失败：${(err as Error).message}（已记为已看，可以再试一次）`;

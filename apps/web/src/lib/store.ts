@@ -93,7 +93,7 @@ export function removedWatched(): Record<string, number> {
 function rememberRemoved(ids: string[]) {
   if (!ids.length) return;
   const t = Math.floor(Date.now() / 1000);
-  // 只留最近 90 天的（数据本身只保留最近三周和未来一个月的比赛）
+  // 只留最近 90 天的（数据本身只保留最近 60 天和未来一个月的比赛）
   const keepSince = t - 90 * 24 * 3600;
   const next = Object.fromEntries(
     Object.entries(removedWatched()).filter(([, at]) => at >= keepSince),

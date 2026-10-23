@@ -38,6 +38,7 @@ interface WebMessage {
     kickoff: string;
     home: { id: string; name: string };
     away: { id: string; name: string };
+    hideExtras?: boolean;
   };
 }
 
@@ -75,6 +76,7 @@ window.addEventListener('message', async (e: MessageEvent) => {
         host,
         at: Date.now(),
         liveMode: Boolean(data.liveMode),
+        hideExtras: Boolean(data.match.hideExtras),
       },
     });
   }

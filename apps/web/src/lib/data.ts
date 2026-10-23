@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   NOT_SCORE_DATA,
   scorePath,
@@ -114,15 +114,18 @@ export function useAppData(): DataState & { reload: () => void } {
       alive = false;
     };
   }, [attempt]);
+  // 事件处理器里读最新状态用 ref（不在 setState 的更新函数里调用别的 setter）
+  const latest = useRef(state);
+  latest.current = state;
   useEffect(() => {
     const maybeRefresh = () => {
       if (document.visibilityState !== 'visible') return;
-      setState((s) => {
-        if (s.status === 'ready' && Date.now() - s.loadedAt > REFRESH_AFTER_MS) reload();
-        return s;
-      });
+      const s = latest.current;
+      if (s.status === 'ready' && Date.now() - s.loadedAt > REFRESH_AFTER_MS) reload();
     };
-    const onOnline = () => setState((s) => (s.status === 'error' ? (reload(), s) : s));
+    const onOnline = () => {
+      if (latest.current.status === 'error') reload();
+    };
     document.addEventListener('visibilitychange', maybeRefresh);
     window.addEventListener('online', onOnline);
     return () => {

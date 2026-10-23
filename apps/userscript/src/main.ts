@@ -109,6 +109,7 @@ function runBridge() {
             host,
             at: Date.now(),
             liveMode: Boolean(d.liveMode),
+            hideExtras: Boolean(d.match.hideExtras),
           },
         });
       } catch {
@@ -244,6 +245,10 @@ async function runShield() {
           if (status === 200 && json === null) return `${NOT_SCORE_DATA}。已记为已看`;
           if (status !== 200 || !score || score.id !== m.id || typeof score.home !== 'number') {
             return '数据源还没有这场的比分，已记为已看';
+          }
+          // 次回合、首回合还没看：不带加时/点球（能倒推出首回合比分）
+          if (m.hideExtras) {
+            return `${m.home.name} ${score.home} - ${score.away} ${m.away.name}（首回合还没看，加时和点球情况先不显示）`;
           }
           return `${m.home.name} ${score.home} - ${score.away} ${m.away.name}${
             score.penalties ? `（点球 ${score.penalties[0]} - ${score.penalties[1]}）` : ''

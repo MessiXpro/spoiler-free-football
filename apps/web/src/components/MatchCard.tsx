@@ -11,6 +11,7 @@ import {
   lockBlockers,
   neutralTitle,
   postponedClearKey,
+  scoreFileName,
   stageLabel,
   teamName,
   type PublicMatch,
@@ -40,6 +41,8 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
   const cleared = isPostponedCleared(state, match);
   const locked = isFixtureLocked(match, all, state, now);
   const blockers = locked ? lockBlockers(match, all, state, now) : [];
+  // 次回合、首回合还没看：加时/点球/总比分都能倒推出首回合比分（网页和插件/脚本都不显示）
+  const hideExtras = !canShowAggregate(match, all, state);
   const [open, setOpen] = useState(expanded);
   const [askUnlock, setAskUnlock] = useState(false);
   const [askMark, setAskMark] = useState(false);
@@ -62,7 +65,9 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
     <article
       className={`match-card status-${status}${watched || cleared ? ' is-watched' : ''}`}
       data-testid="match-card"
-      data-match-id={match.id}
+      // 比赛编号由队名拼成：锁定时不放进页面（「检查元素」也看不出是哪两队），定位用哈希的 data-match-key
+      data-match-id={locked ? undefined : match.id}
+      data-match-key={scoreFileName(match.id)}
       aria-label={neutralTitle(match, { lockedTeams: locked })}
     >
       <header className="match-head">
@@ -178,13 +183,13 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
               {replays.length > 0 && (
                 <section>
                   <h4>全场录像</h4>
-                  <LinkList match={match} links={replays} />
+                  <LinkList match={match} links={replays} hideExtras={hideExtras} />
                 </section>
               )}
               {highlights.length > 0 && (
                 <section>
                   <h4>集锦</h4>
-                  <LinkList match={match} links={highlights} />
+                  <LinkList match={match} links={highlights} hideExtras={hideExtras} />
                 </section>
               )}
               {!replays.length && !highlights.length && <p className="muted">暂无观看入口</p>}
@@ -192,11 +197,7 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
           )}
 
           {status === 'finished' && (
-            <RevealScore
-              match={match}
-              watched={watched}
-              showAggregate={canShowAggregate(match, all, state)}
-            />
+            <RevealScore match={match} watched={watched} showAggregate={!hideExtras} />
           )}
           {status === 'live' && <p className="muted">比赛进行中，结束后可以在这里显示比分。</p>}
           {/*
@@ -281,7 +282,13 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
                 </button>
               )}
               {replays.map((l, i) => (
-                <ExternalLink key={`${l.url}-${i}`} match={match} link={l} liveMode />
+                <ExternalLink
+                  key={`${l.url}-${i}`}
+                  match={match}
+                  link={l}
+                  liveMode
+                  hideExtras={hideExtras}
+                />
               ))}
               {!replays.length && !embeddableReplay && (
                 <p className="muted">这场暂无全场录像入口。</p>

@@ -1,4 +1,4 @@
-import { getCompetition, type Stage } from '@sff/core';
+import { competitionName, getCompetition, type Stage } from '@sff/core';
 import type { AdapterContext, AdapterResult, FixtureAdapter, RawFixture } from '../types.ts';
 import { isNationalCompetition, pair, stageFromApiFootball, teamRef } from '../normalize.ts';
 import { HttpError } from '../http.ts';
@@ -175,7 +175,7 @@ export function createOpenfootballAdapter(
             json = await load(src.fallback.url);
             used = { ...src, season: src.fallback.season, url: src.fallback.url };
             notes.push(
-              `${src.competition}：openfootball 还没发布 ${src.season} 赛季文件，暂用上赛季（${src.fallback.season}）；新赛季联赛赛程这期间由其他数据源提供`,
+              `${competitionName(src.competition)}：openfootball 还没发布 ${src.season} 赛季文件，暂用上赛季（${src.fallback.season}）；新赛季联赛赛程这期间由其他数据源提供`,
             );
           }
           const parsed = parseOpenfootball(json, used).filter((f) => {
@@ -185,7 +185,7 @@ export function createOpenfootballAdapter(
           fixtures.push(...parsed);
           ctx.log(`openfootball ${used.competition}: ${parsed.length} 场`);
         } catch (err) {
-          notes.push(`${src.competition} 拉取失败：${(err as Error).message}`);
+          notes.push(`${competitionName(src.competition)} 拉取失败：${(err as Error).message}`);
         }
       }
       return { fixtures, notes };

@@ -91,7 +91,7 @@ async function syncGlobalScript() {
   }
 }
 
-/** 规则每 12 小时检查一次。同名 alarm 重复创建会覆盖，所以安装、启动、后台脚本每次唤醒时都确保它在 */
+/** 规则每 12 小时检查一次。同名 alarm 重复创建会覆盖，所以安装时和浏览器启动时都确保它在 */
 const ensureAlarm = () => void ext.alarms.create(ALARM, { periodInMinutes: 12 * 60 });
 
 ext.runtime.onInstalled.addListener(() => {

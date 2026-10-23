@@ -90,8 +90,11 @@ interface Rule {
   contextual?: boolean;
   /** 只取某个捕获组作为遮挡范围 */
   group?: number;
-  /** 捕获组的位置按前面各组的长度累加（group 前面的组必须都紧挨着），不用 indexOf 找（队名里可能也含这个字） */
-  groupByLength?: boolean;
+  /**
+   * 命中后再看前后各一小段文字（例如「两边都是队名」）。先用便宜的正则找到候选、再做这一步，
+   * 比把几百个队名直接写进正则（每个位置都要试一遍）快得多
+   */
+  around?: (norm: string, start: number, end: number) => boolean;
   digitsOnly?: boolean;
 }
 
@@ -142,7 +145,16 @@ function validateZhScorer(m: RegExpExecArray, norm: string): boolean {
  */
 function validateZhGoals(m: RegExpExecArray): boolean {
   const name = m[1] ?? '';
-  if (/[场轮赛队共计进打入以到第超甲乙杯联周季年月日有的了把个是在]$/.test(name)) return false;
+  // 末字是这些的不是人名：「本场两球」「至少两球」「让两球」「会进两球」「开出两球」「这一球」
+  if (
+    /[场轮赛队共计进打入以到第超甲乙杯联周季年月日有的了把个是在让受少差再会要需还出能可约这那每哪任多]$/.test(
+      name,
+    )
+  ) {
+    return false;
+  }
+  // 赛前盘口、预测、讨论
+  if (/[盘赔猜估测论坛]/.test(name)) return false;
   return !/^(?:全场|本场|上半场|下半场|两队|双方|合计|共计|一共|总共|全部|最近|本轮|上轮|这场|那场|本赛季|本季|赛季|生涯)/.test(
     name,
   );
@@ -153,6 +165,11 @@ const LATIN_UNIT_AFTER = /^(?:GB|MB|KB|TB|HZ|FPS|PM|AM|CM|MM|KM|KG|MP|HP|PS)(?![
 
 type Cache = {
   rules: Rule[];
+  /** 「队名 + 空白」结尾 / 「空白 + 队名」开头：给夹在两队之间的结果字用 */
+  zhTeamBefore: RegExp;
+  zhTeamAfter: RegExp;
+  enTeamBefore: RegExp;
+  enTeamAfter: RegExp;
   contextRe: RegExp;
   safeRe: RegExp;
   /** 带边界的英文保护写法（抽签仪式的 draw），单独匹配，免得和字面量保护词抢同一位置 */
@@ -265,10 +282,34 @@ const ZH_MARGIN_SUFFIX = [
   '赢',
 ];
 
+/** 两个队名夹着结果字时，检查前后各多远（队名最长十几个字） */
+const PAIR_WINDOW = 40;
+
+function pairAnchors() {
+  // 中文昵称（维拉、枪手、红军）也算：两边都是队名、中间只有一个字时不会误伤
+  const zh = alt(teamNames(true));
+  const en = alt(teamNames());
+  return {
+    zhTeamBefore: new RegExp(`(?:${zh})\\s*$`),
+    zhTeamAfter: new RegExp(`^\\s*(?:${zh})`),
+    enTeamBefore: new RegExp(`(?<![A-Za-z])(?:${en})\\s+$`),
+    enTeamAfter: new RegExp(`^\\s+(?:${en})(?![A-Za-z])`),
+  };
+}
+
+const pairAround =
+  (lang: 'zh' | 'en') =>
+  (norm: string, start: number, end: number): boolean => {
+    const c = getCache();
+    const before = norm.slice(Math.max(0, start - PAIR_WINDOW), start);
+    const after = norm.slice(end, end + PAIR_WINDOW);
+    return lang === 'zh'
+      ? c.zhTeamBefore.test(before) && c.zhTeamAfter.test(after)
+      : c.enTeamBefore.test(before) && c.enTeamAfter.test(after);
+  };
+
 function buildRules(): Rule[] {
   const teams = alt(teamNames());
-  // 中文昵称（维拉、枪手、红军）也算：两边都是队名、中间只有一个字时不会误伤
-  const zhPairTeams = alt(teamNames(true));
   const rules: Rule[] = [
     // (4)1-1(3)：点球写在两侧括号里
     { re: /\(\s*\d{1,2}\s*\)\s*\d{1,2}\s*[-:]\s*\d{1,2}\s*\(\s*\d{1,2}\s*\)/g, kind: 'score' },
@@ -311,41 +352,42 @@ function buildRules(): Rule[] {
       kind: 'score',
       digitsOnly: true,
     },
-    // 两个队名夹着结果字/词："阿森纳胜切尔西""曼城负利物浦"；只遮中间的字，对阵保留。
-    // 正向匹配队名再取第 2 组（不用 lookbehind：几百个队名的 lookbehind 在每个位置都要回头试一遍，整页识别慢十倍）
+    // 两个队名夹着结果字/词："阿森纳胜切尔西""曼城负利物浦""阿森纳主场胜切尔西"；只遮中间的字，对阵保留。
+    // 先找结果字，再看前后是不是队名（见 pairAround）；需要足球语境（"法国胜德国"也可能是历史文章）
     {
-      re: new RegExp(
-        `((?:${zhPairTeams})\\s*)(${alt(ZH_PAIR_VERBS)})(?=\\s*(?:${zhPairTeams}))`,
-        'g',
-      ),
+      re: new RegExp(`(?:在?(?:主场|客场))?(?:${alt(ZH_PAIR_VERBS)})`, 'g'),
       kind: 'result',
-      group: 2,
-      groupByLength: true,
       contextual: true,
+      around: pairAround('zh'),
     },
     // "Arsenal see off Chelsea" "Villa hold Liverpool"：同样只遮动词（区分大小写，队名按原样写才算）
     {
-      re: new RegExp(
-        `((?<![A-Za-z])(?:${teams})\\s+)(${alt(EN_PAIR_VERBS)})(?=\\s+(?:${teams})(?![A-Za-z]))`,
-        'g',
-      ),
+      re: new RegExp(`(?<![A-Za-z])(?:${alt(EN_PAIR_VERBS)})(?![A-Za-z])`, 'g'),
       kind: 'result',
-      group: 2,
-      groupByLength: true,
       contextual: true,
+      around: pairAround('en'),
     },
     // 进球数：3球大胜、两球领先、7球大战
     {
       re: new RegExp(`${NUM_ANY}\\s*(?:个|粒)?\\s*球\\s*(?:${alt(ZH_MARGIN_SUFFIX)})`, 'g'),
       kind: 'score',
     },
-    // 净胜两球、打进2球、丢了3球、进2球
+    // 净胜两球、打进2球、丢了3球
     {
       re: new RegExp(
-        `(?:净胜|领先|落后|狂灌|狂轰|攻入|打进|打入|攻进|轰入|射入|灌进|连进|连入|连扳|扳回|丢了?|失|狂进|独进|连丢|进了|再进|又进|共进|合计|轰进|射进|踢进|罚进|进|入)\\s*${NUM_ANY}\\s*(?:个|粒)?\\s*(?:球|粒进球)`,
+        `(?:净胜|领先|落后|狂灌|狂轰|攻入|打进|打入|攻进|轰入|射入|灌进|连进|连入|连扳|扳回|丢了?|失|狂进|独进|连丢|进了|再进|又进|共进|合计|轰进|射进|踢进|罚进)\\s*${NUM_ANY}\\s*(?:个|粒)?\\s*(?:球|粒进球)`,
         'g',
       ),
       kind: 'score',
+    },
+    // 单字的「进2球」「入两球」：别的场合也可能出现，需要足球语境
+    {
+      re: new RegExp(
+        `(?:进|入)\\s*${NUM_ANY}\\s*(?:个|粒)?\\s*球(?![员迷队衣鞋场馆台星类技赛拍])`,
+        'g',
+      ),
+      kind: 'score',
+      contextual: true,
     },
     // 全场5球、两队合计4球、一球之差（"一共三球"也可能是毛线球，需要足球语境）
     {
@@ -359,7 +401,7 @@ function buildRules(): Rule[] {
     // 人名 + 进球数："哈兰德两球""凯恩进2球"（需要足球语境；"买了两球"不算）
     {
       re: new RegExp(
-        `((?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,4}?))\\s*(?:进|入|独进|打进|攻入)?\\s*(?:两|三|四|五|\\d)\\s*球(?![员迷队衣鞋场馆台星类技星赛])`,
+        `((?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,4}?))\\s*(?:进|入|独进|打进|攻入)?\\s*(?:一|两|三|四|五|六|七|八|九|\\d)\\s*球(?:[一两三四五\\d]助)?(?![员迷队衣鞋场馆台星类技赛拍])`,
         'g',
       ),
       kind: 'scorer',
@@ -444,6 +486,7 @@ function getCache(): Cache {
       safeRe: safePattern(),
       safePatternRe: new RegExp(EN_SAFE_PATTERNS.join('|'), 'gi'),
       teamStartRe: teamStartPattern(),
+      ...pairAnchors(),
     };
   }
   return cached;
@@ -513,14 +556,12 @@ export function findSpoilers(text: string, options: DetectOptions = {}): Spoiler
       let end = m.index + m[0].length;
       if (rule.group !== undefined && m[rule.group]) {
         const inner = m[rule.group] as string;
-        if (rule.groupByLength) {
-          let offset = 0;
-          for (let g = 1; g < rule.group; g++) offset += (m[g] ?? '').length;
-          start = m.index + offset;
-        } else {
-          start = m.index + m[0].indexOf(inner);
-        }
+        start = m.index + m[0].indexOf(inner);
         end = start + inner.length;
+      }
+      if (rule.around && !rule.around(norm, start, end)) {
+        rule.re.lastIndex = m.index + 1;
+        continue;
       }
       // 完全落在球队名/赛事名/保护词里的命中是误报（"欧洲冠军联赛"里的"冠军"）
       if (safe.some(([s, e]) => start >= s && end <= e)) continue;

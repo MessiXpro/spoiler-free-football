@@ -1,6 +1,6 @@
 import { act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { Program, PublicMatch } from '@sff/core';
+import { scoreFileName, type Program, type PublicMatch } from '@sff/core';
 import type { AppData } from '../src/lib/data.ts';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -48,7 +48,7 @@ export const qa = (root: ParentNode, testId: string) => [
   ...root.querySelectorAll(`[data-testid="${testId}"]`),
 ];
 export const cardOf = (root: ParentNode, id: string) =>
-  root.querySelector(`[data-testid=match-card][data-match-id="${id}"]`);
+  root.querySelector(`[data-testid=match-card][data-match-key="${scoreFileName(id)}"]`);
 export const buttonByText = (root: ParentNode, text: string) =>
   [...root.querySelectorAll('button')].find((b) => b.textContent?.trim() === text);
 

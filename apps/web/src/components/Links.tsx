@@ -15,14 +15,17 @@ export function ExternalLink({
   match,
   link,
   liveMode = false,
+  hideExtras = false,
 }: {
   match: PublicMatch;
   link: MatchLink;
   liveMode?: boolean;
+  /** 插件/脚本显示比分时不带加时/点球/总比分（次回合、首回合没看） */
+  hideExtras?: boolean;
 }) {
   const [asking, setAsking] = useState(false);
   const go = () => {
-    notifyOpenMatch(match, link.url, liveMode);
+    notifyOpenMatch(match, link.url, liveMode, hideExtras);
     window.open(link.url, '_blank', 'noopener');
   };
   return (
@@ -67,12 +70,20 @@ export function ExternalLink({
   );
 }
 
-export function LinkList({ match, links }: { match: PublicMatch; links: MatchLink[] }) {
+export function LinkList({
+  match,
+  links,
+  hideExtras = false,
+}: {
+  match: PublicMatch;
+  links: MatchLink[];
+  hideExtras?: boolean;
+}) {
   if (!links.length) return <p className="muted">暂无观看入口</p>;
   return (
     <div className="link-list">
       {links.map((l, i) => (
-        <ExternalLink key={`${l.url}-${i}`} match={match} link={l} />
+        <ExternalLink key={`${l.url}-${i}`} match={match} link={l} hideExtras={hideExtras} />
       ))}
     </div>
   );

@@ -72,8 +72,8 @@
 
 **方式 A：GitHub Pages（默认）**
 
-1. 公开仓库一般**不用手动开**：第 4 步第一次运行时，工作流会自动把 GitHub Pages 打开（来源设为 GitHub Actions）。如果运行页面上仍提示「网页还没上线」，再手动开：仓库 **Settings** → **Pages** → **Build and deployment** 里的 Source 选 **GitHub Actions**。
-2. 注意：**私有仓库开 Pages 需要 GitHub Pro / Team 等付费套餐**（自动开启也会失败）。如果 Pages 页面提示需要升级，有两个选择：
+1. 仓库 **Settings** → **Pages** → **Build and deployment** 里的 Source 选 **GitHub Actions**。（工作流没法替你开：开启 Pages 需要仓库管理权限，工作流自带的令牌没有。）
+2. 注意：**私有仓库开 Pages 需要 GitHub Pro / Team 等付费套餐**。如果 Pages 页面提示需要升级，有两个选择：
    - 把仓库改成公开（Settings → General → 最下面 Change visibility）。仓库里没有任何个人信息或密钥，数据也不含比分；或者
    - 用下面的方式 B。
 

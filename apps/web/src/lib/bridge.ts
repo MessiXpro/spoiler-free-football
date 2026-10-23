@@ -69,7 +69,12 @@ export function initBridge(): () => void {
 }
 
 /** 跳转到正版平台前告诉插件"要去看哪一场" */
-export function notifyOpenMatch(match: PublicMatch, url: string, liveMode = false) {
+export function notifyOpenMatch(
+  match: PublicMatch,
+  url: string,
+  liveMode = false,
+  hideExtras = false,
+) {
   post({
     type: 'open-match',
     url,
@@ -81,6 +86,7 @@ export function notifyOpenMatch(match: PublicMatch, url: string, liveMode = fals
       kickoff: match.kickoff,
       home: match.home,
       away: match.away,
+      hideExtras,
     },
   });
 }

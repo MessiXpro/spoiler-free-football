@@ -339,7 +339,11 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
           }
           for (const [s, rounds] of roundsBySeason) {
             for (const r of [...rounds].sort((a, b) => a - b)) {
-              if (overBudget()) break;
+              if (overBudget()) {
+                // 拉到一半超时：记下来（不然这项赛事看起来「正常但场次少」）
+                skipped.push(competitionName(THESPORTSDB_LEAGUES[id]!));
+                break;
+              }
               requests++;
               // 单独一轮出错（偶发的报错体或请求失败）只记一笔，其他轮次照常拉
               try {
@@ -367,7 +371,7 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
         }
       }
       if (skipped.length) {
-        notes.push(`超过用时上限，这次没拉取（失败）：${[...new Set(skipped)].join('、')}`);
+        notes.push(`超过用时上限，这次没拉取或没拉完（失败）：${[...new Set(skipped)].join('、')}`);
       }
       if (!premium) notes.push('使用免费测试 Key：只拉取当前前后几轮');
       ctx.log(`thesportsdb: ${fixtures.size} 场`);

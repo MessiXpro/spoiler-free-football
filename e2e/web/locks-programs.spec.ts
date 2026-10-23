@@ -59,6 +59,8 @@ test.describe('淘汰赛对阵锁定', () => {
     // 对阵本身不显示（对手「拜仁」不出现）；锁定卡列出的是没看完的上一轮（1/8决赛 PSV vs 阿森纳），
     // 这是用户自己订阅的那场、赛前就公开的对阵，不是剧透
     await expect(locked).not.toContainText('拜仁');
+    // 页面结构里也没有由队名拼成的比赛编号
+    await expect(locked).not.toHaveAttribute('data-match-id', /.*/);
     await expect(locked.getByTestId('lock-blockers')).toContainText('1/8决赛');
     await expect(locked.getByTestId('lock-blockers').locator('a')).toHaveAttribute(
       'href',

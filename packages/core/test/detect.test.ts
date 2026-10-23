@@ -718,7 +718,6 @@ describe('回归：常见赛果写法补充（审计发现的漏网）', () => {
       '曼联出线',
       '利物浦拿到三分',
       '阿森纳收获三分',
-      '凯恩进2球',
       'Arsenal see off Chelsea',
       'Aston Villa hold Liverpool',
       'Man City ease past Burnley',
@@ -733,6 +732,7 @@ describe('回归：常见赛果写法补充（审计发现的漏网）', () => {
   it('需要足球语境的说法（财经、电商、篮球页面上同样的词不遮）', () => {
     for (const text of track([
       '哈兰德两球',
+      '凯恩进2球',
       '狼队垫底',
       '双方平手',
       '萨卡失点',
@@ -789,5 +789,42 @@ describe('回归：常见赛果写法补充（审计发现的漏网）', () => {
     expect(findSpoilers('三分球命中率', FB)).toEqual([]);
     expect(findSpoilers('小组出线形势分析', FB)).toEqual([]);
     expect(findSpoilers('买了两球衣', FB)).toEqual([]);
+  });
+});
+
+describe('回归：二次审查发现的识别问题', () => {
+  it('主场/客场写法、一球一助、六球、多人进球都遮', () => {
+    for (const text of track([
+      '阿森纳主场胜切尔西',
+      '阿森纳客场胜切尔西',
+      '曼城客场平利物浦',
+      '萨卡一球一助',
+      '哈兰德六球',
+    ])) {
+      expectMasked(text, FB);
+    }
+    expect(redact('阿森纳主场胜切尔西', FB)).toBe(`阿森纳${M}${M}切尔西`);
+    expect(redact('凯恩两球萨卡一球', FB)).not.toMatch(/萨卡一球/);
+    // 「X进N球」整体遮住，名字不再漏出
+    expect(redact('凯恩进2球', FB)).toBe(`${M}${M}`);
+  });
+
+  it('赛前盘口、预测、条件不当成进球者', () => {
+    expect(redact('亚盘：曼城让两球', FB)).toBe('亚盘：曼城让两球');
+    expect(redact('本场比赛主让两球', FB)).toBe('本场比赛主让两球');
+    expect(redact('大小球盘口开出两球', FB)).toBe('大小球盘口开出两球');
+    // 只遮「出线」（足球语境下的结果词），「需要至少两球」保留
+    expect(redact('阿森纳需要至少两球才能出线', FB)).toBe(`阿森纳需要至少两球才能${M}${M}`);
+  });
+
+  it('性能：两队夹结果字的规则不能拖慢整页识别（以前写进 lookbehind 时慢十几倍）', () => {
+    const seed =
+      '昨晚的英超比赛中，阿森纳主场迎战切尔西，球迷们早早来到酋长球场。平台数据显示，今年的和平谈判取得进展，股市胜率提升，负债率下降。曼城和利物浦的比赛将在周末进行，热刺对阵维拉。';
+    const text = seed.repeat(Math.ceil(100_000 / seed.length));
+    findSpoilers('预热', FB);
+    const t = performance.now();
+    findSpoilers(text, FB);
+    // 本机约 0.15 秒；回归时超过 2 秒。留足 CI 机器的余量
+    expect(performance.now() - t).toBeLessThan(1500);
   });
 });

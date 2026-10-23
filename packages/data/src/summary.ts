@@ -70,10 +70,10 @@ export function stepSummary(output: BuildOutput, scores: number): string {
  */
 export function emptyDataReason(output: Pick<BuildOutput, 'matches' | 'meta'>): string | null {
   if (output.matches.length > 0) return null;
-  const failed = output.meta.sources.filter(
-    (s) => s.id !== 'manual' && (!s.ok || /失败/.test(s.note ?? '')) && !/跳过/.test(s.note ?? ''),
-  );
-  if (!failed.length) return null;
+  const used = output.meta.sources.filter((s) => s.id !== 'manual' && !/跳过/.test(s.note ?? ''));
+  const failed = used.filter((s) => !s.ok || /失败/.test(s.note ?? ''));
+  // 有数据源正常跑完、确实是 0 场（深度淡季）：照常发布。只有全部出错时才不发布
+  if (!failed.length || failed.length < used.length) return null;
   const detail = failed.map((s) => `${s.name}：${s.note ?? '出错'}`).join('；');
   return `${failed.map((s) => s.name).join('、')} 出错，一场比赛也没拿到，这次不发布（网页保留上一次的数据）。${detail}`;
 }

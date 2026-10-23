@@ -1421,6 +1421,23 @@ describe('数据源全部失败时不发布空数据；部分失败有黄色注�
     ).toBeNull();
   });
 
+  it('有数据源正常跑完、确实是 0 场（深度淡季），另一个出错：照常发布', () => {
+    expect(
+      emptyDataReason(
+        meta([
+          { id: 'openfootball', name: 'openfootball', ok: true, count: 0 },
+          {
+            id: 'thesportsdb',
+            name: 'TheSportsDB',
+            ok: true,
+            count: 0,
+            note: '欧冠（联赛 4480）失败：HTTP 429',
+          },
+        ]),
+      ),
+    ).toBeNull();
+  });
+
   it('有比赛就不算空，哪怕有数据源失败', () => {
     const out = meta([
       { id: 'thesportsdb', name: 'TheSportsDB', ok: false, count: 0, note: '失败：x' },
@@ -1537,5 +1554,34 @@ describe('TheSportsDB 单独一轮出错不影响其他轮次', () => {
       /英超 2026-2027 第 7 轮失败：数据源返回报错：Invalid round/,
     );
     expect(res.notes.filter((n) => /第 \d+ 轮失败/.test(n))).toHaveLength(1);
+  });
+});
+
+describe('所有数据源共用一个总用时上限', () => {
+  it('前面的数据源用掉的时间会从后面的上限里扣掉', async () => {
+    let now = 0;
+    const deadlines: number[] = [];
+    const slow = (id: string, spendMs: number) => ({
+      id,
+      name: id,
+      priority: 1,
+      fetch: async (c: { deadline?: number }) => {
+        deadlines.push(c.deadline ?? -1);
+        now += spendMs;
+        return { fixtures: [], notes: [] };
+      },
+    });
+    await buildData({
+      now: new Date('2026-10-16T12:00:00Z'),
+      fetcher: createFixtureFetcher([]),
+      env: {},
+      config: await loadConfig(),
+      clock: () => now,
+      adapterBudgetMs: 10 * 60_000,
+      totalBudgetMs: 15 * 60_000,
+      adapters: [slow('a', 9 * 60_000), slow('b', 0)],
+    });
+    // a：自己的 10 分钟上限；b：总共 15 分钟里只剩 6 分钟
+    expect(deadlines).toEqual([10 * 60_000, 15 * 60_000]);
   });
 });

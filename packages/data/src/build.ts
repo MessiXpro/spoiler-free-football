@@ -73,6 +73,11 @@ export interface BuildOptions {
   log?: (msg: string) => void;
   /** 每个数据源的用时上限，默认 10 分钟（TheSportsDB 免费 Key 跑完全部赛事约 8～9 分钟） */
   adapterBudgetMs?: number;
+  /**
+   * 所有数据源加起来的用时上限，默认 20 分钟：部署工作流的 build job 30 分钟超时，
+   * 几个数据源同时挂住时也要留出构建和部署的时间（被超时杀掉的话连部分数据都发不出去）
+   */
+  totalBudgetMs?: number;
   clock?: () => number;
 }
 
@@ -103,6 +108,7 @@ const revealsAdvancement = (stage: Stage | undefined) => !stage || isKnockoutSta
 
 const DUPLICATE_WINDOW_MS = 3 * 60 * 60 * 1000;
 const DEFAULT_ADAPTER_BUDGET_MS = 10 * 60 * 1000;
+const DEFAULT_TOTAL_BUDGET_MS = 20 * 60 * 1000;
 
 function collectDiagnostics(all: RawFixture[], matches: PublicMatch[]): BuildDiagnostics {
   const seen = new Set<string>();
@@ -176,6 +182,8 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
   const sources: DataMeta['sources'] = [];
   const all: RawFixture[] = [];
 
+  const runClock = opts.clock ?? Date.now;
+  const runDeadline = runClock() + (opts.totalBudgetMs ?? DEFAULT_TOTAL_BUDGET_MS);
   for (const adapter of adapters) {
     const reason = adapter.unavailableReason?.(env);
     if (reason) {
@@ -188,7 +196,10 @@ export async function buildData(opts: BuildOptions): Promise<BuildOutput> {
       const result = await adapter.fetch({
         ...ctx,
         clock,
-        deadline: started + (opts.adapterBudgetMs ?? DEFAULT_ADAPTER_BUDGET_MS),
+        deadline: Math.min(
+          started + (opts.adapterBudgetMs ?? DEFAULT_ADAPTER_BUDGET_MS),
+          runDeadline,
+        ),
       });
       log(`${adapter.name}：用时 ${Math.round((clock() - started) / 1000)} 秒`);
       all.push(...result.fixtures);

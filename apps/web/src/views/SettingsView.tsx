@@ -488,7 +488,7 @@ export function SettingsView({ state }: { state: UserState }) {
             onChange={(e) => actions.updateSettings({ lockKnockoutOpponents: e.target.checked })}
             data-testid="toggle-lock"
           />
-          淘汰赛：上一轮订阅比赛没看完时，先藏起下一轮的对阵
+          淘汰赛：上一轮订阅比赛没看完时，先藏起下一轮的对阵（「只看订阅球队」的赛事，这一轮所有比赛都先显示为「对阵待揭晓」，从卡片看不出你的球队在不在下一轮）
         </label>
         <label className="toggle">
           <input

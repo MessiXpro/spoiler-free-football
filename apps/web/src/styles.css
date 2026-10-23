@@ -53,6 +53,8 @@ a {
 
 .app {
   min-height: 100vh;
+  /* iOS Safari 的 100vh 比工具栏展开时的可视高度大，短页面的页脚会落到底部标签栏后面 */
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
