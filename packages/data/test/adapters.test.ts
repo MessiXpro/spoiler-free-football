@@ -142,8 +142,31 @@ describe('football-data adapter（真实响应样本）', () => {
     const ger = parseFootballDataMatch(edge.matches.find((m) => m.id === 537415)!)!;
     expect(ger.competition).toBe('world-cup');
     expect(ger.stage).toBe('round-of-32');
-    expect(ger.score?.extraTime).toBe(true);
-    expect(ger.score?.note).toMatch(/点球/);
+    // 免费档只给了含点球进球的 4-5：算不出真实比分，这一条不给比分（不发布偏大的错比分）
+    expect(ger.finished).toBe(true);
+    expect(ger.score).toBeUndefined();
+    expect(ger.penaltyShootout).toBe(true);
+    // 给了 90 分钟比分和加时进球：两者相加就是加时结束时的比分，不带说明
+    const withEt = parseFootballDataMatch({
+      ...edge.matches.find((m) => m.id === 537415)!,
+      score: {
+        duration: 'PENALTY_SHOOTOUT',
+        fullTime: { home: 4, away: 5 },
+        halfTime: { home: 0, away: 1 },
+        regularTime: { home: 1, away: 1 },
+        extraTime: { home: 0, away: 0 },
+      },
+    })!;
+    expect(withEt.score).toEqual({
+      home: 1,
+      away: 1,
+      halfTime: [0, 1],
+      extraTime: true,
+      regularTime: [1, 1],
+    });
+    expect(withEt.scoreIncludesShootout).toBeUndefined();
+    // 仍然没有点球比分：合并时排在带点球比分的来源后面
+    expect(withEt.penaltyShootout).toBe(true);
     // 补上点球比分后能算出加时结束时的比分
     const withPens = parseFootballDataMatch({
       ...edge.matches.find((m) => m.id === 537415)!,

@@ -120,17 +120,25 @@ export function parseFootballDataMatch(m: FdMatch): RawFixture | null {
   if (finished && full) {
     const pens = pair(s?.penalties?.home, s?.penalties?.away);
     const regular = pair(s?.regularTime?.home, s?.regularTime?.away);
+    const extra = pair(s?.extraTime?.home, s?.extraTime?.away);
     const duration = s?.duration ?? 'REGULAR';
     // 注意：football-data 的 fullTime 包含加时和点球大战的进球
     let home = full[0];
     let away = full[1];
-    let note: string | undefined;
     if (duration === 'PENALTY_SHOOTOUT') {
+      // 没有点球比分的看不出谁晋级：合并时优先用其他来源带点球比分的记录
+      fixture.penaltyShootout = true;
       if (pens) {
         home -= pens[0];
         away -= pens[1];
+      } else if (regular && extra) {
+        // 没给点球比分：90 分钟比分加上加时进球，就是加时结束时的比分
+        home = regular[0] + extra[0];
+        away = regular[1] + extra[1];
       } else {
-        note = '数据源给出的比分包含点球大战进球';
+        // 免费档常常只给含点球大战进球的 fullTime（例如 1-1 点球 4-3 给成 5-4），算不出真实比分：
+        // 这一条不给比分，不发布偏大的错比分。合并时用其他来源的；都没有时页面显示「数据源还没有这场的比分」
+        return fixture;
       }
     }
     fixture.score = {
@@ -142,11 +150,7 @@ export function parseFootballDataMatch(m: FdMatch): RawFixture | null {
       ...(duration !== 'REGULAR' ? { extraTime: true } : {}),
       ...(duration !== 'REGULAR' && regular ? { regularTime: regular } : {}),
       ...(pens ? { penalties: pens } : {}),
-      ...(note ? { note } : {}),
     };
-    // 合并时优先用其他来源的正确比分，也不拿它算两回合总比分
-    if (note) fixture.scoreIncludesShootout = true;
-    if (duration === 'PENALTY_SHOOTOUT') fixture.penaltyShootout = true;
   }
   return fixture;
 }

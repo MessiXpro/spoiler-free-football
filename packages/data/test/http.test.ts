@@ -262,4 +262,41 @@ describe('限流过去后逐步恢复请求间隔', () => {
     // 最后几个请求又按原来的 1 秒间隔发出
     expect(waits.at(-1)).toBeLessThanOrEqual(1000);
   });
+
+  it('恢复时不会比这个域名原本的间隔还短（football-data 原本 6.5 秒）', async () => {
+    const waits: number[] = [];
+    let n = 0;
+    const impl = (async () =>
+      ++n <= 3
+        ? new Response('slow down', { status: 429, headers: { 'retry-after': '1' } })
+        : new Response('ok', { status: 200 })) as typeof fetch;
+    const logs: string[] = [];
+    let fakeNow = 0;
+    const realNow = Date.now;
+    Date.now = () => fakeNow;
+    try {
+      const f = createHttpFetcher({
+        fetchImpl: impl,
+        minIntervalMs: { 'api.example.com': 6500 },
+        retries: 2,
+        log: (m) => logs.push(m),
+        sleep: async (ms) => {
+          waits.push(ms);
+          fakeNow += ms;
+        },
+      });
+      await f.getText('https://api.example.com/first', { kind: 'api' }).catch(() => {});
+      for (let i = 0; i < 14; i++)
+        await f.getText(`https://api.example.com/p${i}`, { kind: 'api' });
+    } finally {
+      Date.now = realNow;
+    }
+    // 去掉重试前的等待（Retry-After 1 秒），其余每次请求间隔都不短于 6.5 秒
+    const gaps = waits.filter((w) => w !== 1000);
+    expect(gaps.length).toBeGreaterThan(10);
+    for (const w of gaps) expect(w).toBeGreaterThanOrEqual(6500);
+    expect(logs.join('\n')).not.toMatch(/缩短到 5 秒/);
+    expect(logs.join('\n')).toMatch(/请求间隔恢复正常/);
+    expect(waits.at(-1)).toBe(6500);
+  });
 });

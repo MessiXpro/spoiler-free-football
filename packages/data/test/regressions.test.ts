@@ -323,7 +323,8 @@ describe('#18 含点球大战进球的比分', () => {
 
   it('合并时用 openfootball 的正确比分（1-1 加时，点球 3-4），不用 football-data 的 4-5', () => {
     const fd = parseFootballDataMatch(edge.matches.find((m) => m.id === 537415)!)!;
-    expect(fd.scoreIncludesShootout).toBe(true);
+    // 含点球进球的 4-5 不再作为比分发布
+    expect(fd.score).toBeUndefined();
     const merged = mergeFixtures([fd, ...wc], PRIORITY, 'now');
     const ger = merged.find((m) => m.match.home.id === 'nt-germany')!;
     expect(ger.match.sources.sort()).toEqual(['football-data', 'openfootball']);
@@ -339,11 +340,12 @@ describe('#18 含点球大战进球的比分', () => {
     expect(JSON.stringify(ger.score)).not.toContain('scoreIncludesShootout');
   });
 
-  it('只有含点球进球的比分时照常给出（带说明）', () => {
+  it('只有含点球进球的比分时不发布比分（不显示偏大的 4-5），比赛照常列出', () => {
     const fd = parseFootballDataMatch(edge.matches.find((m) => m.id === 537415)!)!;
     const merged = mergeFixtures([fd], PRIORITY, 'now');
-    expect(merged[0]!.score).toMatchObject({ home: 4, away: 5 });
-    expect(merged[0]!.score?.note).toMatch(/点球/);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.match.sources).toEqual(['football-data']);
+    expect(merged[0]!.score).toBeUndefined();
   });
 
   const leg = (p: Partial<RawFixture>) =>
@@ -374,7 +376,32 @@ describe('#18 含点球大战进球的比分', () => {
     })!;
     const merged = mergeFixtures([leg({}), second], PRIORITY, 'now');
     expect(merged.map((m) => m.match.leg)).toEqual([1, 2]);
+    // 算不出真实比分：次回合不给比分（也就没有总比分），不显示偏大的 5-4
+    expect(merged[1]!.score).toBeUndefined();
     expect(merged[1]!.score?.aggregate).toBeUndefined();
+    // 给了 90 分钟比分和加时进球：算出 1-1，总比分照常
+    const withEt = parseFootballDataMatch({
+      id: 10,
+      utcDate: '2027-03-17T20:00:00Z',
+      status: 'FINISHED',
+      matchday: null,
+      stage: 'LAST_16',
+      group: null,
+      competition: { id: 2001, code: 'CL', name: 'UEFA Champions League' },
+      season: { startDate: '2026-09-01' },
+      homeTeam: { id: 1, name: 'PSV' },
+      awayTeam: { id: 2, name: 'Arsenal' },
+      score: {
+        duration: 'PENALTY_SHOOTOUT',
+        fullTime: { home: 5, away: 4 },
+        regularTime: { home: 1, away: 0 },
+        extraTime: { home: 0, away: 1 },
+      },
+    })!;
+    const fixed = mergeFixtures([leg({}), withEt], PRIORITY, 'now');
+    expect(fixed[1]!.score).toMatchObject({ home: 1, away: 1, regularTime: [1, 0] });
+    expect(fixed[1]!.score?.note).toBeUndefined();
+    expect(fixed[1]!.score?.aggregate).toEqual([2, 2]);
     // 点球比分齐全时照常计算
     const ok = mergeFixtures(
       [
@@ -1797,6 +1824,289 @@ describe('TheSportsDB 单独一轮出错不影响其他轮次', () => {
     expect(res.notes.filter((n) => /轮失败/.test(n))).toEqual([
       '英超 2026-2027 第 7、9 轮失败：数据源返回报错：Invalid',
     ]);
+  });
+
+  // 超过用时上限、杯赛没拉完：没拉到的轮次和失败一样，更后阶段的对阵（种子、先拉到的编码 16）这次不发布
+  const notStarted = { strStatus: 'Not Started', intHomeScore: null, intAwayScore: null };
+  const timed = async (
+    league: string,
+    deadline: number,
+    routes: Array<[string | RegExp, () => string]>,
+  ) => {
+    let t = 0;
+    const urls: string[] = [];
+    const res = await createTheSportsDbAdapter().fetch(
+      ctx({
+        env: { THESPORTSDB_LEAGUES: league },
+        clock: () => t,
+        deadline,
+        fetcher: createFixtureFetcher(
+          [...routes, [/eventsround\.php/, () => JSON.stringify({ events: null })]],
+          (u) => {
+            urls.push(u);
+            t += 200; // 每次请求 0.2 秒
+          },
+        ),
+      }),
+    );
+    return { res, urls };
+  };
+  const faCupSeeds: Array<[string | RegExp, () => string]> = [
+    [
+      'eventsnextleague',
+      () =>
+        JSON.stringify({
+          events: [
+            cupEvent({
+              idEvent: 'r4-seed',
+              idLeague: '4482',
+              intRound: '4',
+              strHomeTeam: 'Arsenal',
+              strAwayTeam: 'Newcastle United',
+              dateEvent: '2026-10-25',
+              ...notStarted,
+            }),
+          ],
+        }),
+    ],
+    [
+      'eventspastleague',
+      () =>
+        JSON.stringify({
+          events: [
+            cupEvent({
+              idEvent: 'r3-seed',
+              idLeague: '4482',
+              intRound: '3',
+              strHomeTeam: 'Chelsea',
+              strAwayTeam: 'Leeds United',
+              dateEvent: '2026-10-11',
+            }),
+          ],
+        }),
+    ],
+    [
+      /eventsround\.php\?id=4482&r=3&/,
+      () =>
+        JSON.stringify({
+          events: [
+            cupEvent({
+              idEvent: 'r3-ars',
+              idLeague: '4482',
+              intRound: '3',
+              strHomeTeam: 'Arsenal',
+              strAwayTeam: 'Portsmouth',
+              dateEvent: '2026-10-10',
+            }),
+          ],
+        }),
+    ],
+  ];
+
+  it('足总杯拉完第 2 轮就超时：第 4 轮的种子对阵不发布，第 3 轮的种子照常', async () => {
+    // 种子 2 次 + 第 2 轮 1 次 = 0.6 秒，拉第 3 轮之前超时
+    const { res, urls } = await timed('4482', 500, faCupSeeds);
+    expect(urls.some((u) => u.includes('r=3&'))).toBe(false);
+    expect(res.fixtures.map((f) => f.stage)).not.toContain('round-4');
+    expect(res.fixtures.map((f) => f.sourceId)).toEqual(['r3-seed']);
+    expect(res.notes[0]).toMatch(/^超过用时上限.*足总杯/);
+    expect(res.notes.join('；')).toMatch(/足总杯 2026-2027 没拉完.*先不发布/);
+    // 没有哪一轮失败：不写空的「第  轮失败」
+    expect(res.notes.some((n) => /第 +轮失败/.test(n))).toBe(false);
+  });
+
+  it('足总杯种子刚拉完就超时：一轮都没拉到，种子里的淘汰赛对阵都不发布', async () => {
+    const { res, urls } = await timed('4482', 300, faCupSeeds);
+    expect(urls.some((u) => u.includes('eventsround'))).toBe(false);
+    // 第 2 轮也没拉到：第 3 轮的对阵同样会暴露第 2 轮谁赢
+    expect(res.fixtures).toEqual([]);
+    expect(res.notes[0]).toMatch(/^超过用时上限.*足总杯/);
+  });
+
+  it('欧冠先拉到编码 16（1/8 决赛）就超时、编码 32 没拉到：1/8 决赛的对阵不发布', async () => {
+    const { res, urls } = await timed('4480', 500, [
+      ['eventsnextleague', () => JSON.stringify({ events: null })],
+      [
+        'eventspastleague',
+        () =>
+          JSON.stringify({
+            events: [
+              cupEvent({
+                idEvent: 'r32-seed',
+                idLeague: '4480',
+                intRound: '32',
+                strHomeTeam: 'Arsenal',
+                strAwayTeam: 'Benfica',
+                dateEvent: '2026-10-10',
+              }),
+            ],
+          }),
+      ],
+      [
+        /eventsround\.php\?id=4480&r=16&/,
+        () =>
+          JSON.stringify({
+            events: [
+              cupEvent({
+                idEvent: 'r16',
+                idLeague: '4480',
+                intRound: '16',
+                strHomeTeam: 'Arsenal',
+                strAwayTeam: 'Inter',
+                dateEvent: '2026-10-24',
+                ...notStarted,
+              }),
+            ],
+          }),
+      ],
+    ]);
+    expect(urls.some((u) => u.includes('r=16&'))).toBe(true);
+    expect(urls.some((u) => u.includes('r=32&'))).toBe(false);
+    expect(res.fixtures.map((f) => f.stage)).not.toContain('round-of-16');
+    expect(res.notes.join('；')).toMatch(/欧冠 2026-2027 没拉完.*先不发布/);
+  });
+
+  it('欧冠种子是 1/8 决赛、上一轮没拉到就超时：这场 1/8 决赛不发布', async () => {
+    const { res } = await timed('4480', 500, [
+      [
+        'eventsnextleague',
+        () =>
+          JSON.stringify({
+            events: [
+              cupEvent({
+                idEvent: 'r16-seed',
+                idLeague: '4480',
+                intRound: '16',
+                strHomeTeam: 'Arsenal',
+                strAwayTeam: 'Inter',
+                dateEvent: '2026-10-24',
+                ...notStarted,
+              }),
+            ],
+          }),
+      ],
+      [
+        'eventspastleague',
+        () =>
+          JSON.stringify({
+            events: [
+              cupEvent({
+                idEvent: 'po-seed',
+                idLeague: '4480',
+                intRound: '32',
+                strHomeTeam: 'Lille',
+                strAwayTeam: 'Borussia Dortmund',
+                dateEvent: '2026-10-10',
+              }),
+            ],
+          }),
+      ],
+    ]);
+    expect(res.fixtures.map((f) => f.stage)).not.toContain('round-of-16');
+  });
+});
+
+describe('TheSportsDB 付费 Key 整个赛季没拉到', () => {
+  const cupEvent = (p: Partial<TsdbEvent> & { idEvent: string; idLeague: string }) => ({
+    strSeason: '2026-2027',
+    strTime: '15:00:00',
+    strStatus: 'Match Finished',
+    intHomeScore: '2',
+    intAwayScore: '1',
+    ...p,
+  });
+  const notStarted = { strStatus: 'Not Started', intHomeScore: null, intAwayScore: null };
+  const run = (seasonRoutes: Array<[string | RegExp, () => string]>) =>
+    createTheSportsDbAdapter().fetch(
+      ctx({
+        env: { THESPORTSDB_KEY: 'paid-key', THESPORTSDB_LEAGUES: '4482' },
+        fetcher: createFixtureFetcher([
+          [
+            'eventsnextleague',
+            () =>
+              JSON.stringify({
+                events: [
+                  cupEvent({
+                    idEvent: 'r4-seed',
+                    idLeague: '4482',
+                    intRound: '4',
+                    strHomeTeam: 'Arsenal',
+                    strAwayTeam: 'Newcastle United',
+                    dateEvent: '2026-10-25',
+                    ...notStarted,
+                  }),
+                ],
+              }),
+          ],
+          [
+            'eventspastleague',
+            () =>
+              JSON.stringify({
+                events: [
+                  cupEvent({
+                    idEvent: 'r3-seed',
+                    idLeague: '4482',
+                    intRound: '3',
+                    strHomeTeam: 'Liverpool',
+                    strAwayTeam: 'Everton',
+                    dateEvent: '2026-10-11',
+                  }),
+                ],
+              }),
+          ],
+          ...seasonRoutes,
+        ]),
+      }),
+    );
+
+  it('eventsseason 请求失败：种子里的下一轮对阵不发布', async () => {
+    // 没有 eventsseason 的路由：模拟请求失败（HTTP 404）
+    const res = await run([]);
+    expect(res.fixtures.map((f) => f.stage)).not.toContain('round-4');
+    expect(res.fixtures).toEqual([]);
+    expect(res.notes.join('；')).toMatch(/足总杯 2026-2027 失败：.*淘汰赛对阵这次先不发布/);
+  });
+
+  it('eventsseason 返回报错体：同样不发布', async () => {
+    const res = await run([['eventsseason', () => JSON.stringify({ Message: 'x' })]]);
+    expect(res.fixtures).toEqual([]);
+    expect(res.notes.join('；')).toMatch(/足总杯 2026-2027 失败：数据源返回报错：x/);
+  });
+
+  it('同一项赛事的另一个联赛 id 已经拿到的场次不受影响', async () => {
+    const playoff = (idEvent: string, idLeague: string, home: string, away: string) =>
+      cupEvent({
+        idEvent,
+        idLeague,
+        intRound: '160',
+        strSeason: '2026',
+        strHomeTeam: home,
+        strAwayTeam: away,
+        dateEvent: '2026-10-25',
+        ...notStarted,
+      });
+    const res = await createTheSportsDbAdapter().fetch(
+      ctx({
+        // 两个世预赛 id 对应同一项赛事
+        env: { THESPORTSDB_KEY: 'paid-key', THESPORTSDB_LEAGUES: '5518,5515' },
+        fetcher: createFixtureFetcher([
+          [
+            'eventsnextleague.php?id=5518',
+            () => JSON.stringify({ events: [playoff('a', '5518', 'Italy', 'Wales')] }),
+          ],
+          [
+            'eventsnextleague.php?id=5515',
+            () => JSON.stringify({ events: [playoff('b', '5515', 'Peru', 'Chile')] }),
+          ],
+          ['eventspastleague', () => JSON.stringify({ events: null })],
+          [
+            'eventsseason.php?id=5518',
+            () => JSON.stringify({ events: [playoff('a', '5518', 'Italy', 'Wales')] }),
+          ],
+        ]),
+      }),
+    );
+    expect(res.fixtures.map((f) => f.sourceId)).toEqual(['a']);
   });
 });
 

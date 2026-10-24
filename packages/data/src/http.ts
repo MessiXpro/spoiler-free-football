@@ -179,7 +179,9 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
     }
     okStreak.set(host, 0);
     const next = Math.floor(slowed / 2);
-    if (next < MIN_SLOWED_INTERVAL_MS) {
+    // 不能比这个域名原本的间隔还短（football-data 原本 6.5 秒：缩到 5 秒就超过每分钟 10 次的额度）
+    const base = config.minIntervalMs?.[host] ?? config.defaultIntervalMs ?? 1000;
+    if (next < Math.max(MIN_SLOWED_INTERVAL_MS, base)) {
       slowedInterval.delete(host);
       log(`${host} 没再限流，请求间隔恢复正常`);
     } else {
