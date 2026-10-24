@@ -391,10 +391,16 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
             let firstError = '';
             let dropped = false;
             let stopped = false;
-            // 按阶段从早到晚拉（同阶段按编码）：编码 16（1/8 决赛）比 32 小，按数字排会先拉；
-            // 按阶段排之后超时没拉到的一定是更后的阶段，已经拉完的轮次不会被一起删掉
+            // 先按编码拉不是淘汰赛的轮次（联赛阶段、小组赛，以及 9、31、33 这类其实不存在的资格赛编码），
+            // 再按阶段从早到晚拉淘汰赛（编码 16 即 1/8 决赛比 32 小，按数字排会先拉）：
+            // 超时没拉到的一定是更后的阶段，已经拉完的轮次不会被一起删掉；
+            // 没拉到的非淘汰赛轮次本来就会让所有淘汰赛对阵不发布，它们之间的顺序不影响删除
             const stageOf = (r: number) => stageOrder(stageFromTheSportsDb(String(r), comp).stage);
-            const order = [...rounds].sort((a, b) => stageOf(a) - stageOf(b) || a - b);
+            const fetchKey = (r: number) => {
+              const { stage } = stageFromTheSportsDb(String(r), comp);
+              return isKnockoutStage(stage) ? stageOrder(stage) : 0;
+            };
+            const order = [...rounds].sort((a, b) => fetchKey(a) - fetchKey(b) || a - b);
             for (const [i, r] of order.entries()) {
               if (overBudget()) {
                 // 拉到一半超时：记下来（不然这项赛事看起来「正常但场次少」）

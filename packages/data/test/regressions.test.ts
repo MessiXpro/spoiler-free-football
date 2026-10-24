@@ -1967,6 +1967,50 @@ describe('TheSportsDB 单独一轮出错不影响其他轮次', () => {
     expect(res.fixtures.map((f) => f.sourceId)).toEqual(['r32-seed']);
   });
 
+  it('欧联第 7、8 轮之间超时：先拉真实的联赛阶段轮次，不存在的编码 9 排在最后', async () => {
+    const md8 = (idEvent: string, home: string, away: string) =>
+      cupEvent({
+        idEvent,
+        idLeague: '4481',
+        intRound: '8',
+        strHomeTeam: home,
+        strAwayTeam: away,
+        dateEvent: '2026-10-22',
+        ...notStarted,
+      });
+    const { res, urls } = await timed('4481', 900, [
+      ['eventsnextleague', () => JSON.stringify({ events: [md8('md8-seed', 'Arsenal', 'Roma')] })],
+      [
+        'eventspastleague',
+        () =>
+          JSON.stringify({
+            events: [
+              cupEvent({
+                idEvent: 'md7-seed',
+                idLeague: '4481',
+                intRound: '7',
+                strHomeTeam: 'Lazio',
+                strAwayTeam: 'Porto',
+                dateEvent: '2026-10-14',
+              }),
+            ],
+          }),
+      ],
+      [
+        /eventsround\.php\?id=4481&r=8&/,
+        () =>
+          JSON.stringify({
+            events: [md8('md8-seed', 'Arsenal', 'Roma'), md8('md8-2', 'Ajax', 'Celtic')],
+          }),
+      ],
+    ]);
+    const rounds = urls
+      .filter((u) => u.includes('eventsround'))
+      .map((u) => /&r=(\d+)&/.exec(u)![1]);
+    expect(rounds).toEqual(['6', '7', '8']);
+    expect(res.fixtures.map((f) => f.sourceId)).toContain('md8-2');
+  });
+
   const eflCup: Array<[string | RegExp, () => string]> = [
     [
       'eventsnextleague',
