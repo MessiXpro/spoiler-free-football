@@ -888,6 +888,22 @@ describe('回归：三次审查发现的识别问题', () => {
     }
   });
 
+  it('以「上」「下」结尾的日本姓氏、「补上一球」前面的人名照样遮', () => {
+    for (const text of track([
+      '萨卡补上一球',
+      '哈兰德补上一球',
+      '莱万多夫斯基补上一球',
+      '森下两球',
+      '井上两球',
+      '村上一球一助',
+    ])) {
+      expect(redact(text, FB), text).toBe(`${M}${M}${M}`);
+    }
+    // 「落后两球」的「后」不是人名末字，只遮「落后两球」，队名保留
+    expect(redact('曼联落后两球', FB)).toBe(`曼联${M}${M}`);
+    track(['曼联落后两球']);
+  });
+
   it('台球的「九球」「八球」、「任何一球」不当成进球者', () => {
     for (const text of track([
       '男子九球世界杯开赛',
@@ -895,13 +911,29 @@ describe('回归：三次审查发现的识别问题', () => {
       '门将拉亚：不放过任何一球',
       '潘晓婷被称为九球天后',
       '比赛最后一球',
+      '门将救下一球',
+      '场上两球',
+      '以上两球均被吹掉',
+      '剩下一球',
+      '补上一球',
     ])) {
       expectNeutral(text);
     }
   });
 
   it('非足球页面：中文简称也算语境，城市名、日常词里的简称不算', () => {
-    for (const text of track(['多特败北', '国米告捷', '尤文出线', '多特一轮游'])) {
+    for (const text of track([
+      '多特败北',
+      '国米告捷',
+      '尤文出线',
+      '多特一轮游',
+      '西汉姆告捷',
+      '西汉姆出线',
+      '曼彻斯特城告捷',
+      '今日国米告捷',
+      '昨日国米出线',
+      '纽卡大捷',
+    ])) {
       expectMasked(text);
     }
     for (const text of track([
@@ -915,6 +947,9 @@ describe('回归：三次审查发现的识别问题', () => {
       '这家店有很多特色菜，销量领先',
       '全国米价连续三个月领先',
       '泰国米粉店开业首日告捷',
+      '日本米价领先',
+      '纽卡大学排名领先',
+      '西汉墓考古发现，首战告捷',
     ])) {
       expect(findSpoilers(text), text).toEqual([]);
     }
@@ -927,6 +962,12 @@ describe('回归：三次审查发现的识别问题', () => {
       'Arsenal took the lead through Saka',
       'Arsenal claim three points',
       'City secure three points at Anfield',
+      'Liverpool secures three points',
+      'Man City earns three points',
+      'Villa collected three points',
+      'Liverpool secured the three points',
+      'Liverpool seal three points',
+      'Arsenal take the lead via Saka',
       '巴萨惊险过关',
       '皇马三分到手',
     ])) {
