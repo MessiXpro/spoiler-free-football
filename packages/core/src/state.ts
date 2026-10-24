@@ -279,7 +279,12 @@ function stageLockActive(
   return stageLockBlockers(match, all, state, now, sameTeamOnly).length > 0;
 }
 
-/** 让这场对阵被锁定的那些「上一轮没看完的订阅比赛」（给锁定卡列出来，用户知道该去看哪场） */
+/**
+ * 锁定卡上列出的「更早阶段没看完的订阅比赛」（用户知道该先去看哪场）。
+ * 列表不能随这张卡的两队、也不能随谁晋级而变：不按队挑（「全部比赛」模式下按队挑等于说出这场是谁），
+ * 也去掉本身对阵也被锁定的比赛（「只看订阅球队」时，多出一条被锁的后几轮比赛就说明你的球队打进了那一轮）。
+ * 没被锁定的比赛本来就带队名显示，列出来不多泄露什么；结果可能为空
+ */
 export function lockBlockers(
   match: PublicMatch,
   all: PublicMatch[],
@@ -287,13 +292,9 @@ export function lockBlockers(
   now: Date,
 ): PublicMatch[] {
   if (!isFixtureLocked(match, all, state, now)) return [];
-  return stageLockBlockers(
-    match,
-    all,
-    state,
-    now,
-    competitionMode(state, match.competition) !== 'teams',
-  ).sort(byKickoff);
+  return stageLockBlockers(match, all, state, now, false)
+    .filter((b) => !isFixtureLocked(b, all, state, now))
+    .sort(byKickoff);
 }
 
 function stageLockBlockers(

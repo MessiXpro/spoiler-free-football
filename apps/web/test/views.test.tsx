@@ -10,6 +10,7 @@ import {
   unwatchedRecent,
   type MatchLink,
   type Program,
+  type PublicMatch,
   type UserState,
 } from '@sff/core';
 import { Embed } from '../src/components/Embed.tsx';
@@ -96,6 +97,22 @@ describe('节目折叠原因不暴露锁定的对阵', () => {
     noSpoilers(el);
   });
 
+  it('节目页：被「对阵待揭晓」的比赛折叠时，给一句固定提示和去「还没看完」的链接', async () => {
+    const { el } = await render(<ProgramsView data={data} state={getState()} now={now} />);
+    const hint = q(el, 'program-locked-hint')!;
+    expect(hint).not.toBeNull();
+    expect(hint.querySelector('a')?.getAttribute('href')).toBe('#/unwatched');
+    // 折叠原因里可能有别人的比赛（占位卡），不再叫「订阅比赛」
+    expect(q(el, 'program-locked')!.textContent).not.toContain('订阅比赛');
+    noSpoilers(el);
+
+    // 看完 1/8 决赛后 1/4 决赛不再锁定：节目仍因 1/4 决赛没看折叠，但不需要这句提示
+    const watched = { ...getState(), watched: { [r16.id]: 1 } };
+    const other = await render(<ProgramsView data={data} state={watched} now={now} />);
+    expect(q(other.el, 'program-locked')).not.toBeNull();
+    expect(q(other.el, 'program-locked-hint')).toBeNull();
+  });
+
   it('详情页：对阵锁定时不显示由队名拼成的比赛编号', async () => {
     const { el } = await render(
       <MatchDetailView data={data} state={getState()} now={now} id={qf.id} />,
@@ -109,6 +126,66 @@ describe('节目折叠原因不暴露锁定的对阵', () => {
       <MatchDetailView data={data} state={getState()} now={now} id={r16.id} />,
     );
     expect(q(other.el, 'match-id')?.textContent).toContain(r16.id);
+  });
+});
+
+describe('锁定卡列出的上一轮比赛', () => {
+  const wc = (
+    id: string,
+    stage: PublicMatch['stage'],
+    home: string,
+    away: string,
+    kickoff: string,
+  ) =>
+    match({
+      id,
+      competition: 'world-cup',
+      season: '2026',
+      stage,
+      matchday: undefined,
+      kickoff,
+      home: { id: home, name: home },
+      away: { id: away, name: away },
+    });
+  const r32 = wc(
+    'wc-r32-fra-ned',
+    'round-of-32',
+    'nt-france',
+    'nt-netherlands',
+    '2026-06-29T20:00:00Z',
+  );
+  const r16 = wc(
+    'wc-r16-fra-ger',
+    'round-of-16',
+    'nt-france',
+    'nt-germany',
+    '2026-07-04T20:00:00Z',
+  );
+  const qf = wc('wc-qf-fra-bra', 'quarter-final', 'nt-france', 'nt-brazil', '2026-07-09T20:00:00Z');
+  const now = new Date('2026-07-10T02:00:00Z');
+
+  it('本身也被锁定的比赛不列出（多出一条就说明你的球队打进了那一轮），其余都带链接', async () => {
+    const all = [r32, r16, qf];
+    expect(isFixtureLocked(r16, all, getState(), now)).toBe(true);
+    const { el } = await render(<MatchCard match={qf} all={all} state={getState()} now={now} />);
+    const list = q(el, 'lock-blockers')!;
+    expect(list.textContent).not.toContain('对阵待揭晓');
+    expect(list.textContent).not.toContain('1/8决赛');
+    const hrefs = [...list.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual([`#/match/${r32.id}`]);
+    noSpoilers(el);
+  });
+
+  it('能列出的比赛都被锁定时，给固定提示和「还没看完」的链接', async () => {
+    // 1/16 决赛离 1/4 决赛超过 60 天：只锁 1/8 决赛，1/4 决赛卡上没有能列出的比赛
+    const early = { ...r32, kickoff: '2026-05-07T20:00:00Z' };
+    const all = [early, r16, qf];
+    const { el } = await render(<MatchCard match={qf} all={all} state={getState()} now={now} />);
+    expect(q(el, 'locked-teams')).not.toBeNull();
+    expect(q(el, 'lock-blockers')).toBeNull();
+    const hint = q(el, 'lock-blockers-earlier')!;
+    expect(hint.querySelector('a')?.getAttribute('href')).toBe('#/unwatched');
+    noSpoilers(el);
   });
 });
 
@@ -398,6 +475,10 @@ describe('次回合的两回合总比分', () => {
             home: 2,
             away: 1,
             aggregate: [3, 3],
+            extraTime: true,
+            regularTime: [1, 0],
+            penalties: [4, 3],
+            note: '点球大战决出胜负（数据源未提供点球比分）',
             source: 'test',
             updatedAt: '',
           }),
@@ -421,6 +502,10 @@ describe('次回合的两回合总比分', () => {
     expect(q(shown, 'score-aggregate')).toBeNull();
     expect(q(shown, 'score-aggregate-hidden')).not.toBeNull();
     expect(shown.textContent).not.toContain('3 - 3');
+    // 加时、点球、附注同样能倒推出首回合比分
+    expect(shown.textContent).not.toContain('点球大战');
+    expect(shown.textContent).not.toContain('经过加时');
+    expect(shown.textContent).not.toContain('4 - 3');
     await unmount();
 
     // 首回合看过之后（次回合已记为已看，「没看完」里不再有它，去详情页看）
@@ -433,6 +518,10 @@ describe('次回合的两回合总比分', () => {
     const c2 = cardOf(again.el, second.id)!;
     await click(q(c2, 'reveal-button'));
     await settle();
-    expect(q(cardOf(again.el, second.id)!, 'score-aggregate')?.textContent).toContain('3 - 3');
+    const c3 = cardOf(again.el, second.id)!;
+    expect(q(c3, 'score-aggregate')?.textContent).toContain('3 - 3');
+    expect(c3.textContent).toContain('点球大战 4 - 3');
+    expect(c3.textContent).toContain('经过加时');
+    expect(c3.textContent).toContain('点球大战决出胜负（数据源未提供点球比分）');
   });
 });

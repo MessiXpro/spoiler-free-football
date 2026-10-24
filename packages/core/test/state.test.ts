@@ -352,6 +352,66 @@ describe('只看订阅球队：淘汰赛占位卡不泄露上一轮结果', () =
     expect(upcomingMatches([r16, qfB], watched, now, 30)).toEqual([]);
   });
 
+  it('锁定卡列出的上一轮比赛和谁晋级无关：后几轮被锁的订阅比赛不列出', () => {
+    // 附加赛（没看）→ 1/8决赛（没看）→ 1/4决赛占位卡；阿森纳附加赛赢了才有自己的 1/8 决赛
+    const at = new Date('2027-04-01T00:00:00Z');
+    const po1 = {
+      ...mk('po1', 'playoff', 'arsenal', 'benfica', '2027-02-17T20:00:00Z'),
+      leg: 1 as const,
+    };
+    const po2 = {
+      ...mk('po2', 'playoff', 'benfica', 'arsenal', '2027-02-25T20:00:00Z'),
+      leg: 2 as const,
+    };
+    const qf = mk('qf-juv', 'quarter-final', 'juventus', 'lazio', '2027-04-07T19:00:00Z');
+    const lists = ['arsenal', 'benfica'].map((w) => {
+      const r1 = {
+        ...mk(`r1-${w}`, 'round-of-16', w, 'dortmund', '2027-03-10T20:00:00Z'),
+        leg: 1 as const,
+      };
+      const r2 = {
+        ...mk(`r2-${w}`, 'round-of-16', 'dortmund', w, '2027-03-17T20:00:00Z'),
+        leg: 2 as const,
+      };
+      const all = [po1, po2, r1, r2, qf] as PublicMatch[];
+      expect(isFixtureLocked(qf, all, base, at)).toBe(true);
+      // 阿森纳赢了时，自己的 1/8 决赛本身也是占位卡
+      if (w === 'arsenal') expect(isFixtureLocked(r1, all, base, at)).toBe(true);
+      const blockers = lockBlockers(qf, all, base, at);
+      expect(blockers.some((b) => isFixtureLocked(b, all, base, at))).toBe(false);
+      return blockers.map((m) => m.id);
+    });
+    expect(lists[0]).toEqual(['po1', 'po2']);
+    expect(lists[1]).toEqual(lists[0]);
+  });
+
+  it('「全部比赛」模式：锁定卡列出的比赛不按这张卡的两队挑，换晋级队后列表不变', () => {
+    const at = new Date('2027-03-05T00:00:00Z');
+    const allMode = { ...base, teams: [], competitions: { ucl: 'all' as const } };
+    const lg = [
+      mk('l1', 'league-phase', 'arsenal', 'monaco', '2027-01-28T20:00:00Z'),
+      mk('l2', 'league-phase', 'lille', 'dortmund', '2027-01-28T20:00:00Z'),
+      mk('l3', 'league-phase', 'benfica', 'napoli', '2027-01-28T20:00:00Z'),
+    ];
+    const p1 = {
+      ...mk('p1', 'playoff', 'dortmund', 'benfica', '2027-02-17T20:00:00Z'),
+      leg: 1 as const,
+    };
+    const p2 = {
+      ...mk('p2', 'playoff', 'benfica', 'dortmund', '2027-02-25T20:00:00Z'),
+      leg: 2 as const,
+    };
+    const lists = ['dortmund', 'benfica'].map((w) => {
+      const r16 = mk(`r16-${w}`, 'round-of-16', 'arsenal', w, '2027-03-10T20:00:00Z');
+      const all = [...lg, p1, p2, r16] as PublicMatch[];
+      expect(isFixtureLocked(r16, all, allMode, at)).toBe(true);
+      return lockBlockers(r16, all, allMode, at).map((m) => m.id);
+    });
+    // 附加赛本身也被锁定，不列出；联赛阶段三场都列出（不只是和这张卡两队有关的）
+    expect(lists[0]).toEqual(['l1', 'l2', 'l3']);
+    expect(lists[1]).toEqual(lists[0]);
+  });
+
   it('「全部比赛」模式、关闭淘汰赛锁定、非淘汰赛：和以前一样', () => {
     expect(isShown(qfB, [r16, qfB], { ...base, competitions: { ucl: 'all' as const } }, now)).toBe(
       true,

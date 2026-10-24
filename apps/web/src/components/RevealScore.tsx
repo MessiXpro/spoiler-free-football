@@ -143,7 +143,8 @@ function ScoreView({
             首回合还没看，两回合总比分、加时和点球情况先不显示（能倒推出首回合比分）
           </li>
         )}
-        {score.note && <li>{score.note}</li>}
+        {/* 附注常说明点球大战（数据源没给点球比分时），同样能倒推出首回合比分 */}
+        {score.note && showAggregate && <li>{score.note}</li>}
       </ul>
       <button type="button" className="btn btn-small" onClick={onHide}>
         藏起比分并标记为没看

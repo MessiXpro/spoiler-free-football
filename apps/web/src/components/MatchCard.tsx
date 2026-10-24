@@ -100,22 +100,29 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
 
       {locked ? (
         <div className="locked-note">
-          <p>这是淘汰赛，对阵会透露上一轮的结果。你还有上一轮的订阅比赛没看完：</p>
-          <ul className="reason-list" data-testid="lock-blockers">
-            {blockers.slice(0, 5).map((m) => (
-              <li key={m.id}>
-                {isFixtureLocked(m, all, state, now) ? (
-                  <span>{neutralTitle(m, { lockedTeams: true })}</span>
-                ) : (
-                  <a href={href({ name: 'match', id: m.id })}>{neutralTitle(m)}</a>
-                )}
-              </li>
-            ))}
-            {blockers.length > 5 && <li>……共 {blockers.length} 场</li>}
-          </ul>
-          <p className="muted small">
-            看完它们（在详情页点「显示比分」或标记为已看）后，这里会自动显示对阵。
-          </p>
+          {/* 列表和这张卡的两队、谁晋级都无关，只含本身没被锁定的比赛（见 lockBlockers），可能为空 */}
+          {blockers.length > 0 ? (
+            <>
+              <p>这是淘汰赛，对阵会透露上一轮的结果。你还有上一轮的订阅比赛没看完：</p>
+              <ul className="reason-list" data-testid="lock-blockers">
+                {blockers.slice(0, 5).map((m) => (
+                  <li key={m.id}>
+                    <a href={href({ name: 'match', id: m.id })}>{neutralTitle(m)}</a>
+                  </li>
+                ))}
+                {blockers.length > 5 && <li>……共 {blockers.length} 场</li>}
+              </ul>
+              <p className="muted small">
+                先从这些看起（在详情页点「显示比分」或标记为已看），上一轮都看完后这里会自动显示对阵。
+              </p>
+            </>
+          ) : (
+            <p data-testid="lock-blockers-earlier">
+              这是淘汰赛，对阵会透露上一轮的结果。更早一轮的比赛也还没看完，去
+              <a href={href({ name: 'unwatched' })}>「还没看完」</a>
+              从最早的一场看起，上一轮都看完后这里会自动显示对阵。
+            </p>
+          )}
           <button
             type="button"
             className="btn btn-small"

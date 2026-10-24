@@ -63,9 +63,7 @@ function ProgramCard({
       <p className="kickoff">{program.schedule}</p>
       {locked ? (
         <div className="locked-note" data-testid="program-locked">
-          <p>
-            还有 {reasons.length} 场相关的订阅比赛没看完，节目可能会讲到它们的结果，先折叠起来：
-          </p>
+          <p>还有 {reasons.length} 场相关的比赛没看完，节目可能会讲到它们的结果，先折叠起来：</p>
           <ul className="reason-list">
             {reasons.slice(0, 5).map((m) => (
               <li key={m.id}>
@@ -79,6 +77,14 @@ function ProgramCard({
             ))}
             {reasons.length > 5 && <li>……共 {reasons.length} 场</li>}
           </ul>
+          {/* 占位卡点不进去：给一句固定的提示和去处（只要有被锁的就显示同一句话，不随谁晋级而变） */}
+          {reasons.some((m) => isFixtureLocked(m, all, state, now)) && (
+            <p className="muted small" data-testid="program-locked-hint">
+              「对阵待揭晓」的比赛要先看完更早一轮才能揭晓，
+              <a href={href({ name: 'unwatched' })}>去「还没看完」</a>
+              从最早的一场看起。
+            </p>
+          )}
           <button
             type="button"
             className="btn btn-small"
