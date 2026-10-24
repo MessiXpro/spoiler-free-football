@@ -1,4 +1,4 @@
-import { DEFAULT_SITE_RULES_JSON, validateSiteRules } from '@sff/core';
+import { DEFAULT_SITE_RULES_JSON, scorePath, validateSiteRules } from '@sff/core';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseTimeWindow } from '../src/schedule.ts';
 
@@ -64,6 +64,21 @@ const panel = () => {
 };
 const panelStatus = () =>
   document.querySelector('sff-panel')!.shadowRoot!.querySelector('[data-id="status"]')!.textContent;
+const panelTitle = () =>
+  document.querySelector('sff-panel')!.shadowRoot!.querySelector('[data-id="title"]')!.textContent;
+
+/** 网页里点开的比赛（同平台 localhost） */
+const openedMatch = (id: string, home: string, away: string) => ({
+  id,
+  title: `${home} vs ${away}`,
+  competition: 'epl',
+  kickoff: '2026-09-21T00:00:00Z',
+  home: { id: home.toLowerCase(), name: home },
+  away: { id: away.toLowerCase(), name: away },
+  url: 'http://localhost:3000/',
+  host: 'localhost',
+  at: Date.now(),
+});
 
 const storedSettings = () =>
   store.get('settings') as {
@@ -191,6 +206,39 @@ describe('悬浮面板', () => {
     await vi.waitFor(() => expect(q('sff-toggle-site').textContent).toBe('在此站点停用'));
   });
 
+  it('面板开着时其他标签页重新启用了此站点：按钮跟着变成「在此站点停用」', async () => {
+    const off = {
+      disabledHosts: ['localhost'],
+      global: { enabled: true, start: '06:00', end: '12:00', days: ALL_DAYS },
+    };
+    await boot('global', off);
+    const q = panel();
+    q('sff-fab').click();
+    expect(q('sff-toggle-site').textContent).toBe('在此站点启用');
+    remoteChange({ ...off, disabledHosts: [] });
+    expect(document.getElementById('t')!.textContent).toBe('Arsenal ■-■ Chelsea');
+    // 按钮还写着「启用」的话，点下去其实是停用，会把比分露出来
+    expect(q('sff-toggle-site').textContent).toBe('在此站点停用');
+    expect(panelStatus()).not.toBe('此站点已停用');
+  });
+
+  it('面板开着时用脚本菜单重新启用 / 停用：按钮跟着变', async () => {
+    await boot('global', {
+      disabledHosts: ['localhost'],
+      global: { enabled: true, start: '06:00', end: '12:00', days: ALL_DAYS },
+    });
+    const q = panel();
+    q('sff-fab').click();
+    expect(q('sff-toggle-site').textContent).toBe('在此站点启用');
+    await menus.get('防剧透：在此站点重新启用')!();
+    await vi.waitFor(() => expect(q('sff-toggle-site').textContent).toBe('在此站点停用'));
+    expect(document.getElementById('t')!.textContent).toBe('Arsenal ■-■ Chelsea');
+    expect(panelStatus()).not.toBe('此站点已停用');
+    await menus.get('防剧透：在此站点停用')!();
+    await vi.waitFor(() => expect(q('sff-toggle-site').textContent).toBe('在此站点启用'));
+    expect(panelStatus()).toBe('此站点已停用');
+  });
+
   it('其他标签页打开了总开关：不刷新也补上面板', async () => {
     const off = {
       enabled: false,
@@ -274,6 +322,51 @@ describe('悬浮面板', () => {
     expect(q('sff-reveal-yes').hidden).toBe(true);
     await vi.waitFor(() => expect(q('sff-score').textContent).toBe('Arsenal 2 - 1 Chelsea'));
     expect(scoreCalls).toBe(2);
+  });
+
+  it('加载失败后其他标签页换了一场：面板先换成新比赛，「再试一次」不会直接显示新比赛的比分', async () => {
+    let scoreCalls = 0;
+    await boot(
+      'global',
+      {
+        global: { enabled: true, start: '06:00', end: '12:00', days: ALL_DAYS },
+        currentMatch: openedMatch('epl-a', 'Arsenal', 'Chelsea'),
+      },
+      (url) => {
+        if (!url.includes('/scores/')) return { status: 404, text: async () => '' };
+        scoreCalls++;
+        if (scoreCalls === 1) return { status: 503, text: async () => 'Service Unavailable' };
+        const id = url.endsWith(scorePath('epl-b')) ? 'epl-b' : 'epl-a';
+        return { status: 200, text: async () => JSON.stringify({ id, home: 4, away: 0 }) };
+      },
+    );
+    const q = panel();
+    q('sff-fab').click();
+    q('sff-reveal').click();
+    q('sff-reveal-yes').click();
+    await vi.waitFor(() => expect(q('sff-reveal').textContent).toBe('再试一次'));
+    // 网页（另一个标签页）打开了同平台的另一场
+    remoteChange({
+      ...(store.get('settings') as object),
+      currentMatch: openedMatch('epl-b', 'Liverpool', 'Everton'),
+    });
+    expect(panelTitle()).toBe('Liverpool vs Everton');
+    expect(q('sff-reveal').hidden).toBe(false);
+    expect(q('sff-reveal').textContent).toBe('看完了，显示比分');
+    expect(q('sff-score').textContent).toBe('');
+    // 新的一场还没看：要先确认
+    q('sff-reveal').click();
+    expect(q('sff-reveal-yes').hidden).toBe(false);
+    const scoreUrls = () =>
+      vi
+        .mocked(fetch)
+        .mock.calls.map(([u]) => String(u))
+        .filter((u) => u.endsWith(scorePath('epl-b')));
+    expect(scoreUrls()).toEqual([]);
+    q('sff-reveal-yes').click();
+    await vi.waitFor(() => expect(q('sff-score').textContent).toBe('Liverpool 4 - 0 Everton'));
+    expect(panelTitle()).toBe('Liverpool vs Everton');
+    expect(scoreUrls()).toHaveLength(1);
   });
 });
 

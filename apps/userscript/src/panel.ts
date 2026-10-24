@@ -78,6 +78,9 @@ export function mountPanel(actions: PanelActions) {
   const fab = root.querySelector('.fab') as HTMLButtonElement;
   const panel = root.querySelector('.panel') as HTMLElement;
 
+  /** refresh() 显示出来的状态：点击时按显示的来（其他标签页、脚本菜单可能已经改了设置，面板还没重画） */
+  let offerEnable = false;
+  let shownId: string | undefined;
   const refresh = () => {
     const c = actions.controller();
     const stats = c.shield?.stats;
@@ -92,8 +95,16 @@ export function mountPanel(actions: PanelActions) {
           : `已遮挡 ${(stats?.texts ?? 0) + (stats?.blocks ?? 0)} 处`;
     $('pause').hidden = !working || Boolean(stats?.paused);
     $('resume').hidden = !working || !stats?.paused;
-    $('disable').textContent = actions.siteDisabled() ? '在此站点启用' : '在此站点停用';
+    offerEnable = actions.siteDisabled();
+    $('disable').textContent = offerEnable ? '在此站点启用' : '在此站点停用';
     const m = actions.currentMatch();
+    if (m?.id !== shownId) {
+      // 换了一场：上一场的比分、「再试一次」不带过来
+      shownId = m?.id;
+      $('reveal').hidden = false;
+      $('confirm').hidden = true;
+      $('score').textContent = '';
+    }
     $('match').hidden = !m;
     if (m) {
       $('title').textContent = m.title;
@@ -135,16 +146,29 @@ export function mountPanel(actions: PanelActions) {
     refresh();
   });
   $('disable').addEventListener('click', async () => {
-    await (actions.siteDisabled() ? actions.enableSite() : actions.disableSite());
+    // 按钮写着「启用」就只会启用；写着「停用」但已经在别处停用了就不重复加
+    if (offerEnable) await actions.enableSite();
+    else if (!actions.siteDisabled()) await actions.disableSite();
     refresh();
   });
-  const show = async () => {
+  /** 面板上显示的那场；其他标签页换了比赛就先重画面板，这次点击不显示比分 */
+  const shownMatch = () => {
     const m = actions.currentMatch();
+    if (!m || m.id !== shownId) {
+      refresh();
+      return null;
+    }
+    return m;
+  };
+  const show = async () => {
+    const m = shownMatch();
     if (!m) return;
     $('reveal').hidden = true;
     $('confirm').hidden = true;
     $('score').textContent = '加载中…';
     const text = await actions.revealScore(m);
+    // 加载期间换了比赛：不把这场的比分写到新比赛下面
+    if (shownId !== m.id) return;
     $('score').textContent = text;
     // 加载失败（已记为已看）：可以再试一次，不用刷新视频页（会打断播放）
     if (text.startsWith('比分加载失败') || text.startsWith(NOT_SCORE_DATA)) {
@@ -153,8 +177,9 @@ export function mountPanel(actions: PanelActions) {
     }
   };
   $('reveal').addEventListener('click', () => {
-    const m = actions.currentMatch();
-    if (m && actions.isWatched(m.id)) void show();
+    const m = shownMatch();
+    if (!m) return;
+    if (actions.isWatched(m.id)) void show();
     else {
       $('reveal').hidden = true;
       $('confirm').hidden = false;

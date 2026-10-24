@@ -211,6 +211,8 @@ async function runShield() {
   /** 当前域名在停用名单里（面板显示「在此站点启用」，手机上没有脚本菜单也能撤销） */
   const siteDisabled = () =>
     settings.disabledHosts.some((h) => hostDisabledBy(location.hostname, h));
+  /** 已挂上的面板：设置在面板以外改了（其他标签页、脚本菜单）也要重画，按钮文字不能过时 */
+  let panelRef: ReturnType<typeof mountPanel> | undefined;
   const enableSite = async () => {
     // 只去掉覆盖当前域名的停用项（和插件弹窗的「在此站点启用」一致）
     const list = settings.disabledHosts.filter((h) => !hostDisabledBy(location.hostname, h));
@@ -218,6 +220,7 @@ async function runShield() {
     settings = await save({ disabledHosts: list });
     controller.update(settings);
     ensureUi();
+    panelRef?.refresh();
   };
 
   const activateUi = () => {
@@ -275,6 +278,7 @@ async function runShield() {
         }
       },
     });
+    panelRef = panel;
     registerMenu('防剧透：临时显示 5 分钟', () => {
       pauseAll(MAX_PAUSE);
       panel.refresh();
@@ -286,6 +290,7 @@ async function runShield() {
     registerMenu('防剧透：在此站点停用', async () => {
       settings = await save({ disabledHosts: [...settings.disabledHosts, location.hostname] });
       controller.update(settings);
+      panel.refresh();
     });
   };
   // 面板和菜单在遮挡启动后才挂：全网版可能在时段开始前就打开了页面，时段到了遮挡自动启动，这时也要有面板；
@@ -325,6 +330,7 @@ async function runShield() {
     controller.update(settings);
     // 其他标签页重新启用了此站点 / 打开了总开关：普通版没有补挂定时器，这里补挂面板和菜单
     ensureUi();
+    panelRef?.refresh();
   });
   if (isTop) void updateRules(settings);
 }
