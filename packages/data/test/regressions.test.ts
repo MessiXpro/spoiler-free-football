@@ -1923,8 +1923,9 @@ describe('TheSportsDB 单独一轮出错不影响其他轮次', () => {
     expect(res.notes[0]).toMatch(/^超过用时上限.*足总杯/);
   });
 
-  it('欧冠先拉到编码 16（1/8 决赛）就超时、编码 32 没拉到：1/8 决赛的对阵不发布', async () => {
-    const { res, urls } = await timed('4480', 500, [
+  it('欧冠按阶段拉：编码 32 没拉到就超时时，编码 16（1/8 决赛）也不会先拉到', async () => {
+    // 顺序是 31、33（资格赛）、64、32、16：种子 2 次 + 3 轮 = 1 秒，拉编码 32 之前超时
+    const { res, urls } = await timed('4480', 900, [
       ['eventsnextleague', () => JSON.stringify({ events: null })],
       [
         'eventspastleague',
@@ -1960,10 +1961,87 @@ describe('TheSportsDB 单独一轮出错不影响其他轮次', () => {
           }),
       ],
     ]);
-    expect(urls.some((u) => u.includes('r=16&'))).toBe(true);
     expect(urls.some((u) => u.includes('r=32&'))).toBe(false);
+    expect(urls.some((u) => u.includes('r=16&'))).toBe(false);
     expect(res.fixtures.map((f) => f.stage)).not.toContain('round-of-16');
-    expect(res.notes.join('；')).toMatch(/欧冠 2026-2027 没拉完.*先不发布/);
+    expect(res.fixtures.map((f) => f.sourceId)).toEqual(['r32-seed']);
+  });
+
+  const eflCup: Array<[string | RegExp, () => string]> = [
+    [
+      'eventsnextleague',
+      () =>
+        JSON.stringify({
+          events: [
+            cupEvent({
+              idEvent: 'sf-seed',
+              idLeague: '4570',
+              intRound: '150',
+              strHomeTeam: 'Arsenal',
+              strAwayTeam: 'Chelsea',
+              dateEvent: '2026-10-28',
+              ...notStarted,
+            }),
+          ],
+        }),
+    ],
+    [
+      'eventspastleague',
+      () =>
+        JSON.stringify({
+          events: [
+            cupEvent({
+              idEvent: 'qf-seed',
+              idLeague: '4570',
+              intRound: '125',
+              strHomeTeam: 'Liverpool',
+              strAwayTeam: 'Everton',
+              dateEvent: '2026-10-14',
+            }),
+          ],
+        }),
+    ],
+    [
+      /eventsround\.php\?id=4570&r=125&/,
+      () =>
+        JSON.stringify({
+          events: [
+            cupEvent({
+              idEvent: 'qf-seed',
+              idLeague: '4570',
+              intRound: '125',
+              strHomeTeam: 'Liverpool',
+              strAwayTeam: 'Everton',
+              dateEvent: '2026-10-14',
+            }),
+            cupEvent({
+              idEvent: 'qf2',
+              idLeague: '4570',
+              intRound: '125',
+              strHomeTeam: 'Arsenal',
+              strAwayTeam: 'Brentford',
+              dateEvent: '2026-10-15',
+            }),
+          ],
+        }),
+    ],
+  ];
+
+  it('联赛杯 1/4 决赛拉完、半决赛编码没拉到就超时：已经拉完的轮次照常发布', async () => {
+    // 顺序是 160（附加赛）、64、125、150：拉编码 150 之前超时
+    const { res } = await timed('4570', 900, eflCup);
+    expect(res.fixtures.map((f) => f.sourceId).sort()).toEqual(['qf-seed', 'qf2', 'sf-seed']);
+    // 只有总的「超过用时上限」，没有删掉对阵的说明
+    expect(res.notes[0]).toMatch(/^超过用时上限.*联赛杯/);
+    expect(res.notes.join('；')).not.toMatch(/联赛杯 2026-2027 没拉完/);
+  });
+
+  it('联赛杯 1/4 决赛没拉到就超时：半决赛对阵不发布，说明里写明', async () => {
+    const { res, urls } = await timed('4570', 700, eflCup);
+    expect(urls.some((u) => u.includes('r=125&'))).toBe(false);
+    expect(res.fixtures.map((f) => f.sourceId)).toEqual(['qf-seed']);
+    expect(res.fixtures.map((f) => f.stage)).not.toContain('semi-final');
+    expect(res.notes.join('；')).toMatch(/联赛杯 2026-2027 没拉完.*先不发布/);
   });
 
   it('欧冠种子是 1/8 决赛、上一轮没拉到就超时：这场 1/8 决赛不发布', async () => {

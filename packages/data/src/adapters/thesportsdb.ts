@@ -391,17 +391,17 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
             let firstError = '';
             let dropped = false;
             let stopped = false;
-            const order = [...rounds].sort((a, b) => a - b);
+            // 按阶段从早到晚拉（同阶段按编码）：编码 16（1/8 决赛）比 32 小，按数字排会先拉；
+            // 按阶段排之后超时没拉到的一定是更后的阶段，已经拉完的轮次不会被一起删掉
+            const stageOf = (r: number) => stageOrder(stageFromTheSportsDb(String(r), comp).stage);
+            const order = [...rounds].sort((a, b) => stageOf(a) - stageOf(b) || a - b);
             for (const [i, r] of order.entries()) {
               if (overBudget()) {
                 // 拉到一半超时：记下来（不然这项赛事看起来「正常但场次少」）
                 skipped.push(competitionName(comp));
-                // 没拉到的轮次按失败处理：更后阶段的淘汰赛对阵（种子、先拉到的编码 16）这次不发布
+                // 没拉到的轮次按失败处理：比它们更后阶段的淘汰赛对阵（例如种子里的下一轮）这次不发布
                 for (const rest of order.slice(i))
-                  failedOrder = Math.min(
-                    failedOrder,
-                    stageOrder(stageFromTheSportsDb(String(rest), comp).stage),
-                  );
+                  failedOrder = Math.min(failedOrder, stageOf(rest));
                 stopped = true;
                 break;
               }
@@ -427,7 +427,7 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
               }
             }
             if (!failedRounds.length && !stopped) continue;
-            // 已经加进去的更后阶段也删掉：种子可能就是下一轮，编码 16（1/8 决赛）也会排在 32 前面先拉到
+            // 已经加进去的更后阶段也删掉：种子可能就是下一轮
             for (const [k, f] of fixtures) {
               if (
                 f.competition === comp &&
