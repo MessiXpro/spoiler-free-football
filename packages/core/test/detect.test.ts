@@ -820,6 +820,20 @@ describe('回归：二次审查发现的识别问题', () => {
       expect(redact(text, FB), text).toBe(`${M}${M}`);
     }
     expect(redact('曼城2-0领先，哈兰德随后又进一球', FB)).not.toMatch(/哈兰德/);
+    // 名字和动词之间夹着「随后」「之后」「上半场」这类词：名字也要遮住
+    for (const text of track([
+      '哈兰德随后打入一球',
+      '凯恩之后再进一球',
+      '萨卡之后进了一球',
+      '孙兴慜随后补上一球',
+      '哈兰德上半场两球',
+      'C罗随后又进一球',
+    ])) {
+      expect(redact(text, FB), text).toMatch(new RegExp(`^${M}+$`));
+    }
+    expect(redact('曼城2-0领先，哈兰德随后打入一球', FB)).not.toMatch(/哈兰德/);
+    // 「最后一球」不是进球数
+    expect(redact('梅西生涯最后一球', FB)).toBe('梅西生涯最后一球');
     // 不是人名的前缀照旧保留
     expect(redact('球队再进一球', FB)).toBe(`球队${M}${M}`);
     expect(redact('两队共进五球', FB)).toBe(`两队${M}${M}`);
