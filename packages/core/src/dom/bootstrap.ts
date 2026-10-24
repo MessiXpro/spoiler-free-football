@@ -215,6 +215,8 @@ export interface ShieldController {
   site: SiteRule | null;
   active: boolean;
   reason?: string;
+  /** 全网时段已结束，但这个页面的遮挡还在（保持到刷新）：临时显示/恢复照常可用 */
+  holding?: boolean;
   currentMatch: CurrentMatch | null;
   /** 一键临时显示 */
   pause(ms?: number): void;
@@ -225,7 +227,8 @@ export interface ShieldController {
 /**
  * 根据设置启动遮挡；不需要工作时立即显示页面。
  * 返回的控制器会跟着设置走：之后调用 update() 时，关闭→开启、停用→启用都会自动重新启动；
- * 全网模式下每分钟看一次时段，时段开始就自动启动、结束就自动解除（页面可能一直开着跨过时段边界）
+ * 全网模式下每分钟看一次时段，时段开始就自动启动（页面可能一直开着跨过时段边界）；
+ * 时段结束后已打开页面的遮挡保持到刷新，用户主动关掉全网模式则立即解除
  */
 export function bootShield(
   doc: Document,
@@ -244,19 +247,30 @@ export function bootShield(
    * 之后新打开的页面不会启动，时段再开始时这里照常
    */
   let heldBySchedule = false;
-  /** 总开关关了 / 此站点停用：遮挡由 inner.update 解除，状态也要对应 */
+  /** 总开关关了 / 此站点停用 / 关掉了全网模式：遮挡由 inner.update 解除，状态也要对应 */
   const userDisabled = (): string | null =>
     !latest.enabled
       ? '已关闭'
       : latest.disabledHosts.some((h) => hostDisabledBy(host, h))
         ? '此站点已停用'
-        : null;
+        : !options.siteMode && !latest.global.enabled
+          ? '全网模式已关闭'
+          : null;
   const sync = () => {
     if (!inner.active) {
       if (wanted()) inner = startShield(doc, latest, options);
       return;
     }
-    if (!options.siteMode && !inner.site) heldBySchedule = !inSchedule(latest.global);
+    if (!options.siteMode && !inner.site) {
+      // 用户主动关掉全网模式不是「时段自然结束」：和总开关一样立即解除
+      // （改时段、改星期仍按保持到刷新处理：和无关的设置写入分不开）
+      if (!latest.global.enabled) {
+        heldBySchedule = false;
+        inner.update({ ...latest, enabled: false });
+        return;
+      }
+      heldBySchedule = !inSchedule(latest.global);
+    }
     inner.update(latest);
   };
   if (!options.siteMode) {
@@ -274,8 +288,17 @@ export function bootShield(
     get active() {
       return inner.active && !heldBySchedule && !userDisabled();
     },
+    get holding() {
+      return inner.active && heldBySchedule && !userDisabled();
+    },
     get reason() {
-      return userDisabled() ?? (heldBySchedule ? '不在全网防剧透时段' : inner.reason);
+      // 全网页面的 inner 没启动又不是用户停用的：只可能是时段（不能用启动时的旧原因）
+      return (
+        userDisabled() ??
+        (heldBySchedule || (!inner.active && !options.siteMode)
+          ? '不在全网防剧透时段'
+          : inner.reason)
+      );
     },
     get currentMatch() {
       return inner.currentMatch;

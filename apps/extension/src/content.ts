@@ -57,6 +57,7 @@ async function main() {
     const status: TabStatus = {
       active: controller.active,
       reason: controller.reason,
+      holding: controller.holding ?? false,
       site: controller.site?.name ?? null,
       football: stats?.football ?? false,
       texts: stats?.texts ?? 0,

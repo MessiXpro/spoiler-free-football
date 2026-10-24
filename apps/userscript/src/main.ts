@@ -208,6 +208,18 @@ async function runShield() {
     if (!siteMode) location.reload();
   };
 
+  /** 当前域名在停用名单里（面板显示「在此站点启用」，手机上没有脚本菜单也能撤销） */
+  const siteDisabled = () =>
+    settings.disabledHosts.some((h) => hostDisabledBy(location.hostname, h));
+  const enableSite = async () => {
+    // 只去掉覆盖当前域名的停用项（和插件弹窗的「在此站点启用」一致）
+    const list = settings.disabledHosts.filter((h) => !hostDisabledBy(location.hostname, h));
+    if (list.length === settings.disabledHosts.length) return;
+    settings = await save({ disabledHosts: list });
+    controller.update(settings);
+    ensureUi();
+  };
+
   const activateUi = () => {
     const panel = mountPanel({
       controller: withFrames,
@@ -229,6 +241,8 @@ async function runShield() {
         settings = await save({ disabledHosts: [...settings.disabledHosts, location.hostname] });
         controller.update(settings);
       },
+      enableSite,
+      siteDisabled,
       revealScore: async (m) => {
         settings = await save({
           watched: { ...settings.watched, [m.id]: Math.floor(Date.now() / 1000) },
@@ -243,7 +257,10 @@ async function runShield() {
             penalties?: [number, number];
           } | null;
           if (status === 200 && json === null) return `${NOT_SCORE_DATA}。已记为已看`;
-          if (status !== 200 || !score || score.id !== m.id || typeof score.home !== 'number') {
+          // 只有 404 是还没有比分；托管平台临时出错（5xx 等）要能再试一次（和插件一致）
+          if (status === 404) return '数据源还没有这场的比分，已记为已看';
+          if (status !== 200) return `比分加载失败：HTTP ${status}（已记为已看，可以再试一次）`;
+          if (!score || score.id !== m.id || typeof score.home !== 'number') {
             return '数据源还没有这场的比分，已记为已看';
           }
           // 次回合、首回合还没看：不带加时/点球（能倒推出首回合比分）
@@ -254,7 +271,7 @@ async function runShield() {
             score.penalties ? `（点球 ${score.penalties[0]} - ${score.penalties[1]}）` : ''
           }${score.extraTime ? '（经过加时）' : ''}`;
         } catch (err) {
-          return `比分加载失败：${(err as Error).message}`;
+          return `比分加载失败：${err instanceof Error ? err.message : '网络错误'}（已记为已看，可以再试一次）`;
         }
       },
     });
@@ -271,22 +288,17 @@ async function runShield() {
       controller.update(settings);
     });
   };
-  // 面板和菜单在遮挡启动后才挂：全网版可能在时段开始前就打开了页面，时段到了遮挡自动启动，这时也要有面板
+  // 面板和菜单在遮挡启动后才挂：全网版可能在时段开始前就打开了页面，时段到了遮挡自动启动，这时也要有面板；
+  // 此站点已停用时也挂（面板里可以重新启用）
   let uiMounted = false;
   const ensureUi = () => {
-    if (uiMounted || !isTop || !controller.active) return;
+    if (uiMounted || !isTop || !(controller.active || siteDisabled())) return;
     uiMounted = true;
     activateUi();
   };
   ensureUi();
   if (__SFF_VARIANT__ === 'global' && isTop && !uiMounted) setInterval(ensureUi, 60 * 1000);
-  registerMenu('防剧透：在此站点重新启用', async () => {
-    // 只去掉覆盖当前域名的停用项（和插件弹窗的「在此站点启用」一致）
-    const list = settings.disabledHosts.filter((h) => !hostDisabledBy(location.hostname, h));
-    if (list.length === settings.disabledHosts.length) return;
-    settings = await save({ disabledHosts: list });
-    controller.update(settings);
-  });
+  registerMenu('防剧透：在此站点重新启用', () => void enableSite());
   if (__SFF_VARIANT__ === 'global' && isTop) {
     const g = settings.global;
     const range = `${g.start}–${g.end}`;
@@ -311,6 +323,8 @@ async function runShield() {
   onValueChange(KEY, (v) => {
     settings = normalizeSettings(v as Partial<ShieldSettings>, DEFAULT_DATA_BASE);
     controller.update(settings);
+    // 其他标签页重新启用了此站点 / 打开了总开关：普通版没有补挂定时器，这里补挂面板和菜单
+    ensureUi();
   });
   if (isTop) void updateRules(settings);
 }

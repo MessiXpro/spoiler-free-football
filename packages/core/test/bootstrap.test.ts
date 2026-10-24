@@ -264,12 +264,85 @@ describe('控制器跟着设置和时段走', () => {
       expect(c.active).toBe(false);
       expect(c.reason).toBe('不在全网防剧透时段');
       expect(document.body.textContent).toBe('Arsenal ■-■ Chelsea');
+      // 弹窗/面板据此说明「遮挡保持到刷新」，临时显示照常可用
+      expect(c.holding).toBe(true);
+      c.pause(5 * 60 * 1000);
+      expect(document.body.textContent).toBe('Arsenal 2-1 Chelsea');
+      c.resume();
+      expect(document.body.textContent).toBe('Arsenal ■-■ Chelsea');
 
       vi.setSystemTime(new Date(2026, 9, 18, 6, 0));
       vi.advanceTimersByTime(60_000);
       expect(c.active).toBe(true);
+      expect(c.holding).toBe(false);
       expect(document.body.textContent).toBe('Arsenal ■-■ Chelsea');
       c.shield?.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('时段内关掉全网模式：立即解除遮挡（不是时段结束，不保持）；重新打开后再遮上', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 9, 17, 8, 0));
+      document.documentElement.className = '';
+      document.body.innerHTML = '<p>Arsenal 2-1 Chelsea</p>';
+      const s = defaultShieldSettings(BASE);
+      s.global = { enabled: true, start: '06:00', end: '12:00', days: week };
+      const c = bootShield(document, s, { siteMode: false });
+      expect(document.body.textContent).toBe('Arsenal ■-■ Chelsea');
+
+      c.update({ ...s, global: { ...s.global, enabled: false } });
+      expect(document.body.textContent).toBe('Arsenal 2-1 Chelsea');
+      expect(c.active).toBe(false);
+      expect(c.holding).toBe(false);
+      expect(c.reason).toBe('全网模式已关闭');
+      // 每分钟的时段检查也不会重新遮上
+      vi.advanceTimersByTime(60_000);
+      expect(document.body.textContent).toBe('Arsenal 2-1 Chelsea');
+
+      c.update(s);
+      expect(c.active).toBe(true);
+      expect(document.body.textContent).toBe('Arsenal ■-■ Chelsea');
+
+      // 时段结束后保持遮挡；之后无关的设置写入（规则检查时间等）不会解除
+      vi.setSystemTime(new Date(2026, 9, 17, 12, 0));
+      vi.advanceTimersByTime(60_000);
+      expect(c.holding).toBe(true);
+      c.update({ ...s, rulesCheckedAt: Date.now() });
+      c.update({ ...s, watched: { x: 1 } });
+      expect(document.body.textContent).toBe('Arsenal ■-■ Chelsea');
+      expect(c.holding).toBe(true);
+      expect(c.reason).toBe('不在全网防剧透时段');
+      c.shield?.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('时段外重新启用：状态跟着变，不显示启动时的旧原因', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 9, 17, 13, 0));
+      document.documentElement.className = '';
+      document.body.innerHTML = '<p>Arsenal 2-1 Chelsea</p>';
+      const s = defaultShieldSettings(BASE);
+      s.global = { enabled: true, start: '06:00', end: '12:00', days: week };
+      const off = bootShield(document, { ...s, enabled: false }, { siteMode: false });
+      expect(off.reason).toBe('已关闭');
+      off.update(s);
+      expect(off.active).toBe(false);
+      expect(off.reason).toBe('不在全网防剧透时段');
+      const stopped = bootShield(
+        document,
+        { ...s, disabledHosts: ['localhost'] },
+        { siteMode: false },
+      );
+      expect(stopped.reason).toBe('此站点已停用');
+      stopped.update(s);
+      expect(stopped.reason).toBe('不在全网防剧透时段');
+      expect(document.body.textContent).toBe('Arsenal 2-1 Chelsea');
     } finally {
       vi.useRealTimers();
     }

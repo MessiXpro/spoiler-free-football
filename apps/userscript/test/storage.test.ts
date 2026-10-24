@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { getValue, setValue, storageKind } from '../src/storage.ts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getJson, getValue, setValue, storageKind, type GmXhrDetails } from '../src/storage.ts';
 
 const g = globalThis as unknown as Record<string, unknown>;
 
@@ -7,6 +7,8 @@ afterEach(() => {
   delete g.GM;
   delete g.GM_getValue;
   delete g.GM_setValue;
+  delete g.GM_xmlhttpRequest;
+  vi.unstubAllGlobals();
   localStorage.clear();
 });
 
@@ -37,5 +39,19 @@ describe('用户脚本存储', () => {
     expect(storageKind()).toBe('gm-legacy');
     await setValue('x', 3);
     expect(await getValue('x')).toBe(3);
+  });
+
+  it('跨域读取：fetch 失败改用 GM_xmlhttpRequest，出错时拿到的是 Error（不是响应对象）', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    );
+    // Tampermonkey / Violentmonkey 传给 onerror 的是响应对象
+    g.GM_xmlhttpRequest = (d: GmXhrDetails) => d.onerror({ status: 0, responseText: '' });
+    await expect(getJson('https://example.test/x.json')).rejects.toThrow('网络错误');
+    g.GM_xmlhttpRequest = (d: GmXhrDetails) => d.onload({ status: 200, responseText: '{"a":1}' });
+    expect(await getJson('https://example.test/x.json')).toEqual({ status: 200, json: { a: 1 } });
   });
 });

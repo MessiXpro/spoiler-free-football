@@ -9,6 +9,11 @@ import { parseTimeWindow } from '../src/schedule.ts';
 const g = globalThis as unknown as Record<string, unknown>;
 let store: Map<string, unknown>;
 let menus: Map<string, () => unknown>;
+/** 脚本管理器的 addValueChangeListener：模拟其他标签页改了设置 */
+let changeListeners: Array<(k: string, o: unknown, n: unknown, remote: boolean) => void>;
+const remoteChange = (value: unknown) => {
+  for (const cb of changeListeners) cb('settings', undefined, structuredClone(value), true);
+};
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
@@ -30,12 +35,15 @@ async function boot(
   store = new Map();
   if (stored !== undefined) store.set('settings', structuredClone(stored));
   menus = new Map();
+  changeListeners = [];
   g.__SFF_WEB_URL__ = 'https://web.example/sff/';
   g.__SFF_WEB_PREFIXES__ = ['https://web.example/sff/'];
   g.__SFF_VARIANT__ = variant;
   g.GM = {
     getValue: async (k: string, d?: unknown) => (store.has(k) ? structuredClone(store.get(k)) : d),
     setValue: async (k: string, v: unknown) => void store.set(k, structuredClone(v)),
+    addValueChangeListener: (_k: string, cb: (typeof changeListeners)[number]) =>
+      changeListeners.push(cb),
   };
   g.GM_registerMenuCommand = (name: string, fn: () => unknown) => void menus.set(name, fn);
   vi.stubGlobal(
@@ -47,6 +55,15 @@ async function boot(
   // 这个菜单在 runShield 最后注册（不管遮挡是否生效）
   await vi.waitFor(() => expect(menus.has('防剧透：在此站点重新启用')).toBe(true));
 }
+
+/** 面板在 shadow root 里 */
+const panel = () => {
+  const root = document.querySelector('sff-panel')?.shadowRoot;
+  return <T extends HTMLElement = HTMLElement>(id: string) =>
+    root?.querySelector(`[data-testid="${id}"]`) as T;
+};
+const panelStatus = () =>
+  document.querySelector('sff-panel')!.shadowRoot!.querySelector('[data-id="status"]')!.textContent;
 
 const storedSettings = () =>
   store.get('settings') as {
@@ -152,6 +169,111 @@ describe('全网版用户脚本', () => {
     );
     expect(document.getElementById('t')!.textContent).toBe('Arsenal 2-1 Chelsea');
     expect([...menus.keys()].some((k) => k.includes('全网'))).toBe(false);
+  });
+});
+
+describe('悬浮面板', () => {
+  it('此站点已停用时也有面板，可以在面板里重新启用（手机上没有脚本菜单）', async () => {
+    await boot('global', {
+      disabledHosts: ['localhost'],
+      global: { enabled: true, start: '06:00', end: '12:00', days: ALL_DAYS },
+    });
+    expect(document.getElementById('t')!.textContent).toBe('Arsenal 2-1 Chelsea');
+    const q = panel();
+    q('sff-fab').click();
+    expect(panelStatus()).toBe('此站点已停用');
+    expect(q('sff-toggle-site').textContent).toBe('在此站点启用');
+    q('sff-toggle-site').click();
+    await vi.waitFor(() =>
+      expect(document.getElementById('t')!.textContent).toBe('Arsenal ■-■ Chelsea'),
+    );
+    expect((store.get('settings') as { disabledHosts: string[] }).disabledHosts).toEqual([]);
+    await vi.waitFor(() => expect(q('sff-toggle-site').textContent).toBe('在此站点停用'));
+  });
+
+  it('其他标签页打开了总开关：不刷新也补上面板', async () => {
+    const off = {
+      enabled: false,
+      global: { enabled: true, start: '06:00', end: '12:00', days: ALL_DAYS },
+    };
+    await boot('global', off);
+    expect(document.querySelector('sff-panel')).toBeNull();
+    remoteChange({ ...off, enabled: true });
+    expect(document.getElementById('t')!.textContent).toBe('Arsenal ■-■ Chelsea');
+    expect(document.querySelector('sff-panel')).not.toBeNull();
+  });
+
+  it('全网时段结束后页面还遮着：面板说明保持到刷新，临时显示照常可用', async () => {
+    const s = { global: { enabled: true, start: '06:00', end: '12:00', days: ALL_DAYS } };
+    await boot('global', s);
+    await vi.waitFor(() =>
+      expect(document.getElementById('t')!.textContent).toBe('Arsenal ■-■ Chelsea'),
+    );
+    // 时段结束后的一次设置变化（每分钟的时段检查走同一条路）
+    vi.setSystemTime(new Date(2026, 8, 21, 12, 30, 0));
+    remoteChange(s);
+    expect(document.getElementById('t')!.textContent).toBe('Arsenal ■-■ Chelsea');
+    const q = panel();
+    q('sff-fab').click();
+    expect(panelStatus()).toBe('全网时段已结束，这个页面的遮挡保持到刷新');
+    expect(q('sff-pause').hidden).toBe(false);
+    q('sff-pause').click();
+    expect(document.getElementById('t')!.textContent).toBe('Arsenal 2-1 Chelsea');
+    expect(panelStatus()).toBe('已临时显示');
+    expect(q('sff-resume').hidden).toBe(false);
+  });
+
+  it('全网模式在别的标签页关掉：这个页面立即解除遮挡', async () => {
+    const s = { global: { enabled: true, start: '06:00', end: '12:00', days: ALL_DAYS } };
+    await boot('global', s);
+    await vi.waitFor(() =>
+      expect(document.getElementById('t')!.textContent).toBe('Arsenal ■-■ Chelsea'),
+    );
+    remoteChange({ global: { ...s.global, enabled: false } });
+    expect(document.getElementById('t')!.textContent).toBe('Arsenal 2-1 Chelsea');
+    panel()('sff-fab').click();
+    expect(panelStatus()).toBe('全网模式已关闭');
+  });
+
+  it('比分加载失败（5xx）：说明可以再试一次，点「再试一次」直接重新下载', async () => {
+    let scoreCalls = 0;
+    await boot(
+      'global',
+      {
+        global: { enabled: true, start: '06:00', end: '12:00', days: ALL_DAYS },
+        currentMatch: {
+          id: 'epl-x',
+          title: 'Arsenal vs Chelsea',
+          competition: 'epl',
+          kickoff: '2026-09-21T00:00:00Z',
+          home: { id: 'ars', name: 'Arsenal' },
+          away: { id: 'che', name: 'Chelsea' },
+          url: 'http://localhost:3000/',
+          host: 'localhost',
+          at: Date.now(),
+        },
+      },
+      (url) => {
+        if (!url.includes('/scores/')) return { status: 404, text: async () => '' };
+        scoreCalls++;
+        return scoreCalls === 1
+          ? { status: 503, text: async () => '<html>Service Unavailable</html>' }
+          : { status: 200, text: async () => JSON.stringify({ id: 'epl-x', home: 2, away: 1 }) };
+      },
+    );
+    const q = panel();
+    q('sff-fab').click();
+    q('sff-reveal').click();
+    q('sff-reveal-yes').click();
+    await vi.waitFor(() =>
+      expect(q('sff-score').textContent).toBe('比分加载失败：HTTP 503（已记为已看，可以再试一次）'),
+    );
+    expect(q('sff-reveal').hidden).toBe(false);
+    expect(q('sff-reveal').textContent).toBe('再试一次');
+    q('sff-reveal').click();
+    expect(q('sff-reveal-yes').hidden).toBe(true);
+    await vi.waitFor(() => expect(q('sff-score').textContent).toBe('Arsenal 2 - 1 Chelsea'));
+    expect(scoreCalls).toBe(2);
   });
 });
 

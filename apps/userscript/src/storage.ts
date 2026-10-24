@@ -97,7 +97,8 @@ export async function getJson(url: string): Promise<{ status: number; json: unkn
         method: 'GET',
         url,
         onload: (r) => resolve({ status: r.status, json: safeParse(r.responseText) }),
-        onerror: reject,
+        // 脚本管理器传给 onerror 的是响应对象而不是 Error：统一成 Error，提示里才有原因
+        onerror: () => reject(new Error('网络错误')),
       });
     });
   }

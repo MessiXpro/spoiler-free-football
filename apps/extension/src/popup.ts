@@ -38,6 +38,16 @@ function renderStatus(status: TabStatus | null, host: string) {
     resume.hidden = true;
     return;
   }
+  if (status.holding) {
+    // 全网时段已结束，这个页面已经遮住的内容还在：照常可以临时显示/恢复
+    const where = status.site ?? host;
+    el.textContent = status.paused
+      ? `${where}：已临时显示全部内容`
+      : `${where}：全网时段已结束，这个页面的遮挡保持到刷新`;
+    pause.hidden = status.paused;
+    resume.hidden = !status.paused;
+    return;
+  }
   if (!status.active) {
     el.textContent = `${status.site ?? host}：${status.reason ?? '未启用'}`;
     pause.hidden = true;
@@ -127,7 +137,10 @@ async function main() {
       const out = $('match-score');
       out.textContent = '加载中…';
       const s = await loadSettings();
-      await saveSettings({ watched: { ...s.watched, [match.id]: Math.floor(Date.now() / 1000) } });
+      const at = Math.floor(Date.now() / 1000);
+      await saveSettings({ watched: { ...s.watched, [match.id]: at } });
+      // 本地也记上：之后点「再试一次 / 查看比分」直接显示，不再问「会记为已看」
+      settings.watched[match.id] = at;
       try {
         const score = await fetchScoreFrom(s.dataBase, match.id);
         // 次回合、首回合还没看：不带加时/点球（能倒推出首回合比分）

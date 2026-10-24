@@ -1,8 +1,9 @@
+import { NOT_SCORE_DATA } from '@sff/core';
 import { ATTR_UI, type CurrentMatch, type ShieldController } from '@sff/core/dom';
 
 /**
  * 手机上没有插件弹窗，所以在页面右下角放一个小按钮「防」，点开是迷你面板：
- * 临时显示 / 恢复、在此站点停用、正在看的比赛「看完了，显示比分」；全网版还能改全网防剧透时段。
+ * 临时显示 / 恢复、在此站点停用 / 启用、正在看的比赛「看完了，显示比分」；全网版还能改全网防剧透时段。
  * 面板放在 shadow root 里并带 data-sff-ui 标记，遮挡逻辑不会处理它，页面样式也不会影响它。
  */
 export interface PanelActions {
@@ -11,6 +12,9 @@ export interface PanelActions {
   isWatched: (id: string) => boolean;
   revealScore: (match: CurrentMatch) => Promise<string>;
   disableSite: () => Promise<void>;
+  /** 停用后在面板里重新启用（手机上的脚本管理器大多没有脚本菜单） */
+  enableSite: () => Promise<void>;
+  siteDisabled: () => boolean;
   webUrl: () => string;
   /** 全网版：查看/修改全网防剧透时段（手机上的脚本管理器大多没有脚本菜单，只能在这里改） */
   globalWindow?: {
@@ -47,7 +51,7 @@ export function mountPanel(actions: PanelActions) {
       <div class="row">
         <button class="b" data-id="pause" data-testid="sff-pause">临时显示 5 分钟</button>
         <button class="b" data-id="resume" data-testid="sff-resume" hidden>恢复遮挡</button>
-        <button class="b" data-id="disable">在此站点停用</button>
+        <button class="b" data-id="disable" data-testid="sff-toggle-site">在此站点停用</button>
       </div>
       <div data-id="match" hidden data-testid="sff-match">
         <div class="muted" style="margin-top:10px">正在看</div>
@@ -77,13 +81,18 @@ export function mountPanel(actions: PanelActions) {
   const refresh = () => {
     const c = actions.controller();
     const stats = c.shield?.stats;
-    $('status').textContent = !c.active
+    // 全网时段已结束、这个页面的遮挡还在（保持到刷新）：临时显示/恢复照常可用
+    const working = c.active || Boolean(c.holding);
+    $('status').textContent = !working
       ? (c.reason ?? '未启用')
       : stats?.paused
         ? '已临时显示'
-        : `已遮挡 ${(stats?.texts ?? 0) + (stats?.blocks ?? 0)} 处`;
-    $('pause').hidden = !c.active || Boolean(stats?.paused);
-    $('resume').hidden = !c.active || !stats?.paused;
+        : c.holding
+          ? '全网时段已结束，这个页面的遮挡保持到刷新'
+          : `已遮挡 ${(stats?.texts ?? 0) + (stats?.blocks ?? 0)} 处`;
+    $('pause').hidden = !working || Boolean(stats?.paused);
+    $('resume').hidden = !working || !stats?.paused;
+    $('disable').textContent = actions.siteDisabled() ? '在此站点启用' : '在此站点停用';
     const m = actions.currentMatch();
     $('match').hidden = !m;
     if (m) {
@@ -126,7 +135,7 @@ export function mountPanel(actions: PanelActions) {
     refresh();
   });
   $('disable').addEventListener('click', async () => {
-    await actions.disableSite();
+    await (actions.siteDisabled() ? actions.enableSite() : actions.disableSite());
     refresh();
   });
   const show = async () => {
@@ -135,7 +144,13 @@ export function mountPanel(actions: PanelActions) {
     $('reveal').hidden = true;
     $('confirm').hidden = true;
     $('score').textContent = '加载中…';
-    $('score').textContent = await actions.revealScore(m);
+    const text = await actions.revealScore(m);
+    $('score').textContent = text;
+    // 加载失败（已记为已看）：可以再试一次，不用刷新视频页（会打断播放）
+    if (text.startsWith('比分加载失败') || text.startsWith(NOT_SCORE_DATA)) {
+      $('reveal').textContent = '再试一次';
+      $('reveal').hidden = false;
+    }
   };
   $('reveal').addEventListener('click', () => {
     const m = actions.currentMatch();

@@ -44,6 +44,8 @@ export type TabMessage = { type: 'status' } | { type: 'pause'; ms: number } | { 
 export interface TabStatus {
   active: boolean;
   reason?: string;
+  /** 全网时段已结束，但这个页面的遮挡保持到刷新（临时显示/恢复照常可用） */
+  holding?: boolean;
   site: string | null;
   football: boolean;
   texts: number;
