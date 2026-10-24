@@ -16,6 +16,7 @@ import {
   DEFAULT_THESPORTSDB_LEAGUES,
   parseTheSportsDbEvent,
   roundsAround,
+  seedTtl,
   settledRoundTtl,
   THESPORTSDB_LEAGUES,
   type TsdbEvent,
@@ -1583,5 +1584,39 @@ describe('所有数据源共用一个总用时上限', () => {
     });
     // a：自己的 10 分钟上限；b：总共 15 分钟里只剩 6 分钟
     expect(deadlines).toEqual([10 * 60_000, 15 * 60_000]);
+  });
+});
+
+describe('TheSportsDB 眼下没在踢的赛事缓存一天', () => {
+  const ev = (date: string) => ({
+    idEvent: date,
+    idLeague: '4429',
+    strSeason: '2026',
+    intRound: '1',
+    strHomeTeam: 'France',
+    strAwayTeam: 'Spain',
+    dateEvent: date,
+    strTime: '19:00:00',
+    strStatus: 'Not Started',
+  });
+  const now = Date.parse('2026-10-23T12:00:00Z');
+  it('「下一场/最近几场」都在一周以外或没有：24 小时；一周内有比赛：3 小时', () => {
+    const H = 60 * 60 * 1000;
+    expect(seedTtl(JSON.stringify({ events: null }), now)).toBe(24 * H);
+    expect(seedTtl(JSON.stringify({ events: [ev('2026-07-19'), ev('2026-07-15')] }), now)).toBe(
+      24 * H,
+    );
+    expect(seedTtl(JSON.stringify({ events: [ev('2026-07-19'), ev('2026-10-21')] }), now)).toBe(
+      3 * H,
+    );
+    expect(seedTtl(JSON.stringify({ events: [ev('2026-10-28')] }), now)).toBe(3 * H);
+    expect(seedTtl('not json', now)).toBe(3 * H);
+  });
+
+  it('欧协联排在杯赛和国家队赛事前面（时间不够时先跳过的是休赛期赛事）', () => {
+    const order = DEFAULT_THESPORTSDB_LEAGUES;
+    expect(order.indexOf('5071')).toBeLessThan(order.indexOf('4482'));
+    expect(order.indexOf('5071')).toBeLessThan(order.indexOf('4490'));
+    expect(order.slice(-4)).toEqual(['4503', '4429', '4502', '4499']);
   });
 });

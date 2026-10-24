@@ -55,8 +55,10 @@ export const THESPORTSDB_LEAGUES: Record<string, string> = {
  * 联赛默认由 openfootball / football-data 提供，可通过 THESPORTSDB_LEAGUES 环境变量加入
  */
 export const DEFAULT_THESPORTSDB_LEAGUES = [
+  // 赛季里每周都有比赛的排前面：时间不够时被跳过的是排在后面的（多半是休赛期的杯赛和大赛）
   '4480', // 欧冠
   '4481', // 欧联
+  '5071', // 欧协联
   '4482', // 足总杯
   '4483', // 国王杯
   '4570', // 联赛杯
@@ -65,7 +67,6 @@ export const DEFAULT_THESPORTSDB_LEAGUES = [
   '5519', // 欧预赛
   '5518', // 世预赛
   '5515', // 世预赛
-  '5071', // 欧协联
   '4511', // 西班牙超级杯
   '4571', // 社区盾
   '4512', // 欧洲超级杯
@@ -98,6 +99,26 @@ const FINISHED = new Set(['FT', 'AET', 'PEN', 'AWD', 'WO', 'MATCH FINISHED']);
 const RECENT_TTL_MS = 3 * 60 * 60 * 1000;
 const SETTLED_TTL_MS = 24 * 60 * 60 * 1000;
 const SETTLED_AFTER_MS = 2 * 24 * 60 * 60 * 1000;
+/** 「最近一场/下一场」离现在都超过这么久：这项赛事眼下没在踢，缓存一天 */
+const QUIET_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * 「下一场 / 最近几场」的缓存有效期：眼下没在踢的赛事（休赛期的大赛、超级杯）结果一天都不会变，缓存一天；
+ * 一周内有比赛的照常 3 小时。省下来的请求留给正在进行的赛事（免费 Key 很慢，还常被限流）
+ */
+export function seedTtl(body: string, now = Date.now()): number {
+  try {
+    const events = (JSON.parse(body) as EventsResponse).events;
+    if (!Array.isArray(events) || events.length === 0) return SETTLED_TTL_MS;
+    const quiet = events.every((e) => {
+      const f = parseTheSportsDbEvent(e, new Date(now));
+      return f ? Math.abs(Date.parse(f.kickoff) - now) > QUIET_AFTER_MS : true;
+    });
+    return quiet ? SETTLED_TTL_MS : RECENT_TTL_MS;
+  } catch {
+    return RECENT_TTL_MS;
+  }
+}
 
 /**
  * 一整轮的缓存有效期：每场都已完赛、而且最后一场也是两天以前的，缓存一天；否则 3 小时
@@ -274,7 +295,11 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
         ctx.fetcher.getJson<EventsResponse>(`${BASE}/${key}/${path}`, {
           kind: 'api',
           // 按轮次拉取的结果里全都踢完两天以上的，很少再变：缓存一天，省请求（免费 Key 很慢）
-          ttlMs: path.startsWith('eventsround') ? settledRoundTtl : RECENT_TTL_MS,
+          ttlMs: path.startsWith('eventsround')
+            ? settledRoundTtl
+            : path.startsWith('eventsnextleague') || path.startsWith('eventspastleague')
+              ? seedTtl
+              : RECENT_TTL_MS,
           cacheable: isEventsBody,
         });
       // HTTP 200 的报错（Key 无效、超额、联赛 ID 不对）不能当成「这轮没有比赛」，要算这个联赛失败

@@ -225,3 +225,41 @@ describe('被限流后主动放慢', () => {
     expect(waits.some(([u]) => u.includes('other.example.com'))).toBe(false);
   });
 });
+
+describe('限流过去后逐步恢复请求间隔', () => {
+  it('放慢后连续几次没再被限流：间隔减半，最后回到原来的间隔', async () => {
+    const waits: number[] = [];
+    let n = 0;
+    const impl = (async () =>
+      ++n <= 3
+        ? new Response('slow down', { status: 429, headers: { 'retry-after': '1' } })
+        : new Response('ok', { status: 200 })) as typeof fetch;
+    const logs: string[] = [];
+    let fakeNow = 0;
+    const realNow = Date.now;
+    Date.now = () => fakeNow;
+    try {
+      const f = createHttpFetcher({
+        fetchImpl: impl,
+        minIntervalMs: { 'api.example.com': 1000 },
+        retries: 2,
+        log: (m) => logs.push(m),
+        sleep: async (ms) => {
+          waits.push(ms);
+          fakeNow += ms;
+        },
+      });
+      // 第 1 个请求连续 429 三次（最后用不上缓存会报错），间隔一路涨到 20 秒封顶
+      await f.getText('https://api.example.com/first', { kind: 'api' }).catch(() => {});
+      for (let i = 0; i < 14; i++)
+        await f.getText(`https://api.example.com/p${i}`, { kind: 'api' });
+    } finally {
+      Date.now = realNow;
+    }
+    expect(logs.join('\n')).toMatch(/限流.*20 秒/);
+    expect(logs.join('\n')).toMatch(/请求间隔缩短到 10 秒/);
+    expect(logs.join('\n')).toMatch(/请求间隔恢复正常/);
+    // 最后几个请求又按原来的 1 秒间隔发出
+    expect(waits.at(-1)).toBeLessThanOrEqual(1000);
+  });
+});
