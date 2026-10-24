@@ -140,22 +140,21 @@ function validateZhScorer(m: RegExpExecArray, norm: string): boolean {
   return true;
 }
 
+// 末字是这些的不是人名：「本场两球」「至少两球」「让两球」「会进两球」「开出两球」「这一球」「任何一球」「落后两球」；
+// 「多」只排除「最多」「差不多」这类词（罗纳尔多、里卡多是人名）；
+// 「上」「下」只排除「剩下」「救下」「补上」「场上」这类词，日本姓氏（井上、森下）也以它们结尾。
+// 进球者规则里也用它（写成 lookbehind）：名字刚好停在「随后」这类词上时，正则会接着试更长的名字（「哈兰德随后又进一球」整体遮住）
+const ZH_NOT_NAME_END =
+  '[场轮赛队共计进打入以到第超甲乙杯联周季年月日有的了把个是在让受少差再会要需还出能可约这那每哪任何后]|[最至更很许不]多|[剩余留拿救扑挡接压以之脚底]下|[补加马场身手以之台头]上';
+const ZH_NOT_NAME_END_RE = new RegExp(`(?:${ZH_NOT_NAME_END})$`);
+
 /**
  * "哈兰德两球""凯恩进2球" 是进球者提示；"本轮两球""全场5球""买了两球" 不是人名。
  * 人名前面若是 场/轮/赛/队/共/计 等字，或者整个片段以这些常见词开头，就不算
  */
 function validateZhGoals(m: RegExpExecArray): boolean {
   const name = m[1] ?? '';
-  // 末字是这些的不是人名：「本场两球」「至少两球」「让两球」「会进两球」「开出两球」「这一球」「任何一球」「落后两球」；
-  // 「多」只排除「最多」「差不多」这类词（罗纳尔多、里卡多是人名）；
-  // 「上」「下」只排除「剩下」「救下」「补上」「场上」这类词，日本姓氏（井上、森下）也以它们结尾
-  if (
-    /[场轮赛队共计进打入以到第超甲乙杯联周季年月日有的了把个是在让受少差再会要需还出能可约这那每哪任何后]$|[最至更很许不]多$|(?:[剩余留拿救扑挡接压以之脚底]下|[补加马场身手以之台头]上)$/.test(
-      name,
-    )
-  ) {
-    return false;
-  }
+  if (ZH_NOT_NAME_END_RE.test(name)) return false;
   // 赛前盘口、预测、讨论
   if (/[盘赔猜估测论坛]/.test(name)) return false;
   return !/^(?:全场|本场|上半场|下半场|两队|双方|合计|共计|一共|总共|全部|最近|本轮|上轮|这场|那场|本赛季|本季|赛季|生涯)/.test(
@@ -415,7 +414,7 @@ function buildRules(): Rule[] {
     // 一个人单场进七球以上几乎不会出现，"七八九球"多半是台球（"九球天后""中式八球"），不收
     {
       re: new RegExp(
-        `((?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6}?))\\s*(?:进了|进|入|独进|打进|打入|攻入|攻进|再进|又进|共进|补上|再添|又添)?\\s*(?:一|两|三|四|五|六|\\d)\\s*球(?:[一两三四五\\d]助)?(?![员迷队衣鞋场馆台星类技赛拍])`,
+        `((?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6}?)(?<!${ZH_NOT_NAME_END}))\\s*(?:进了|进|入|独进|打进|打入|攻入|攻进|再进|又进|共进|补上|再添|又添)?\\s*(?:一|两|三|四|五|六|\\d)\\s*球(?:[一两三四五\\d]助)?(?![员迷队衣鞋场馆台星类技赛拍])`,
         'g',
       ),
       kind: 'scorer',
@@ -490,7 +489,7 @@ function buildRules(): Rule[] {
     },
     // 动词和 three points 之间可以夹一两个形容词："earn vital three points""secure a hard-fought three points"
     {
-      re: /(?<![A-Za-z])(?:claim|claims|claimed|take|takes|took|earn|earns|earned|secure|secures|secured|collect|collects|collected|bag|bags|bagged|grab|grabs|grabbed|seal|seals|sealed|snatch|snatches|snatched|nick|nicks|nicked|pick(?:s|ed)?\s+up)\s+(?:a\s+|the\s+|all\s+)?(?:[A-Za-z][A-Za-z-]*\s+){0,2}three\s+points(?![A-Za-z])/gi,
+      re: /(?<![A-Za-z])(?:claim|claims|claimed|take|takes|took|earn|earns|earned|secure|secures|secured|collect|collects|collected|bag|bags|bagged|grab|grabs|grabbed|seal|seals|sealed|snatch|snatches|snatched|nick|nicks|nicked|taken|taking|claiming|earning|securing|collecting|bagging|grabbing|sealing|snatching|nicking|pick(?:s|ed|ing)?\s+up)\s+(?:a\s+|the\s+|all\s+)?(?:[A-Za-z][A-Za-z-]*\s+){0,2}three\s+points(?![A-Za-z])/gi,
       kind: 'result',
       contextual: true,
     },
