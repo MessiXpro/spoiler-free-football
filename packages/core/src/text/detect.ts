@@ -2,6 +2,7 @@ import { TEAMS, COMPETITIONS } from '../catalog/index.ts';
 import { normalizeText } from './normalize.ts';
 import {
   CONTEXT_NAME_DENY,
+  CONTEXT_NAME_GUARDED,
   EN_CONTEXTUAL,
   EN_FOOTBALL_HINTS,
   EN_PAIR_VERBS,
@@ -145,9 +146,10 @@ function validateZhScorer(m: RegExpExecArray, norm: string): boolean {
  */
 function validateZhGoals(m: RegExpExecArray): boolean {
   const name = m[1] ?? '';
-  // 末字是这些的不是人名：「本场两球」「至少两球」「让两球」「会进两球」「开出两球」「这一球」
+  // 末字是这些的不是人名：「本场两球」「至少两球」「让两球」「会进两球」「开出两球」「这一球」「任何一球」「剩下一球」；
+  // 「多」只排除「最多」「差不多」这类词（罗纳尔多、里卡多是人名）
   if (
-    /[场轮赛队共计进打入以到第超甲乙杯联周季年月日有的了把个是在让受少差再会要需还出能可约这那每哪任多]$/.test(
+    /[场轮赛队共计进打入以到第超甲乙杯联周季年月日有的了把个是在让受少差再会要需还出能可约这那每哪任何后下上]$|[最至更很许不]多$/.test(
       name,
     )
   ) {
@@ -195,9 +197,13 @@ function teamNames(withZhAliases = false): string[] {
 function contextPattern(): RegExp {
   const zh = new Set<string>(ZH_FOOTBALL_HINTS);
   const en = new Set<string>(EN_FOOTBALL_HINTS);
+  const guarded = new Set<string>();
   const add = (name: string | undefined) => {
     if (!name || CONTEXT_NAME_DENY.has(name)) return;
-    if (/[一-鿿]/.test(name)) {
+    const guard = CONTEXT_NAME_GUARDED.get(name);
+    if (guard) {
+      guarded.add(guard);
+    } else if (/[一-鿿]/.test(name)) {
       if (name.length >= 2) zh.add(name);
     } else if (name.length >= 4) {
       en.add(name);
@@ -206,7 +212,10 @@ function contextPattern(): RegExp {
   for (const team of TEAMS) {
     // 国家名在新闻里太常见，不作为足球语境
     if (team.national) continue;
-    [team.zh, team.zhFull, team.en, ...(team.aliases ?? [])].forEach(add);
+    // 中文简称（国米、尤文、多特）也算；城市名、日常词的简称在 CONTEXT_NAME_DENY 里跳过
+    [team.zh, team.zhFull, team.en, ...(team.aliases ?? []), ...(team.zhAliases ?? [])].forEach(
+      add,
+    );
   }
   for (const comp of COMPETITIONS) {
     [comp.zh, comp.zhFull, comp.en, ...(comp.aliases ?? []), ...(comp.zhAliases ?? [])].forEach(
@@ -214,7 +223,8 @@ function contextPattern(): RegExp {
     );
   }
   // 英文名区分大小写以减少误判（"nice" 不算，"Arsenal" 算）
-  return new RegExp(`(?:${alt(zh)})|(?<![A-Za-z])(?:${alt(en)})(?![A-Za-z])`);
+  const zhAlt = [alt(zh), ...guarded].join('|');
+  return new RegExp(`(?:${zhAlt})|(?<![A-Za-z])(?:${alt(en)})(?![A-Za-z])`);
 }
 
 /** 目录里所有球队名、赛事名（至少两个字） */
@@ -360,9 +370,10 @@ function buildRules(): Rule[] {
       contextual: true,
       around: pairAround('zh'),
     },
-    // "Arsenal see off Chelsea" "Villa hold Liverpool"：同样只遮动词（区分大小写，队名按原样写才算）
+    // "Arsenal see off Chelsea" "Villa Hold Liverpool"：同样只遮动词
+    // （动词不分大小写，标题常用 Title Case；队名按原样写才算，见 pairAnchors）
     {
-      re: new RegExp(`(?<![A-Za-z])(?:${alt(EN_PAIR_VERBS)})(?![A-Za-z])`, 'g'),
+      re: new RegExp(`(?<![A-Za-z])(?:${alt(EN_PAIR_VERBS)})(?![A-Za-z])`, 'gi'),
       kind: 'result',
       contextual: true,
       around: pairAround('en'),
@@ -398,10 +409,12 @@ function buildRules(): Rule[] {
       kind: 'score',
       contextual: true,
     },
-    // 人名 + 进球数："哈兰德两球""凯恩进2球"（需要足球语境；"买了两球"不算）
+    // 人名 + 进球数："哈兰德两球""凯恩进2球"（需要足球语境；"买了两球"不算）。
+    // 名字最长 6 个字（"莱万多夫斯基两球" 整体遮住，不漏出 "莱万"），懒惰匹配让 "凯恩两球萨卡一球" 拆成两处；
+    // 一个人单场进七球以上几乎不会出现，"七八九球"多半是台球（"九球天后""中式八球"），不收
     {
       re: new RegExp(
-        `((?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,4}?))\\s*(?:进|入|独进|打进|攻入)?\\s*(?:一|两|三|四|五|六|七|八|九|\\d)\\s*球(?:[一两三四五\\d]助)?(?![员迷队衣鞋场馆台星类技赛拍])`,
+        `((?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6}?))\\s*(?:进|入|独进|打进|攻入)?\\s*(?:一|两|三|四|五|六|\\d)\\s*球(?:[一两三四五\\d]助)?(?![员迷队衣鞋场馆台星类技赛拍])`,
         'g',
       ),
       kind: 'scorer',
@@ -475,7 +488,9 @@ function buildRules(): Rule[] {
       contextual: true,
     },
   ];
-  return rules;
+  // 先跑完所有不需要语境的规则，再跑需要语境的：比分、强结果词、进球者都算作足球语境
+  // （"C罗破门，葡萄牙胜西班牙"）。各组内部保持原顺序；mergeSpans 按位置排序，顺序只影响语境判断
+  return [...rules.filter((r) => !r.contextual), ...rules.filter((r) => r.contextual)];
 }
 
 function getCache(): Cache {
@@ -538,7 +553,7 @@ export function findSpoilers(text: string, options: DetectOptions = {}): Spoiler
 
   for (const rule of [...extraRules, ...rules]) {
     if (rule.contextual) {
-      // 已经找到比分/强结果词时，这段文字必然是赛果描述
+      // 不需要语境的规则已经全部跑完；找到过比分/强结果词/进球者时，这段文字必然是赛果描述
       football ??= spans.length > 0 || isFootballText(norm);
       if (!football) continue;
     }

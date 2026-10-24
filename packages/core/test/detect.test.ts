@@ -699,12 +699,7 @@ describe('redact 幂等：遮过的文字再遮一次不变', () => {
     }
     expect(redact('Liverpool go top 2-1', FB)).toBe(`Liverpool ${M}${M} ${M}-${M}`);
   });
-  it.each(ALL_STRINGS)('%s', (text) => {
-    for (const options of [{}, FB]) {
-      const once = redact(text, options);
-      expect(redact(once, options), text).toBe(once);
-    }
-  });
+  // 全部用例的幂等检查放在文件末尾：写在 it() 里的 track() 要到运行时才登记
 });
 
 describe('回归：常见赛果写法补充（审计发现的漏网）', () => {
@@ -715,6 +710,10 @@ describe('回归：常见赛果写法补充（审计发现的漏网）', () => {
       '热刺平维拉',
       '拜仁告捷',
       '多特蒙德败北',
+      // 中文简称（多特、国米、尤文）也算队名
+      '多特败北',
+      '国米告捷',
+      '尤文出线',
       '曼联出线',
       '利物浦拿到三分',
       '阿森纳收获三分',
@@ -826,5 +825,129 @@ describe('回归：二次审查发现的识别问题', () => {
     findSpoilers(text, FB);
     // 本机约 0.15 秒；回归时超过 2 秒。留足 CI 机器的余量
     expect(performance.now() - t).toBeLessThan(1500);
+    // 对抗输入：大量空白夹着结果字（10KB）。本机约 15 毫秒；队名写进 lookbehind 时要 7 秒以上
+    const adv = (' '.repeat(39) + '平').repeat(250);
+    const t2 = performance.now();
+    findSpoilers(adv, FB);
+    expect(performance.now() - t2).toBeLessThan(1500);
+  });
+});
+
+describe('回归：三次审查发现的识别问题', () => {
+  it('先跑不需要语境的规则：进球者、强结果词本身就是足球语境', () => {
+    expect(redact('C罗破门，葡萄牙胜西班牙')).toBe(`${M}${M}${M}，葡萄牙${M}${M}西班牙`);
+    expect(redact('梅西梅开二度，阿根廷出线')).toBe(`${M}${M}${M}，阿根廷${M}${M}`);
+    expect(redact('武磊破门，国足一轮游')).toBe(`${M}${M}${M}，国足${M}${M}`);
+    expect(redact('Ronaldo double as Portugal beat Spain')).toBe(
+      `${M}${M}${M} as Portugal ${M}${M} Spain`,
+    );
+    for (const text of track([
+      'C罗破门，葡萄牙胜西班牙',
+      'C罗打进2球，葡萄牙击败西班牙',
+      '梅西梅开二度，阿根廷出线',
+      '武磊破门，国足一轮游',
+      '葡萄牙绝杀西班牙，C罗告捷',
+      'Ronaldo double as Portugal beat Spain',
+      'Kane hat-trick as England beat Wales',
+    ])) {
+      expectMasked(text);
+    }
+    // 单独两个国家名夹着"胜"，没有语境时仍不遮
+    expect(findSpoilers('葡萄牙胜西班牙')).toEqual([]);
+  });
+
+  it('英文两队夹动词：Title Case 标题也遮，队名仍按原样写才算', () => {
+    expect(redact('Arsenal See Off Chelsea', FB)).toBe(`Arsenal ${M}${M} Chelsea`);
+    expect(redact('Aston Villa Hold Liverpool', FB)).toBe(`Aston Villa ${M}${M} Liverpool`);
+    for (const text of track([
+      'Arsenal See Off Chelsea',
+      'Aston Villa Hold Liverpool',
+      'Man City Ease Past Burnley',
+      'Arsenal Overcome Chelsea',
+      'Wolves Humble Manchester United',
+      'Arsenal Thump Chelsea',
+    ])) {
+      expectMasked(text, FB);
+    }
+    // 右边不是队名
+    for (const text of track(['Apple Shares Hold Steady', 'Labour Hold The Seat'])) {
+      expect(findSpoilers(text, FB), text).toEqual([]);
+    }
+  });
+
+  it('以「多」结尾的人名（罗纳尔多、里卡多）、五六个字的人名整体遮住', () => {
+    expect(redact('罗纳尔多两球', FB)).toBe(`${M}${M}${M}`);
+    expect(redact('里卡多两球', FB)).toBe(`${M}${M}${M}`);
+    expect(redact('罗纳尔多两球，葡萄牙晋级', FB)).toBe(`${M}${M}${M}，葡萄牙${M}${M}`);
+    expect(redact('莱万多夫斯基两球', FB)).toBe(`${M}${M}${M}`);
+    expect(redact('阿尔瓦雷斯两球', FB)).toBe(`${M}${M}${M}`);
+    track(['罗纳尔多两球', '里卡多两球', '罗纳尔多两球，葡萄牙晋级', '莱万多夫斯基两球']);
+    // 「最多两球」「差不多两球」不是人名
+    for (const text of track(['曼城最多两球', '阿森纳差不多两球'])) {
+      expect(findSpoilers(text, FB), text).toEqual([]);
+    }
+  });
+
+  it('台球的「九球」「八球」、「任何一球」不当成进球者', () => {
+    for (const text of track([
+      '男子九球世界杯开赛',
+      '中式八球比赛规则介绍',
+      '门将拉亚：不放过任何一球',
+      '潘晓婷被称为九球天后',
+      '比赛最后一球',
+    ])) {
+      expectNeutral(text);
+    }
+  });
+
+  it('非足球页面：中文简称也算语境，城市名、日常词里的简称不算', () => {
+    for (const text of track(['多特败北', '国米告捷', '尤文出线', '多特一轮游'])) {
+      expectMasked(text);
+    }
+    for (const text of track([
+      '兵工厂旧址改造完成，首战告捷',
+      '维拉的新专辑首日告捷',
+      '莱比锡书展开幕，中国出版社出线',
+      '桑坦德银行三季度利润领先',
+      '大巴黎地区选举，左翼领先',
+      '纽卡斯尔大学排名领先',
+      '曼彻斯特城市大学排名领先',
+      '这家店有很多特色菜，销量领先',
+      '全国米价连续三个月领先',
+      '泰国米粉店开业首日告捷',
+    ])) {
+      expect(findSpoilers(text), text).toEqual([]);
+    }
+  });
+
+  it('足球页面：出局、拿下三分、惊险过关这类赛后搭配要遮', () => {
+    for (const text of track([
+      'Arsenal exit the FA Cup',
+      'Spurs exited the Carabao Cup',
+      'Arsenal took the lead through Saka',
+      'Arsenal claim three points',
+      'City secure three points at Anfield',
+      '巴萨惊险过关',
+      '皇马三分到手',
+    ])) {
+      expectMasked(text, FB);
+    }
+    expect(redact('Arsenal exit the FA Cup', FB)).toBe(`Arsenal ${M}${M} FA Cup`);
+    // 单独的 Exit、体检过关、转会竞争里的 take the lead 照旧不遮
+    for (const text of ['Exit', '体检过关', 'Arsenal take the lead in the race to sign him']) {
+      expect(findSpoilers(text, FB), text).toEqual([]);
+    }
+  });
+});
+
+describe('redact 幂等：全部用例', () => {
+  // vitest 按文件里的顺序依次执行，前面 it() 里 track() 登记的用例到这里都已经收齐
+  it('遮过的文字再遮一次不变', () => {
+    for (const text of ALL_STRINGS) {
+      for (const options of [{}, FB]) {
+        const once = redact(text, options);
+        expect(redact(once, options), text).toBe(once);
+      }
+    }
   });
 });
