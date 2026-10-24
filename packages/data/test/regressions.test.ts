@@ -1439,6 +1439,59 @@ describe('数据源全部失败时不发布空数据；部分失败有黄色注�
     ).toBeNull();
   });
 
+  it('夏天 openfootball 退回上赛季文件（0 场）、TheSportsDB 出错：不发布', () => {
+    const reason = emptyDataReason(
+      meta([
+        {
+          id: 'openfootball',
+          name: 'openfootball',
+          ok: true,
+          count: 0,
+          note: '英超：openfootball 还没发布 2027-28 赛季文件，暂用上赛季',
+        },
+        {
+          id: 'thesportsdb',
+          name: 'TheSportsDB',
+          ok: true,
+          count: 0,
+          note: '欧冠（联赛 4480）失败：HTTP 403',
+        },
+        {
+          id: 'football-data',
+          name: 'football-data.org',
+          ok: false,
+          count: 0,
+          note: '未设置 FOOTBALL_DATA_TOKEN，跳过',
+        },
+        { id: 'manual', name: '手工补充', ok: true, count: 0 },
+      ]),
+    );
+    expect(reason).not.toBeNull();
+    expect(reason).toMatch(/TheSportsDB 出错/);
+    expect(reason).toMatch(/HTTP 403/);
+    // 同样的夏天、TheSportsDB 正常返回 0 场：照常发布
+    expect(
+      emptyDataReason(
+        meta([
+          {
+            id: 'openfootball',
+            name: 'openfootball',
+            ok: true,
+            count: 0,
+            note: '英超：openfootball 还没发布 2027-28 赛季文件，暂用上赛季',
+          },
+          {
+            id: 'thesportsdb',
+            name: 'TheSportsDB',
+            ok: true,
+            count: 0,
+            note: '使用免费测试 Key：只拉取当前前后几轮',
+          },
+        ]),
+      ),
+    ).toBeNull();
+  });
+
   it('有比赛就不算空，哪怕有数据源失败', () => {
     const out = meta([
       { id: 'thesportsdb', name: 'TheSportsDB', ok: false, count: 0, note: '失败：x' },
@@ -1525,29 +1578,34 @@ describe('数据源全部失败时不发布空数据；部分失败有黄色注�
 });
 
 describe('TheSportsDB 单独一轮出错不影响其他轮次', () => {
+  const event = (round: number) => ({
+    idEvent: `e${round}`,
+    idLeague: '4328',
+    strSeason: '2026-2027',
+    intRound: String(round),
+    strHomeTeam: 'Arsenal',
+    strAwayTeam: 'Chelsea',
+    dateEvent: '2026-10-10',
+    strTime: '15:00:00',
+    strStatus: 'Match Finished',
+    intHomeScore: '2',
+    intAwayScore: '1',
+  });
+
   it('某一轮返回报错体：记一笔「失败」，其他轮次照常', async () => {
-    const event = (round: number) => ({
-      idEvent: `e${round}`,
-      idLeague: '4328',
-      strSeason: '2026-2027',
-      intRound: String(round),
-      strHomeTeam: 'Arsenal',
-      strAwayTeam: 'Chelsea',
-      dateEvent: '2026-10-10',
-      strTime: '15:00:00',
-      strStatus: 'Match Finished',
-      intHomeScore: '2',
-      intAwayScore: '1',
-    });
+    const urls: string[] = [];
     const res = await createTheSportsDbAdapter().fetch(
       ctx({
         env: { THESPORTSDB_LEAGUES: '4328' },
-        fetcher: createFixtureFetcher([
-          ['eventsnextleague', () => JSON.stringify({ events: [event(8)] })],
-          ['eventspastleague', () => JSON.stringify({ events: [event(7)] })],
-          [/eventsround\.php\?id=4328&r=7&/, () => JSON.stringify({ events: 'Invalid round' })],
-          [/eventsround\.php/, () => JSON.stringify({ events: [event(9)] })],
-        ]),
+        fetcher: createFixtureFetcher(
+          [
+            ['eventsnextleague', () => JSON.stringify({ events: [event(8)] })],
+            ['eventspastleague', () => JSON.stringify({ events: [event(7)] })],
+            [/eventsround\.php\?id=4328&r=7&/, () => JSON.stringify({ events: 'Invalid round' })],
+            [/eventsround\.php/, () => JSON.stringify({ events: [event(9)] })],
+          ],
+          (u) => urls.push(u),
+        ),
       }),
     );
     expect(res.fixtures.length).toBeGreaterThan(0);
@@ -1555,6 +1613,190 @@ describe('TheSportsDB 单独一轮出错不影响其他轮次', () => {
       /英超 2026-2027 第 7 轮失败：数据源返回报错：Invalid round/,
     );
     expect(res.notes.filter((n) => /第 \d+ 轮失败/.test(n))).toHaveLength(1);
+    // 失败那一轮后面的轮次确实照常拉了（联赛每轮互不影响）
+    for (const r of [8, 9]) {
+      expect(urls.some((u) => u.includes(`eventsround.php?id=4328&r=${r}&`))).toBe(true);
+    }
+    expect(res.fixtures.some((f) => f.sourceId === 'e9')).toBe(true);
+  });
+
+  // 杯赛的下一轮对阵会暴露上一轮谁赢：上一轮缺数据时锁定逻辑找不到它，下一轮对阵不能照常发布
+  const cupEvent = (p: Partial<TsdbEvent> & { idEvent: string; idLeague: string }) => ({
+    strSeason: '2026-2027',
+    strTime: '15:00:00',
+    strStatus: 'Match Finished',
+    intHomeScore: '2',
+    intAwayScore: '1',
+    ...p,
+  });
+
+  it('足总杯第 3 轮失败：第 4 轮的对阵（包括种子里的那场）这次不发布，更早的轮次照常', async () => {
+    const urls: string[] = [];
+    const res = await createTheSportsDbAdapter().fetch(
+      ctx({
+        env: { THESPORTSDB_LEAGUES: '4482' },
+        fetcher: createFixtureFetcher(
+          [
+            [
+              'eventsnextleague',
+              () =>
+                JSON.stringify({
+                  events: [
+                    cupEvent({
+                      idEvent: 'r4-seed',
+                      idLeague: '4482',
+                      intRound: '4',
+                      strHomeTeam: 'Chelsea',
+                      strAwayTeam: 'Tottenham',
+                      dateEvent: '2026-10-25',
+                      strStatus: 'Not Started',
+                      intHomeScore: null,
+                      intAwayScore: null,
+                    }),
+                  ],
+                }),
+            ],
+            [
+              'eventspastleague',
+              () =>
+                JSON.stringify({
+                  events: [
+                    cupEvent({
+                      idEvent: 'r3-seed',
+                      idLeague: '4482',
+                      intRound: '3',
+                      strHomeTeam: 'Arsenal',
+                      strAwayTeam: 'Leeds',
+                      dateEvent: '2026-10-10',
+                    }),
+                  ],
+                }),
+            ],
+            [/eventsround\.php\?id=4482&r=3&/, () => JSON.stringify({ events: 'Invalid round' })],
+            [
+              /eventsround\.php\?id=4482&r=2&/,
+              () =>
+                JSON.stringify({
+                  events: [
+                    cupEvent({
+                      idEvent: 'r2',
+                      idLeague: '4482',
+                      intRound: '2',
+                      strHomeTeam: 'Arsenal',
+                      strAwayTeam: 'Everton',
+                      dateEvent: '2026-09-20',
+                    }),
+                  ],
+                }),
+            ],
+            [
+              /eventsround\.php/,
+              () =>
+                JSON.stringify({
+                  events: [
+                    cupEvent({
+                      idEvent: 'r4',
+                      idLeague: '4482',
+                      intRound: '4',
+                      strHomeTeam: 'Arsenal',
+                      strAwayTeam: 'Newcastle',
+                      dateEvent: '2026-10-24',
+                      strStatus: 'Not Started',
+                      intHomeScore: null,
+                      intAwayScore: null,
+                    }),
+                  ],
+                }),
+            ],
+          ],
+          (u) => urls.push(u),
+        ),
+      }),
+    );
+    expect(res.fixtures.map((f) => f.stage)).not.toContain('round-4');
+    expect(res.fixtures.map((f) => f.sourceId).sort()).toEqual(['r2', 'r3-seed']);
+    expect(res.notes.join('；')).toMatch(
+      /足总杯 2026-2027 第 3 轮失败：数据源返回报错：Invalid round（更后面的轮次这次先不发布）/,
+    );
+    // 拉到也要删掉的轮次不再发请求
+    expect(urls.some((u) => /eventsround\.php\?id=4482&r=[45]&/.test(u))).toBe(false);
+  });
+
+  it('欧冠编码 16 排在 32 前面先拉到：32 失败时已经加进去的 1/8 决赛也删掉', async () => {
+    const res = await createTheSportsDbAdapter().fetch(
+      ctx({
+        env: { THESPORTSDB_LEAGUES: '4480' },
+        fetcher: createFixtureFetcher([
+          ['eventsnextleague', () => JSON.stringify({ events: null })],
+          [
+            'eventspastleague',
+            () =>
+              JSON.stringify({
+                events: [
+                  cupEvent({
+                    idEvent: 'r32-seed',
+                    idLeague: '4480',
+                    intRound: '32',
+                    strHomeTeam: 'Arsenal',
+                    strAwayTeam: 'Benfica',
+                    dateEvent: '2026-10-10',
+                  }),
+                ],
+              }),
+          ],
+          [/eventsround\.php\?id=4480&r=32&/, () => JSON.stringify({ events: 'Invalid round' })],
+          [
+            /eventsround\.php\?id=4480&r=16&/,
+            () =>
+              JSON.stringify({
+                events: [
+                  cupEvent({
+                    idEvent: 'r16',
+                    idLeague: '4480',
+                    intRound: '16',
+                    strHomeTeam: 'Arsenal',
+                    strAwayTeam: 'Inter',
+                    dateEvent: '2026-10-24',
+                    strStatus: 'Not Started',
+                    intHomeScore: null,
+                    intAwayScore: null,
+                  }),
+                ],
+              }),
+          ],
+          [/eventsround\.php/, () => JSON.stringify({ events: null })],
+        ]),
+      }),
+    );
+    expect(res.fixtures.map((f) => f.sourceId)).toEqual(['r32-seed']);
+    expect(res.notes.join('；')).toMatch(/欧冠 2026-2027 第 32 轮失败.*更后面的轮次这次先不发布/);
+  });
+
+  it('同一赛季几轮失败合并成一条说明；超过用时上限的说明排在最前面', async () => {
+    let t = 0;
+    const res = await createTheSportsDbAdapter().fetch(
+      ctx({
+        env: { THESPORTSDB_LEAGUES: '4328,4482' },
+        clock: () => t,
+        // 英超 2 + 4 次请求用掉 1.2 秒：足总杯这次不拉
+        deadline: 1100,
+        fetcher: createFixtureFetcher(
+          [
+            ['eventsnextleague', () => JSON.stringify({ events: [event(8)] })],
+            ['eventspastleague', () => JSON.stringify({ events: [event(7)] })],
+            [/eventsround\.php\?id=4328&r=[79]&/, () => JSON.stringify({ events: 'Invalid' })],
+            [/eventsround\.php/, () => JSON.stringify({ events: null })],
+          ],
+          () => {
+            t += 200;
+          },
+        ),
+      }),
+    );
+    expect(res.notes[0]).toMatch(/^超过用时上限.*足总杯/);
+    expect(res.notes.filter((n) => /轮失败/.test(n))).toEqual([
+      '英超 2026-2027 第 7、9 轮失败：数据源返回报错：Invalid',
+    ]);
   });
 });
 

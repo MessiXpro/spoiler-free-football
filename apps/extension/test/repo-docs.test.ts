@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -87,6 +87,11 @@ describe('README', () => {
     const yml = read('.github', 'workflows', 'deploy.yml');
     expect(yml).toContain('SFF_RULES_STAMP=');
     expect(yml).toMatch(/fetch-depth: 0/);
+    // git log 的路径写错时输出为空、步骤照样成功：路径必须是真的规则文件，取不到时这一步要失败
+    const p = /git log -1 --format=%cI -- (\S+?)\)?"/.exec(yml)?.[1];
+    expect(p).toBe('packages/core/src/rules/default-site-rules.json');
+    expect(existsSync(join(ROOT, p!))).toBe(true);
+    expect(yml).toMatch(/\[ -n "\$stamp" \] \|\| \{[^}]*exit 1; \}/);
   });
 });
 

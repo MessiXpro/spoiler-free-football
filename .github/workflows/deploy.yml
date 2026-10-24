@@ -181,6 +181,8 @@ jobs:
       - name: 站点规则的版本号用最后一次提交的时间
         run: |
           stamp="$(git log -1 --format=%cI -- packages/core/src/rules/default-site-rules.json)"
+          # 取不到时不能悄悄退回文件里的旧 version：已安装的插件/脚本会把之后的新规则都当成旧的拒收
+          [ -n "$stamp" ] || { echo "::error title=取不到站点规则的提交时间::检查这一步里的文件路径和 checkout 的 fetch-depth: 0"; exit 1; }
           echo "SFF_RULES_STAMP=$stamp" >> "$GITHUB_ENV"
           echo "站点规则最后提交于 $stamp"
 

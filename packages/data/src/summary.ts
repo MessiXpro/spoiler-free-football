@@ -72,8 +72,10 @@ export function emptyDataReason(output: Pick<BuildOutput, 'matches' | 'meta'>): 
   if (output.matches.length > 0) return null;
   const used = output.meta.sources.filter((s) => s.id !== 'manual' && !/跳过/.test(s.note ?? ''));
   const failed = used.filter((s) => !s.ok || /失败/.test(s.note ?? ''));
-  // 有数据源正常跑完、确实是 0 场（深度淡季）：照常发布。只有全部出错时才不发布
-  if (!failed.length || failed.length < used.length) return null;
+  // 有数据源正常跑完、确实是 0 场（深度淡季）：照常发布。
+  // 夏天 openfootball 退回上赛季文件（「还没发布」）的 0 场不算：这时主要靠 TheSportsDB，它出错就不发布
+  const healthy = used.filter((s) => s.ok && !/失败|还没发布/.test(s.note ?? ''));
+  if (!failed.length || healthy.length > 0) return null;
   const detail = failed.map((s) => `${s.name}：${s.note ?? '出错'}`).join('；');
   return `${failed.map((s) => s.name).join('、')} 出错，一场比赛也没拿到，这次不发布（网页保留上一次的数据）。${detail}`;
 }

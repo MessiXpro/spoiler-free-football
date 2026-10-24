@@ -1,4 +1,4 @@
-import { competitionName } from '@sff/core';
+import { competitionName, isKnockoutStage, stageOrder } from '@sff/core';
 import type { AdapterContext, AdapterResult, FixtureAdapter, RawFixture } from '../types.ts';
 import { envList, envValue } from '../env.ts';
 import {
@@ -345,7 +345,8 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
           }
           // 每场"最近一场/下一场"只拉它自己赛季的前后几轮（不把每个赛季的轮次都拉一遍）；
           // 早于时间窗一周以上的（已经结束的赛事，例如上届世界杯、8 月的社区盾）不再往外扩，省请求
-          const matchdayOnly = theSportsDbRoundIsMatchday(THESPORTSDB_LEAGUES[id]!);
+          const comp = THESPORTSDB_LEAGUES[id]!;
+          const matchdayOnly = theSportsDbRoundIsMatchday(comp);
           const oldBefore = ctx.windowStart.getTime() - 7 * 24 * 60 * 60 * 1000;
           const roundsBySeason = new Map<string, Set<number>>();
           for (const e of seed) {
@@ -363,14 +364,25 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
             roundsBySeason.set(e.strSeason, set);
           }
           for (const [s, rounds] of roundsBySeason) {
+            // 失败那一轮的阶段：比它更后的淘汰赛对阵会暴露那一轮的结果
+            // （锁定只看数据里有的上一轮，上一轮缺数据就锁不住），这次先不发布
+            let failedOrder = Infinity;
+            const failedRounds: number[] = [];
+            let firstError = '';
+            let dropped = false;
             for (const r of [...rounds].sort((a, b) => a - b)) {
               if (overBudget()) {
                 // 拉到一半超时：记下来（不然这项赛事看起来「正常但场次少」）
-                skipped.push(competitionName(THESPORTSDB_LEAGUES[id]!));
+                skipped.push(competitionName(comp));
                 break;
               }
+              const { stage } = stageFromTheSportsDb(String(r), comp);
+              if (isKnockoutStage(stage) && stageOrder(stage) > failedOrder) {
+                dropped = true;
+                continue;
+              }
               requests++;
-              // 单独一轮出错（偶发的报错体或请求失败）只记一笔，其他轮次照常拉
+              // 单独一轮出错（偶发的报错体或请求失败）只记一笔，其他轮次照常拉（联赛每轮互不影响）
               try {
                 add(
                   eventsOf(
@@ -380,11 +392,29 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
                   ),
                 );
               } catch (err) {
-                notes.push(
-                  `${competitionName(THESPORTSDB_LEAGUES[id]!)} ${s} 第 ${r} 轮失败：${(err as Error).message}`,
-                );
+                failedRounds.push(r);
+                firstError ||= (err as Error).message;
+                failedOrder = Math.min(failedOrder, stageOrder(stage));
               }
             }
+            if (!failedRounds.length) continue;
+            // 已经加进去的更后阶段也删掉：种子可能就是下一轮，编码 16（1/8 决赛）也会排在 32 前面先拉到
+            for (const [k, f] of fixtures) {
+              if (
+                f.competition === comp &&
+                f.season === seasonLabel(s, f.kickoff) &&
+                f.stage &&
+                isKnockoutStage(f.stage) &&
+                stageOrder(f.stage) > failedOrder
+              ) {
+                fixtures.delete(k);
+                dropped = true;
+              }
+            }
+            // 同一赛季的单轮失败合并成一条（每轮一条会把后面的说明挤出 500 字的截断）
+            notes.push(
+              `${competitionName(comp)} ${s} 第 ${failedRounds.join('、')} 轮失败：${firstError}${dropped ? '（更后面的轮次这次先不发布）' : ''}`,
+            );
           }
           ctx.log(
             `thesportsdb ${THESPORTSDB_LEAGUES[id]}：${fixtures.size - before} 场，${requests} 次请求`,
@@ -396,7 +426,10 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
         }
       }
       if (skipped.length) {
-        notes.push(`超过用时上限，这次没拉取或没拉完（失败）：${[...new Set(skipped)].join('、')}`);
+        // 放在最前面：说明会被截到 500 字，这条最要紧
+        notes.unshift(
+          `超过用时上限，这次没拉取或没拉完（失败）：${[...new Set(skipped)].join('、')}`,
+        );
       }
       if (!premium) notes.push('使用免费测试 Key：只拉取当前前后几轮');
       ctx.log(`thesportsdb: ${fixtures.size} 场`);
