@@ -806,6 +806,18 @@ describe('回归：二次审查发现的识别问题', () => {
     expect(redact('凯恩两球萨卡一球', FB)).not.toMatch(/萨卡一球/);
     // 「X进N球」整体遮住，名字不再漏出
     expect(redact('凯恩进2球', FB)).toBe(`${M}${M}`);
+    for (const text of track([
+      '萨卡打入一球',
+      '哈兰德打入两球',
+      '凯恩再进一球',
+      '梅西进了两球',
+      '萨卡共进两球',
+    ])) {
+      expect(redact(text, FB), text).toBe(`${M}${M}`);
+    }
+    // 不是人名的前缀照旧保留
+    expect(redact('球队再进一球', FB)).toBe(`球队${M}${M}`);
+    expect(redact('两队共进五球', FB)).toBe(`两队${M}${M}`);
   });
 
   it('赛前盘口、预测、条件不当成进球者', () => {
@@ -968,14 +980,27 @@ describe('回归：三次审查发现的识别问题', () => {
       'Liverpool secured the three points',
       'Liverpool seal three points',
       'Arsenal take the lead via Saka',
+      'Spurs earn vital three points',
+      'Arsenal claim crucial three points at Newcastle',
+      'Chelsea grab late three points',
+      'Liverpool secure a hard-fought three points',
+      'Spurs snatch late three points',
       '巴萨惊险过关',
       '皇马三分到手',
     ])) {
       expectMasked(text, FB);
     }
     expect(redact('Arsenal exit the FA Cup', FB)).toBe(`Arsenal ${M}${M} FA Cup`);
-    // 单独的 Exit、体检过关、转会竞争里的 take the lead 照旧不遮
-    for (const text of ['Exit', '体检过关', 'Arsenal take the lead in the race to sign him']) {
+    expect(redact('Arsenal claim crucial three points at Newcastle', FB)).toBe(
+      `Arsenal ${M}${M} at Newcastle`,
+    );
+    // 单独的 Exit、体检过关、转会竞争里的 take the lead、赛前的 take on 照旧不遮
+    for (const text of [
+      'Exit',
+      '体检过关',
+      'Arsenal take the lead in the race to sign him',
+      'Arsenal take on Chelsea for three points',
+    ]) {
       expect(findSpoilers(text, FB), text).toEqual([]);
     }
   });

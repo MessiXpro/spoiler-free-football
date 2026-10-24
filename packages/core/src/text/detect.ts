@@ -410,12 +410,12 @@ function buildRules(): Rule[] {
       kind: 'score',
       contextual: true,
     },
-    // 人名 + 进球数："哈兰德两球""凯恩进2球""萨卡补上一球"（需要足球语境；"买了两球"不算）。
+    // 人名 + 进球数："哈兰德两球""凯恩进2球""萨卡补上一球""哈兰德打入两球"（需要足球语境；"买了两球"不算）。
     // 名字最长 6 个字（"莱万多夫斯基两球" 整体遮住，不漏出 "莱万"），懒惰匹配让 "凯恩两球萨卡一球" 拆成两处；
     // 一个人单场进七球以上几乎不会出现，"七八九球"多半是台球（"九球天后""中式八球"），不收
     {
       re: new RegExp(
-        `((?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6}?))\\s*(?:进|入|独进|打进|攻入|补上|再添|又添)?\\s*(?:一|两|三|四|五|六|\\d)\\s*球(?:[一两三四五\\d]助)?(?![员迷队衣鞋场馆台星类技赛拍])`,
+        `((?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6}?))\\s*(?:进了|进|入|独进|打进|打入|攻入|攻进|再进|又进|共进|补上|再添|又添)?\\s*(?:一|两|三|四|五|六|\\d)\\s*球(?:[一两三四五\\d]助)?(?![员迷队衣鞋场馆台星类技赛拍])`,
         'g',
       ),
       kind: 'scorer',
@@ -485,6 +485,12 @@ function buildRules(): Rule[] {
     { re: new RegExp(alt(ZH_CONTEXTUAL), 'g'), kind: 'result', contextual: true },
     {
       re: new RegExp(`(?<![A-Za-z])(?:${alt(EN_CONTEXTUAL)})(?![A-Za-z])`, 'gi'),
+      kind: 'result',
+      contextual: true,
+    },
+    // 动词和 three points 之间可以夹一两个形容词："earn vital three points""secure a hard-fought three points"
+    {
+      re: /(?<![A-Za-z])(?:claim|claims|claimed|take|takes|took|earn|earns|earned|secure|secures|secured|collect|collects|collected|bag|bags|bagged|grab|grabs|grabbed|seal|seals|sealed|snatch|snatches|snatched|nick|nicks|nicked|pick(?:s|ed)?\s+up)\s+(?:a\s+|the\s+|all\s+)?(?:[A-Za-z][A-Za-z-]*\s+){0,2}three\s+points(?![A-Za-z])/gi,
       kind: 'result',
       contextual: true,
     },
