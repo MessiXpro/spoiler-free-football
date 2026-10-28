@@ -60,13 +60,17 @@ const RANGE_UNIT = new RegExp(
     // "米"只在后面不接汉字（"1-2米"）或接 高/长/远/以内/开外/范围/距离/射门 这类搭配时才算单位，
     // "米兰""米堡""米特罗维奇""米内罗竞技"都不是
     '米(?![\\u4e00-\\u9fff])|米(?=[高长宽远深处的外左以开范距射之]|内(?!罗))|公里|公斤|斤|码|%|‰|' +
+    // 日常量词："8-9点""2-3杯""2-3页""2-3 cups"。排除 点球/点射/点评/点赞、杯赛、片山、线上，
+    // 不收 分（"2-1分析"）、张/本（"2-1张伯伦""2-1本泽马"）、单数 cup（"2-1 Cup final"）
+    '点(?![球射评赞燃])|杯(?!赛)|颗|勺|瓶|盒|页|碗|室|班|片(?!山|冈|桐|段)|线(?![上下])|' +
+    'cups\\b|tbsp\\b|tsp\\b|servings?\\b|million\\b|billion\\b|percent\\b|business\\s+days\\b|' +
     'weeks?\\b|days?\\b|months?\\b|years?\\b|yrs?\\b|mins?\\b|minutes?\\b|hours?\\b|hrs?\\b|seconds?\\b|games?\\b|matches\\b|points?\\b|pts\\b|players?\\b(?!\\s+rat)|times\\b|' +
     '度(?!过)|℃|°|km\\b|kg\\b|cm\\b|mm\\b|阵型|阵容|体系|站位|打法|formation)',
   'i',
 );
 /** 跟在 "1比1" "1:1" 后面说明是比例，不是比分 */
 const RATIO_FOLLOW =
-  /^\s*(?:还原|复刻|复原|比例|尺寸|模型|大小|等比|兑换|配比|打造|重现|再现|高仿|手办)/;
+  /^\s*(?:还原|复刻|复原|比例|尺寸|模型|大小|等比|兑换|配比|打造|重现|再现|高仿|手办|屏幕|画面|画幅|显示屏|稀释|轻断食|的比例|浓度)/;
 /** 紧挨在前面说明是比例："画面比例：4:3" */
 const RATIO_PRECEDE = /(?:比例|画幅|宽高比|长宽比|aspect ratio|ratio)\s*:?\s*$/i;
 /**
@@ -75,10 +79,11 @@ const RATIO_PRECEDE = /(?:比例|画幅|宽高比|长宽比|aspect ratio|ratio)\
  * 落后0-2、最后2-1、随后1-1、目前2-1领先、此前2-1、"0-1后2-1"；"近"排除 最近/接近/附近；
  * 英文前缀要求左边是词边界（Torino、Lugano、Rayo Vallecano 不是 "no"）；
  * top 只认紧贴数字的 "TOP1-3"，"Arsenal go top 2-1" 不算；
- * 单独的 week 不算（"this week 2-1 win" 是比分），只认 matchday/gameweek/matchweek/md/gw/mw。
+ * 单独的 week 不算（"this week 2-1 win" 是比分），只认 matchday/gameweek/matchweek/md/gw/mw；
+ * 页码/年龄/集数/天数/月份缩写（"pages 3-5" "Ages 3-5" "Day 1-2" "Nov 2-3"）也算，但 "Boxing Day 2-1 win" 是比分。
  */
 const RANGE_PRECEDE =
-  /(?:第|(?:(?<=[榜名排位])|(?<![\u4e00-\u9fff\dA-Za-z■]))[前后]|共|约|(?<![最接附])近|每|(?<![A-Za-z])(?:vol\.?|ep\.?|no\.?|chapter|part|episode|season|md|gw|mw|matchday|gameweek|matchweek|top(?!\s)))\s*$/i;
+  /(?:第|(?:(?<=[榜名排位])|(?<![\u4e00-\u9fff\dA-Za-z■]))[前后]|共|约|(?<![最接附])近|每|(?<![A-Za-z])(?:vol\.?|ep\.?|no\.?|chapter|part|episode|season|md|gw|mw|matchday|gameweek|matchweek|top(?!\s)|ages?|pages?|pp\.|chapters?|episodes?|(?<!boxing\s)days?|rounds?|tiers?|grades?|levels?|gen|serves|jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december))\s*$/i;
 /** 双位数比分（10-0 这种）需要的语境 */
 const SCORE_CONTEXT = /(?:比分|总比分|score|agg|ft|全场|半场|ht|最终)\s*[:：]?\s*$/i;
 
@@ -104,7 +109,8 @@ const isLeadingZeroPair = (a: string) => a.length === 2 && a.startsWith('0');
 function validateNumericScore(m: RegExpExecArray, norm: string): boolean {
   const [, a = '', sep = '', b = ''] = m;
   const before = norm.slice(Math.max(0, m.index - 12), m.index);
-  const after = norm.slice(m.index + m[0].length, m.index + m[0].length + 12);
+  // 后面多看几个字母，"business days" 这种两个词的单位才装得下
+  const after = norm.slice(m.index + m[0].length, m.index + m[0].length + 16);
   // 时间/时长：右边两位数，例如 9:30、3:05、20:00
   if (sep === ':' && b.length === 2) return false;
   if (isLeadingZeroPair(a) || isLeadingZeroPair(b)) return false;
@@ -164,6 +170,39 @@ function validateZhGoals(m: RegExpExecArray): boolean {
 
 /** 紧跟比分的拉丁字母若是这些单位，就不是队名缩写（"内存2-4GB"） */
 const LATIN_UNIT_AFTER = /^(?:GB|MB|KB|TB|HZ|FPS|PM|AM|CM|MM|KM|KG|MP|HP|PS)(?![A-Za-z])/;
+/** 英文人名（首字母大写）：不分大小写的进球者规则命中后，名字单独再查一次（"he scores" 不算） */
+const EN_NAME_RE = /^[A-Z][a-zà-ÿA-Z'-]+(?:\s(?:de |van |di )?[A-Z][a-zà-ÿA-Z'-]+){0,2}$/;
+/** 三个字母但不会和日常词混淆的队名缩写（NEC 是电器公司、AEK/OFI 太像普通缩写，不算） */
+const SHORT_TEAM_NAMES = new Set(['PSG', 'BVB', 'PSV', 'QPR']);
+/**
+ * 进球者动词里只有进球含义的那些，Title Case / 全大写也遮（YouTube 标题 "Saka Goal vs Chelsea" "SAKA GOAL VS CHELSEA"）；
+ * double/penalty/header/winner/score 这类日常名词不收，免得 "Credit Score" "Death Penalty" "Daily Double" 在别的页面被遮
+ */
+const EN_SCORER_VERBS_ANYCASE = [
+  'scores',
+  'scored',
+  'nets',
+  'netted',
+  'bagged',
+  'heads in',
+  'heads home',
+  'fires in',
+  'fires home',
+  'curls in',
+  'equaliser',
+  'equalizer',
+  'hat-trick',
+  'hat trick',
+  'brace',
+  'stunner',
+  'screamer',
+  'wonder goal',
+  'own goal',
+  'goal vs',
+  'goal against',
+  'free kick goal',
+  'free-kick goal',
+];
 
 type Cache = {
   rules: Rule[];
@@ -187,7 +226,7 @@ function teamNames(withZhAliases = false): string[] {
     if (withZhAliases) list.push(...(team.zhAliases ?? []));
     for (const name of list) {
       if (!name) continue;
-      if (/^[A-Za-z]/.test(name) && name.length < 4) continue;
+      if (/^[A-Za-z]/.test(name) && name.length < 4 && !SHORT_TEAM_NAMES.has(name)) continue;
       names.add(name);
     }
   }
@@ -205,7 +244,7 @@ function contextPattern(): RegExp {
       guarded.add(guard);
     } else if (/[一-鿿]/.test(name)) {
       if (name.length >= 2) zh.add(name);
-    } else if (name.length >= 4) {
+    } else if (name.length >= 4 || SHORT_TEAM_NAMES.has(name)) {
       en.add(name);
     }
   };
@@ -433,6 +472,16 @@ function buildRules(): Rule[] {
       kind: 'scorer',
       validate: validateZhScorer,
     },
+    // 并列的进球者："萨卡、哈弗茨先后破门" "萨卡、哈弗茨、赖斯建功" "萨卡、哈弗茨各入一球"
+    // （只认顿号/斜杠，逗号是分句："迎战阿森纳，萨卡破门" 的对阵保留）
+    {
+      re: new RegExp(
+        `(?:(?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6})[、/]\\s*)+(?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6})(?:${alt(ZH_SCORER_SUFFIX)}|各入一球|各进一球|各下一城|均有进球|均有建功|各有斩获)`,
+        'g',
+      ),
+      kind: 'scorer',
+      validate: validateZhScorer,
+    },
     // 拉丁字母人名 + 中文进球词："Haaland破门"
     {
       re: new RegExp(
@@ -450,6 +499,21 @@ function buildRules(): Rule[] {
       kind: 'scorer',
       validate: (m) =>
         !/^(?:Watch|Full|Extended|All|Every|Best|Top|Match|Premier|League|Champions|The|Who|When|How|Will|Can|Live|Preview|Highlights|Team|Goal|Goals)\b/.test(
+          m[0],
+        ),
+    },
+    // 标题常用 Title Case / 全大写："Saka Goal vs Chelsea" "SAKA GOAL VS CHELSEA" "Saka Heads Home"：
+    // 只认进球专用的动词（见 EN_SCORER_VERBS_ANYCASE），名字必须首字母大写；
+    // "Credit Scores" "Test Scores" "Box Scores" 这类栏目名开头的词不是人名
+    {
+      re: new RegExp(
+        `(?<![A-Za-z])([A-Z][a-zà-ÿA-Z'\\-]+(?:\\s(?:de |van |di )?[A-Z][a-zà-ÿA-Z'\\-]+){0,2})(?:'s)?\\s+(?:${alt(EN_SCORER_VERBS_ANYCASE)})(?![A-Za-z])`,
+        'gi',
+      ),
+      kind: 'scorer',
+      validate: (m) =>
+        EN_NAME_RE.test(m[1] ?? '') &&
+        !/^(?:Watch|Full|Extended|All|Every|Best|Top|Match|Premier|League|Champions|The|Who|When|How|Will|Can|Live|Preview|Highlights|Team|Goal|Goals|Credit|Test|Box|Exam|Quiz|Latest|Final|Average|High|Low)\b/i.test(
           m[0],
         ),
     },
@@ -488,6 +552,82 @@ function buildRules(): Rule[] {
       kind: 'result',
       contextual: true,
     },
+    // 英文并列进球者："Goals from Saka and Havertz" "Saka, Havertz score" "Saka and Havertz on target"
+    {
+      re: /(?<![A-Za-z])(?:Goals?|Strikes?)\s+(?:from|by)\s+[A-Z][\w'-]+(?:\s+[A-Z][\w'-]+)?(?:\s*(?:,|and|&)\s*[A-Z][\w'-]+(?:\s+[A-Z][\w'-]+)?)*/g,
+      kind: 'scorer',
+      contextual: true,
+    },
+    {
+      re: /(?<![A-Za-z])[A-Z][\w'-]+(?:(?:\s*,\s*[A-Z][\w'-]+)+(?:\s+(?:and|&)\s+[A-Z][\w'-]+)?|\s+(?:and|&)\s+[A-Z][\w'-]+)\s+(?:on target|scores?|scored|nets?|netted|strike|struck)(?![A-Za-z])/g,
+      kind: 'scorer',
+      contextual: true,
+    },
+    // 英文晋级/出局，标题常省掉冠词："reach first Champions League final" "exit Europa League" "book place" "are through"。
+    // 只遮动词和冠词，赛事名保留（和 "exit the" 一致）；"ruled out of" 是伤停，"reach agreement" "book flights" 不算
+    {
+      re: /(?<![A-Za-z])(?:(?<!ruled\s)(?:reach(?:es|ed)?|into|through\s+to)(?:\s+(?:the|a|an|its|their|first|another))?(?=\s+(?:[A-Za-z]+\s+){0,3}(?:final|semi-?finals?|quarter-?finals?|last\s+(?:16|32|eight|four)|round\s+of\s+\d+|knockouts?|play-?offs?)(?![A-Za-z]))|(?<!ruled\s)(?:exits?|exited|out\s+of|dumped\s+out\s+of|crash(?:es|ed)?\s+out\s+of|bow(?:s|ed)?\s+out\s+of)(?:\s+the)?(?=\s+(?:[A-Za-z]+\s+){0,2}(?:cup|league|championship|competition|tournament|europe)(?![A-Za-z]))|book(?:s|ed)?\s+(?:their\s+|its\s+|a\s+)?(?:place|spot)(?![A-Za-z])|sets?\s+up\s+(?:an?\s+)?(?:[A-Za-z-]+\s+){0,2}(?:final|semi-?final|quarter-?final|clash|showdown|tie|meeting)(?![A-Za-z])|dreams?\s+(?:is\s+|are\s+)?(?:over|ended|ends|shattered)(?![A-Za-z])|are\s+through(?![A-Za-z])|secure[sd]?\s+(?:[A-Za-z]+\s+){0,3}(?:promotion|qualification)(?![A-Za-z]))/gi,
+      kind: 'result',
+      contextual: true,
+    },
+    // 中文晋级/出局："会师欧冠决赛" "进入决赛" "跻身四强" "四强出炉" "梦碎"；"有望进入决赛" 是赛前，
+    // "进入淘汰赛阶段" 是赛程，"首发/大名单/抽签结果出炉" 不算
+    {
+      re: /(?<!有望|能否|争取|力争|冲击|想要|希望|渴望)(?:闯进|杀进|打进|打入|进入|进了|跻身|昂首挺进|成功进入|顺利进入|会师)(?:欧冠|欧联|欧协联|英超|足总杯|联赛杯|世界杯|欧洲杯|亚洲杯|亚冠|世俱杯|国王杯|德国杯|意大利杯|法国杯)?(?:决赛|半决赛|四强|八强|十六强|16强|32强|下一轮|附加赛|决赛圈)|会师决赛|(?:四|八|十六|16|32)强(?:出炉|名单|对阵|诞生)|梦碎/g,
+      kind: 'result',
+      contextual: true,
+    },
+    // 夺冠/升降级："三连冠" "夺得欧冠冠军" "降入英冠" "升入英超" "提前夺冠"；"lift the trophy"
+    {
+      re: /[两三四五六七八九十\d]连冠|夺得[一-鿿]{0,6}冠军|降入(?:英冠|西乙|德乙|意乙|法乙|中甲|荷乙|葡甲|英甲)|升入(?:英超|西甲|德甲|意甲|法甲|中超|荷甲|葡超|英冠)|提前(?:升级|降级|夺冠|保级|出线|晋级)/g,
+      kind: 'result',
+      contextual: true,
+    },
+    {
+      re: /(?<![A-Za-z])lift(?:s|ed|ing)?\s+(?:the\s+|a\s+)?(?:[A-Za-z]+\s+){0,3}trophy(?![A-Za-z])/gi,
+      kind: 'result',
+      contextual: true,
+    },
+    // 积分榜升降："升至第二" "跌至第14" "跌入降级区"（名次一起遮）；
+    // "six points clear" "leapfrog" "slip up" "top of the table"（赛前的 "top of the table clash" 不算）
+    {
+      re: /(?:升至|跌至|升到|跌到|滑落至|滑落到|下滑至|跌出|升上|跌入|重回|重返)(?:[第前][一二三四五六七八九十\d]{0,2}|榜首|积分榜|降级区|欧冠区|欧战区)/g,
+      kind: 'result',
+      contextual: true,
+    },
+    {
+      re: /(?<![A-Za-z])(?:points?\s+clear|leapfrog(?:s|ged)?|climb(?:s|ed)?\s+(?:to|into|up\s+to|above)|extend(?:s|ed)?\s+(?:their\s+|its\s+)?(?:lead|advantage|gap)|drop(?:s|ped)?\s+points|slip(?:s|ped)?\s+up|top\s+of\s+the\s+(?:table|league)(?!\s+(?:clash|showdown|meeting|battle|encounter|fixture|tie))|within\s+[a-z]+\s+points?\s+of|cut\s+(?:the\s+)?gap|reclaim(?:s|ed)?\s+top\s+spot|back\s+on\s+top)(?![A-Za-z])/gi,
+      kind: 'result',
+      contextual: true,
+    },
+    // "put five past" "hit four past"；"让二追三"
+    {
+      re: /(?<![A-Za-z])(?:put|puts|hit|hits|fire|fires|fired|stick|sticks|stuck|smash|smashed|score|scores|scored)\s+(?:two|three|four|five|six|seven|eight|nine|\d)\s+past(?![A-Za-z])/gi,
+      kind: 'result',
+      contextual: true,
+    },
+    { re: /让[一二两三四五]追[二两三四五六]/g, kind: 'result', contextual: true },
+    // 进球/红牌事件："fires City ahead" "puts City in front" "converts from the spot" "on target"（"Shots on target: 5" 是统计）
+    // "down to ten men"
+    {
+      re: /(?<![A-Za-z])(?:(?:fires?|fired|puts?|put|heads?|headed|nods?|nodded|slots?|slotted|blasts?|blasted|taps?|tapped|curls?|curled|pokes?|poked|rifles?|rifled|strikes?|struck|scores?|scored)\s+(?:[A-Za-z]+\s+){1,2}(?:ahead|in\s+front|level|back\s+level|into\s+the\s+lead)|convert(?:s|ed)?\s+(?:the\s+|a\s+|from\s+the\s+)?(?:penalty|spot-?\s?kick|spot)|(?<!shots?\s)on\s+target|down\s+to\s+(?:ten|10|nine|9)\s+men)(?![A-Za-z])/gi,
+      kind: 'result',
+      contextual: true,
+    },
+    // "萨卡操刀主罚命中"；弹幕/直播间的 "萨卡进了！" "萨卡又进了"（后面接汉字的 "进了公司" 不算）
+    {
+      re: /操刀[一-鿿]{0,4}命中|(?:(?<![A-Za-z])[A-Z][一-鿿]|[一-鿿·・]{2,6})(?:又|再|也|终于)?进了[！!]?(?![一-鿿])/g,
+      kind: 'scorer',
+      contextual: true,
+    },
+    // 带走1分 / 拿到3分 / 3分到手（三分的汉字写法在 ZH_CONTEXTUAL 里）；"Three points!" 只收带感叹号的，
+    // 赛前的 "for three points" 和积分榜的 "3 points" 不遮
+    {
+      re: /(?:拿到|收获|斩获|取得|拿下|抢下|豪取|轻取|痛失|丢掉|带走|全取|只拿|仅得|仅拿|收下|带回)\s*(?:三|3|一|1)\s*分(?![钟秒])|(?:三|3|一|1)\s*分到手/g,
+      kind: 'result',
+      contextual: true,
+    },
+    { re: /(?<![A-Za-z])three\s+points\s*!/gi, kind: 'result', contextual: true },
     // 动词和 three points 之间可以夹一两个形容词："earn vital three points""secure a hard-fought three points"
     {
       re: /(?<![A-Za-z])(?:claim|claims|claimed|take|takes|took|earn|earns|earned|secure|secures|secured|collect|collects|collected|bag|bags|bagged|grab|grabs|grabbed|seal|seals|sealed|snatch|snatches|snatched|nick|nicks|nicked|taken|taking|claiming|earning|securing|collecting|bagging|grabbing|sealing|snatching|nicking|pick(?:s|ed|ing)?\s+up)\s+(?:a\s+|the\s+|all\s+)?(?:[A-Za-z][A-Za-z-]*\s+){0,2}three\s+points(?![A-Za-z])/gi,
@@ -544,12 +684,40 @@ function protectedRanges(norm: string, extraSafe: string[]): Array<[number, numb
   return ranges;
 }
 
+/**
+ * 「完全落在某个保护区间里」的判断：区间按起点排序、记下前缀最大终点，每次二分一下就行。
+ * 赛果密集的页面（直播文字、赛后报道）一页能命中几千处，逐个区间比对会明显拖慢
+ */
+function protectedLookup(ranges: Array<[number, number]>): (start: number, end: number) => boolean {
+  ranges.sort((a, b) => a[0] - b[0]);
+  const starts = ranges.map((r) => r[0]);
+  const maxEnd: number[] = [];
+  let m = -1;
+  for (const [, e] of ranges) maxEnd.push((m = Math.max(m, e)));
+  return (start, end) => {
+    // 最后一个起点 <= start 的区间；它之前（含）的区间里只要有终点 >= end 的，就包住了
+    let lo = 0;
+    let hi = starts.length - 1;
+    let idx = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if ((starts[mid] as number) <= start) {
+        idx = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return idx >= 0 && (maxEnd[idx] as number) >= end;
+  };
+}
+
 /** 找出文字中所有剧透片段（按位置排序、已合并重叠） */
 export function findSpoilers(text: string, options: DetectOptions = {}): SpoilerSpan[] {
   if (!text || text.length < 2) return [];
   const norm = normalizeText(text);
   const { rules } = getCache();
-  const safe = protectedRanges(norm, options.safePhrases ?? []);
+  const inSafe = protectedLookup(protectedRanges(norm, options.safePhrases ?? []));
   const spans: SpoilerSpan[] = [];
   let football: boolean | undefined = options.football ? true : undefined;
 
@@ -586,7 +754,7 @@ export function findSpoilers(text: string, options: DetectOptions = {}): Spoiler
         continue;
       }
       // 完全落在球队名/赛事名/保护词里的命中是误报（"欧洲冠军联赛"里的"冠军"）
-      if (safe.some(([s, e]) => start >= s && end <= e)) continue;
+      if (inSafe(start, end)) continue;
       spans.push({
         start,
         end,

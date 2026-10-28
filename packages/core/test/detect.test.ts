@@ -1031,6 +1031,380 @@ describe('回归：三次审查发现的识别问题', () => {
   });
 });
 
+describe('回归：真实页面标题里的漏网（第八轮审计）', () => {
+  it('DET-1 英文标题常用 Title Case / 全大写：Saka Goal vs、SAKA GOAL VS、Heads Home 也遮', () => {
+    expect(redact('Saka Goal vs Chelsea')).toBe(`${M}${M}${M} Chelsea`);
+    expect(redact('SAKA GOAL VS CHELSEA')).toBe(`${M}${M}${M} CHELSEA`);
+    expect(redact('Saka Heads Home vs Chelsea')).toBe(`${M}${M}${M} vs Chelsea`);
+    expect(redact('SAKA SCORES TWICE AS ARSENAL BEAT CHELSEA', FB).startsWith(`${M}${M}${M}`)).toBe(
+      true,
+    );
+    for (const text of track([
+      'Saka Goal vs Chelsea',
+      'SAKA GOAL VS CHELSEA',
+      'RICE FREE KICK GOAL vs Real Madrid',
+      'Saka Heads Home vs Chelsea',
+      'Messi FREE KICK GOAL vs LAFC',
+      'Bukayo Saka Goal vs Chelsea | Premier League',
+      'Haaland Scores Twice As City Beat United',
+    ])) {
+      expectMasked(text);
+      // 名字不能露在遮挡符旁边
+      expect(redact(text, FB)).not.toMatch(/Saka|SAKA|Rice|RICE|Messi|Haaland/);
+    }
+    // 日常名词的 Title Case 不遮（信用分、问答节目、"最终得分"、考试/篮球数据栏目）
+    for (const text of track([
+      'Credit Score Check',
+      'Daily Double',
+      'Final Score',
+      'Death Penalty Debate',
+      'Credit Scores Explained',
+      'Test Scores',
+      'Box Scores',
+    ])) {
+      expect(findSpoilers(text), text).toEqual([]);
+    }
+  });
+
+  it('DET-2 两射一传 / 一射一传 / 两传一射 是强结果词，前面的人名一起遮', () => {
+    expect(redact('哈兰德两射一传 曼城3-0曼联')).toBe(`${M}${M}${M} 曼城${M}-${M}曼联`);
+    expect(redact('萨卡一射一传')).toBe(`${M}${M}${M}`);
+    for (const text of track([
+      '哈兰德两射一传 曼城3-0曼联',
+      '萨卡一射一传 阿森纳2-1',
+      '萨卡两传一射 阿森纳3-1',
+      '阿森纳三球大胜切尔西 萨卡两射一传',
+      '哈兰德两射一传',
+    ])) {
+      expectMasked(text);
+      expect(redact(text)).not.toMatch(/萨卡|哈兰德/);
+    }
+  });
+
+  it('DET-3 英文晋级/出局标题省掉冠词也遮，赛事名保留', () => {
+    expect(redact('Arsenal reach first Champions League final', FB)).toBe(
+      `Arsenal ${M}${M} Champions League final`,
+    );
+    expect(redact('Man Utd exit Europa League', FB)).toBe(`Man Utd ${M}${M} Europa League`);
+    expect(redact('Villa secure Champions League qualification', FB)).toBe(`Villa ${M}${M}`);
+    expect(redact('Arsenal exit the FA Cup', FB)).toBe(`Arsenal ${M}${M} FA Cup`);
+    for (const text of track([
+      'Spurs into Europa League final',
+      'Real Madrid out of Champions League',
+      'Arsenal book place in Champions League final',
+      'Arsenal set up semi-final with PSG',
+      'Arsenal are through!',
+      "Real Madrid's Champions League dream over",
+    ])) {
+      expectMasked(text, FB);
+    }
+    // 转会、伤停、赛前文章里同样的词不遮
+    for (const text of track([
+      'Saka ruled out of Champions League tie',
+      'Arsenal reach agreement over Eze fee',
+      'Arsenal book flights to Madrid',
+      'Arsenal exit talks for Zinchenko',
+      "Saka insight into Arsenal's final preparations",
+      'Chelsea squad for Champions League knockouts announced',
+    ])) {
+      expect(findSpoilers(text, FB), text).toEqual([]);
+    }
+  });
+
+  it('DET-4 中文晋级/出局：会师决赛、进入决赛、跻身四强、四强出炉、梦碎', () => {
+    expect(redact('阿森纳、巴黎会师欧冠决赛', FB)).toBe(`阿森纳、巴黎${M}${M}`);
+    expect(redact('欧冠四强出炉：巴萨、国米、阿森纳、巴黎', FB)).toContain(`${M}${M}`);
+    expect(redact('皇马欧冠梦碎', FB)).toBe(`皇马欧冠${M}${M}`);
+    expect(redact('阿森纳闯进决赛', FB)).toBe(`阿森纳${M}${M}`);
+    for (const text of track([
+      '阿森纳进入决赛',
+      '阿森纳打入欧冠决赛',
+      '阿森纳跻身四强',
+      '欧冠16强名单出炉',
+      '皇马梦碎伯纳乌',
+      '阿森纳、巴黎会师欧冠决赛',
+      '欧冠四强出炉：巴萨、国米、阿森纳、巴黎',
+    ])) {
+      expectMasked(text, FB);
+    }
+    // 赛前展望、首发/大名单/抽签出炉、淘汰赛阶段不遮
+    for (const text of track([
+      '阿森纳有望进入决赛',
+      '欧冠抽签结果出炉',
+      '阿森纳首发出炉',
+      '阿森纳大名单出炉',
+      '欧冠进入淘汰赛阶段',
+    ])) {
+      expect(findSpoilers(text, FB), text).toEqual([]);
+    }
+  });
+
+  it('DET-5 并列的进球者整体遮住，不只遮最后一个', () => {
+    expect(redact('萨卡、哈弗茨先后破门')).toBe(`${M}${M}${M}`);
+    expect(redact('阿森纳3-0 萨卡、哈弗茨、赖斯建功')).toBe(`阿森纳${M}-${M} ${M}${M}${M}`);
+    for (const text of track([
+      '#英超# 阿森纳主场2-1击败切尔西，萨卡、哈弗茨各入一球',
+      'Saka, Havertz score as Arsenal beat Chelsea',
+      'Goals from Saka and Havertz sealed the win',
+      'Saka and Havertz on target as Arsenal win',
+    ])) {
+      expectMasked(text, FB);
+      expect(redact(text, FB), text).not.toMatch(/萨卡|哈弗茨|Saka|Havertz/);
+    }
+    // 顿号隔开的赛事名、赛后采访、"迎战…，萨卡破门" 里的对阵保留
+    expectNeutral('英超、西甲进球集锦');
+    expectNeutral('赛后，萨卡、哈弗茨接受采访');
+    expect(redact('切尔西主场迎战阿森纳，萨卡破门')).toBe(`切尔西主场迎战阿森纳，${M}${M}${M}`);
+    track(['英超、西甲进球集锦', '赛后，萨卡、哈弗茨接受采访', '切尔西主场迎战阿森纳，萨卡破门']);
+  });
+
+  it('DET-6 夺冠/升降级：首夺、X连冠、保级失败、lift the trophy、promoted', () => {
+    expect(redact('巴黎首夺欧冠', FB)).toBe(`巴黎${M}${M}欧冠`);
+    expect(redact('曼城三连冠！', FB)).toBe(`曼城${M}${M}！`);
+    expect(redact('莱斯特城保级失败', FB)).toBe(`莱斯特城${M}${M}`);
+    expect(redact('Arsenal lift Champions League trophy', FB)).toBe(`Arsenal ${M}${M}`);
+    expect(redact('Arsenal promoted to Premier League', FB)).toBe(
+      `Arsenal ${M}${M} to Premier League`,
+    );
+    for (const text of track([
+      '利物浦问鼎英超',
+      '巴黎时隔多年再夺欧冠',
+      '曼城两连冠',
+      '利物浦加冕英超冠军',
+      '巴黎夺得欧冠冠军',
+      '颁奖仪式：巴黎捧起大耳朵杯',
+      '巴黎高举奖杯',
+      '伊普斯维奇降入英冠',
+      '伯恩利冲超成功 重返英超',
+      'Arsenal lift the trophy',
+    ])) {
+      expectMasked(text, FB);
+    }
+    // 非足球页面不遮："问鼎销量榜"；软件升级、公司上调预期任何页面都不遮
+    expect(findSpoilers('问鼎销量榜')).toEqual([]);
+    expectNeutral('升级到最新版本');
+    expectNeutral('The company lifted its guidance');
+    track(['问鼎销量榜', '升级到最新版本', 'The company lifted its guidance']);
+  });
+
+  it('DET-7 积分榜升降：升至第二、points clear、slip up、top of the table', () => {
+    expect(redact('阿森纳升至第二', FB)).toBe(`阿森纳${M}${M}`);
+    expect(redact('曼联跌至第14', FB)).toBe(`曼联${M}${M}`);
+    expect(redact('Arsenal go six points clear after Liverpool slip up at Everton', FB)).toBe(
+      `Arsenal go six ${M}${M} after Liverpool ${M}${M} at Everton`,
+    );
+    for (const text of track([
+      'Arsenal go six points clear at the top',
+      'Man City climb to third',
+      'Forest leapfrog Chelsea into third',
+      'Arsenal extend lead at top to seven points',
+      'Arsenal move to within two points of Liverpool',
+      'Liverpool drop points at Everton',
+      'Arsenal slip up at Bournemouth',
+      'Arsenal top of the table after beating Chelsea',
+    ])) {
+      expectMasked(text, FB);
+    }
+    // 赛前的"榜首大战"、实力榜不遮
+    for (const text of track([
+      'Top-of-the-table clash: Arsenal v Liverpool preview',
+      'Top of the table clash: Arsenal v Liverpool',
+      'Arsenal top of the Premier League power rankings',
+    ])) {
+      expect(findSpoilers(text, FB), text).toEqual([]);
+    }
+  });
+
+  it('DET-8 胜负平的同义说法：pegged back、frustrated by、put five past、兵败、不败', () => {
+    expect(redact('Arsenal pegged back by Chelsea', FB)).toBe(`Arsenal ${M}${M} Chelsea`);
+    expect(redact('Arsenal frustrated by Everton', FB)).toBe(`Arsenal ${M}${M} Everton`);
+    expect(redact('Arsenal put five past Chelsea', FB)).toBe(`Arsenal ${M}${M} Chelsea`);
+    expect(redact('阿森纳兵败斯坦福桥', FB)).toBe(`阿森纳${M}${M}斯坦福桥`);
+    expect(redact('阿森纳9轮不败', FB)).toBe(`阿森纳9轮${M}${M}`);
+    for (const text of track([
+      'Arsenal share spoils with Chelsea',
+      'Arsenal and Chelsea share the points',
+      'Honours even at Emirates',
+      'Chelsea humbled at Arsenal',
+      'Arsenal down Chelsea',
+      'Arsenal dispatch Chelsea',
+      'Arsenal outclass Chelsea',
+      'Arsenal run riot at Chelsea',
+      'Arsenal hit four past Chelsea',
+      'Arsenal sent packing',
+      'Arsenal held by Chelsea',
+      '切尔西追平比分',
+      '切尔西两度追平',
+      '阿森纳让一追二',
+      '阿森纳客场凯旋',
+      '阿森纳铩羽而归',
+      '阿森纳败走伦敦',
+      '阿森纳主场失守',
+      '阿森纳马失前蹄',
+      '阿森纳阴沟翻船',
+      '阿森纳笑到最后',
+      '阿森纳吞下败仗',
+      '阿森纳保持全胜',
+      '阿森纳六轮全胜',
+      '阿森纳终结利物浦不败纪录',
+      '阿森纳崩盘',
+      '阿森纳被打爆',
+      '阿森纳大获全胜',
+      '阿森纳旗开得胜',
+    ])) {
+      expectMasked(text, FB);
+    }
+    // "frustrated by" 后面不是队名（伤病、转会）就不遮；股市的崩盘/失守没有足球语境不遮
+    for (const text of track([
+      'Arteta frustrated by injuries',
+      'Arsenal frustrated by transfer delays',
+    ])) {
+      expect(findSpoilers(text, FB), text).toEqual([]);
+    }
+    expect(findSpoilers('股市崩盘 上证失守3000点')).toEqual([]);
+    track(['股市崩盘 上证失守3000点']);
+  });
+
+  it('DET-9 进球/红牌事件：萨卡进了！、打破僵局、fires City ahead、Ten-man', () => {
+    expect(redact('萨卡进了！', FB)).toBe(`${M}${M}${M}`);
+    expect(redact('萨卡打破僵局', FB)).toBe(`萨卡${M}${M}`);
+    expect(redact('Haaland fires City ahead', FB)).toBe(`Haaland ${M}${M}`);
+    expect(redact('Ten-man Arsenal hold on for point at Anfield', FB)).toBe(
+      `${M}${M} Arsenal ${M}${M} for point at Anfield`,
+    );
+    for (const text of track([
+      '哈弗茨扩大比分',
+      '哈弗茨一锤定音',
+      '萨卡改写比分',
+      '曼城3-0曼联，哈兰德双响，福登锦上添花',
+      '哈兰德结束球荒 曼城客场取胜',
+      '萨卡操刀主罚命中',
+      '萨卡造点',
+      '萨卡又进了',
+      '萨利巴两黄变一红',
+      '萨利巴直红',
+      'Haaland puts City in front',
+      'Saka opens scoring',
+      'Saka at the double',
+      'Haaland on target as City win',
+      'Saka converts from the spot',
+      '10-man Arsenal hold on',
+      'Arsenal down to ten men',
+    ])) {
+      expectMasked(text, FB);
+    }
+    // 射正统计、"进了公司"、主帅否认传闻不遮
+    for (const text of track([
+      'Shots on target: 5',
+      '我们进了公司',
+      'Arteta dismissed talk of a move',
+    ])) {
+      expect(findSpoilers(text, FB), text).toEqual([]);
+    }
+  });
+
+  it('DET-10 国足/女足、Bayern、PSG 也算足球语境（全局脚本在微博/推特上也能遮）', () => {
+    for (const s of ['国足', '女足', '男足', 'Bayern', 'PSG']) {
+      expect(isFootballText(s), s).toBe(true);
+    }
+    // 三个字母的日常缩写不算（NEC 是电器公司）
+    for (const s of ['NEC', 'AEK', '中国队']) {
+      expect(isFootballText(s), s).toBe(false);
+    }
+    expect(redact('#国足输了#')).toBe(`#国足${M}${M}#`);
+    expect(redact('PSG beat Inter')).toBe(`PSG ${M}${M} Inter`);
+    expect(redact('Bayern win')).toBe(`Bayern ${M}${M}`);
+    for (const text of track([
+      '#国足输了#',
+      '国足赢了！',
+      '女足赢了',
+      'PSG beat Inter',
+      'PSG win',
+      'Bayern win',
+      'Villa stun Bayern',
+      'Bayern win Der Klassiker',
+    ])) {
+      expectMasked(text);
+    }
+    // 没有足球语境时不遮（"wins" 是语境词，足球页面上照旧会遮）
+    expect(findSpoilers('NEC wins contract')).toEqual([]);
+    track(['NEC wins contract']);
+  });
+
+  it('DET-12 日常范围/比例不当成比分：8-9点、2-3杯、4:3画面、Nov 2-3、2-3 cups、Serves 4-6', () => {
+    for (const text of track([
+      '今晚8-9点直播',
+      '每天喝2-3杯水',
+      '2-3颗',
+      '2-3勺',
+      '2-3瓶',
+      '2-3页',
+      '2-3室',
+      '2-3班',
+      '一二线城市 2-3线城市',
+      '4:3画面',
+      '3:2屏幕',
+      '5:2轻断食',
+      'Add 2-3 cups of flour',
+      '2-3 tbsp',
+      'Serves 4-6',
+      'Ages 3-5',
+      'pages 3-5',
+      'Chapters 1-3',
+      'Episodes 1-3',
+      'Nov 2-3, 2025',
+      'Dec 1-2',
+      '$2-3 million',
+      '2-3 percent',
+      '1-2 business days',
+      'Day 1-2',
+      'Round 1-2',
+      'Tier 1-2',
+      'Grades 1-2',
+      'Levels 1-2',
+      'Dilute 1:4 浓度',
+    ])) {
+      expectNeutral(text);
+    }
+    // 但紧跟 点球/点射/点评/点赞/杯赛/人名/分析/Cup 的还是比分（13 句防漏哨兵，一句都不能放过）
+    for (const text of track([
+      '3-2点球大战',
+      '2-1点射',
+      '阿森纳2-1点评',
+      '阿森纳2-1点赞',
+      '2-1杯赛',
+      '2-1张伯伦',
+      '国足2-1张玉宁绝杀',
+      '2-1本泽马',
+      '阿森纳2-1线上直播',
+      '阿森纳2-1片山',
+      '阿森纳2-1分析',
+      'Arsenal 2-1 Chelsea FA Cup',
+      'Arsenal 2-1 Cup final',
+      'Boxing Day 2-1 win over Chelsea',
+    ])) {
+      expect(redact(text), text).toContain(`${M}-${M}`);
+    }
+  });
+
+  it('DET-13 带走1分 / 拿到3分 / 3分到手 / Three points!', () => {
+    expect(redact('阿森纳客场带走1分', FB)).toBe(`阿森纳客场${M}${M}`);
+    expect(redact('阿森纳3分到手', FB)).toBe(`阿森纳${M}${M}`);
+    expect(redact('Arsenal: Three points! 🔴 #COYG', FB)).toBe(`Arsenal: ${M}${M} 🔴 #COYG`);
+    for (const text of track(['阿森纳拿到3分', '阿森纳带回1分', 'THREE POINTS! 🔴'])) {
+      expectMasked(text, FB);
+    }
+    // 赛前的 "for three points"、积分榜的 "3 points"、三分钟 不遮
+    for (const text of track([
+      'Arsenal take on Chelsea for three points',
+      'Arsenal 3 points',
+      '开场3分钟',
+    ])) {
+      expect(findSpoilers(text, FB), text).toEqual([]);
+    }
+  });
+});
+
 describe('redact 幂等：全部用例', () => {
   // vitest 按文件里的顺序依次执行，前面 it() 里 track() 登记的用例到这里都已经收齐
   it('遮过的文字再遮一次不变', () => {

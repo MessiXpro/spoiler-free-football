@@ -359,7 +359,7 @@ export const TEAMS: Team[] = [
     '拜仁',
     'Bayern Munich',
     'europe',
-    ['FC Bayern München', 'Bayern München', 'Bayern Munchen', 'FC Bayern'],
+    ['FC Bayern München', 'Bayern München', 'Bayern Munchen', 'FC Bayern', 'Bayern'],
     ['拜仁慕尼黑'],
   ),
   t('dortmund', '多特蒙德', 'Borussia Dortmund', 'europe', ['Dortmund', 'BVB'], ['多特']),
