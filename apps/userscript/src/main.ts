@@ -52,8 +52,15 @@ async function load(): Promise<ShieldSettings> {
   return s;
 }
 
-async function save(patch: Partial<ShieldSettings>): Promise<ShieldSettings> {
-  const next = { ...(await load()), ...patch };
+/**
+ * 基于存储里最新的设置合并后写入。不能展开内存里的 settings：没有 addValueChangeListener 的管理器
+ * （Via、X浏览器、iOS Userscripts）里它可能早已过时，会把其他标签页写的「已看」「停用站点」整个覆盖掉
+ */
+async function save(
+  patch: Partial<ShieldSettings> | ((cur: ShieldSettings) => Partial<ShieldSettings>),
+): Promise<ShieldSettings> {
+  const cur = await load();
+  const next = { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) };
   await setValue(KEY, next);
   return next;
 }
@@ -69,8 +76,10 @@ function runBridge() {
   const target = location.origin === 'null' ? '*' : location.origin;
   const post = (watched: Record<string, number>) =>
     window.postMessage({ source: 'sff-shield', type: 'watched', watched }, target);
+  // Tampermonkey 等沙箱里脚本的 window 是个包装对象，网页 postMessage 的 e.source 是页面的 window（unsafeWindow）
+  const unsafe = (globalThis as unknown as { unsafeWindow?: Window }).unsafeWindow;
   window.addEventListener('message', async (e: MessageEvent) => {
-    if (e.source !== window) return;
+    if ((e.source !== window && e.source !== unsafe) || e.origin !== location.origin) return;
     const d = e.data as {
       source?: string;
       type?: string;
@@ -160,6 +169,15 @@ async function runShield() {
     document.documentElement.classList.add('sff-ready');
     return;
   }
+  // 页面上已有另一份在防剧透（插件 + 脚本，或普通版 + 全网版都装了）：不再启动第二份。两份各有自己的观察器，
+  // 一份「临时显示」写回原文、另一份立刻又遮回去，还会有两个「防」按钮。谁先到谁负责，遮罩 #sff-cloak 按 id 共用、
+  // 由先到的那份解除（这里不加 sff-ready）；两版脚本的存储各自独立，先到的那份在此站点停用时，让步的这份也不会接手
+  const root = document.documentElement;
+  if (root.dataset.sffActive) {
+    console.info('[防剧透看球] 页面上已有另一份在防剧透，这份不再启动：', root.dataset.sffActive);
+    return;
+  }
+  root.dataset.sffActive = `userscript-${__SFF_VARIANT__}`;
   const controller: ShieldController = bootShield(document, settings, { siteMode });
   const isTop = window === window.top;
 
@@ -183,7 +201,7 @@ async function runShield() {
   };
   if (!isTop) {
     window.addEventListener('message', (e: MessageEvent) => {
-      if (e.source !== window.parent) return;
+      if (e.source !== window.parent && e.source !== unsafe?.parent) return;
       const d = e.data as { source?: string; type?: string; ms?: unknown } | null;
       if (d?.source !== FRAME_MSG) return;
       if (d.type === 'pause') {
@@ -214,10 +232,10 @@ async function runShield() {
   /** 已挂上的面板：设置在面板以外改了（其他标签页、脚本菜单）也要重画，按钮文字不能过时 */
   let panelRef: ReturnType<typeof mountPanel> | undefined;
   const enableSite = async () => {
-    // 只去掉覆盖当前域名的停用项（和插件弹窗的「在此站点启用」一致）
-    const list = settings.disabledHosts.filter((h) => !hostDisabledBy(location.hostname, h));
-    if (list.length === settings.disabledHosts.length) return;
-    settings = await save({ disabledHosts: list });
+    // 只去掉覆盖当前域名的停用项（和插件弹窗的「在此站点启用」一致）；按存储里最新的名单算
+    const cur = await load();
+    const list = cur.disabledHosts.filter((h) => !hostDisabledBy(location.hostname, h));
+    settings = list.length === cur.disabledHosts.length ? cur : await save({ disabledHosts: list });
     controller.update(settings);
     ensureUi();
     panelRef?.refresh();
@@ -241,15 +259,17 @@ async function runShield() {
             }
           : undefined,
       disableSite: async () => {
-        settings = await save({ disabledHosts: [...settings.disabledHosts, location.hostname] });
+        settings = await save((cur) => ({
+          disabledHosts: [...cur.disabledHosts, location.hostname],
+        }));
         controller.update(settings);
       },
       enableSite,
       siteDisabled,
       revealScore: async (m) => {
-        settings = await save({
-          watched: { ...settings.watched, [m.id]: Math.floor(Date.now() / 1000) },
-        });
+        settings = await save((cur) => ({
+          watched: { ...cur.watched, [m.id]: Math.floor(Date.now() / 1000) },
+        }));
         try {
           const { status, json } = await getJson(new URL(scorePath(m.id), settings.dataBase).href);
           const score = json as {
@@ -288,7 +308,9 @@ async function runShield() {
       panel.refresh();
     });
     registerMenu('防剧透：在此站点停用', async () => {
-      settings = await save({ disabledHosts: [...settings.disabledHosts, location.hostname] });
+      settings = await save((cur) => ({
+        disabledHosts: [...cur.disabledHosts, location.hostname],
+      }));
       controller.update(settings);
       panel.refresh();
     });

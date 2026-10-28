@@ -43,6 +43,29 @@ async function main() {
       void ext.runtime.sendMessage({ type: 'badge', count: pending }).catch(() => {});
     }, 1000);
   };
+  // 页面上已有用户脚本在防剧透（插件和脚本都装了）：不再启动第二份。两份各有自己的观察器，一份「临时显示」写回原文、
+  // 另一份立刻又遮回去，还会有两个控制入口。谁先到谁负责：遮罩靠 html.sff-ready 解除，由先到的那份加上；弹窗问状态时说明原因
+  const root = document.documentElement;
+  if (root.dataset.sffActive && root.dataset.sffActive !== 'extension') {
+    ext.runtime.onMessage.addListener((msg: TabMessage, _sender, sendResponse) => {
+      if (msg.type !== 'status' || window !== window.top) return undefined;
+      const status: TabStatus = {
+        active: false,
+        reason: '此页面已由用户脚本防剧透',
+        holding: false,
+        site: null,
+        football: false,
+        texts: 0,
+        blocks: 0,
+        paused: false,
+        currentMatch: null,
+      };
+      sendResponse(status);
+      return undefined;
+    });
+    return;
+  }
+  root.dataset.sffActive = 'extension';
   const controller: ShieldController = bootShield(document, settings, { siteMode, onStats });
 
   // 控制器自己会在设置从关闭变为开启、或进入全网时段时重新启动

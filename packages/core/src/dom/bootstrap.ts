@@ -55,7 +55,8 @@ export function defaultShieldSettings(dataBase: string): ShieldSettings {
   return {
     enabled: true,
     disabledHosts: [],
-    prefs: structuredClone(DEFAULT_SHIELD_PREFS),
+    // 不用 structuredClone：旧 WebView（Chrome < 98）/ Safari < 15.4 没有它，脚本会在这里出错、整页不再遮挡
+    prefs: { ...DEFAULT_SHIELD_PREFS, hide: { ...DEFAULT_SHIELD_PREFS.hide } },
     global: { enabled: false, start: '06:00', end: '12:00', days: [0, 1, 2, 3, 4, 5, 6] },
     dataBase,
     watched: {},

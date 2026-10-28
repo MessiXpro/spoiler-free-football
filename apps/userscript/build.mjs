@@ -3,11 +3,17 @@ import { build } from 'esbuild';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { FALLBACK_JS, GUARD_JS } from './guard.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const dist = join(root, 'dist');
 mkdirSync(dist, { recursive: true });
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+// 部署时（deploy.yml）传入脚本和 core 最后一次改动的提交时间，作为 @version 的第 4 段：脚本管理器只在版本号变大时
+// 才更新已安装的脚本，否则每天重新部署的脚本（含识别规则的修复）永远到不了用户那里。
+// 打 v* 标签发布（release.yml）不传，仍是 x.y.z（0.2.1 仍大于 0.2.0.1792816139）
+const stamp = (process.env.SFF_BUILD_STAMP ?? '').trim();
+if (stamp && !/^\d{1,10}$/.test(stamp)) throw new Error('SFF_BUILD_STAMP 必须是数字（提交时间戳）');
 
 const WEB_URL = process.env.SFF_WEB_URL || 'https://messixpro.github.io/spoiler-free-football/';
 // 正式构建（SFF_RELEASE=1）不带本机开发地址
@@ -58,7 +64,7 @@ function header(variant) {
     '// ==UserScript==',
     `// @name         ${global ? '防剧透看球（全网版）' : '防剧透看球'}`,
     '// @namespace    https://github.com/MessiXpro/spoiler-free-football',
-    `// @version      ${pkg.version}`,
+    `// @version      ${pkg.version}${stamp ? '.' + stamp : ''}`,
     `// @description  ${
       global
         ? '在设定时段对所有网站隐藏比分和结果词；支持的视频/资讯网站另有专门规则。'
@@ -98,6 +104,9 @@ for (const variant of ['sites', 'global']) {
     target: ['chrome90', 'safari15', 'firefox90'],
     write: false,
     legalComments: 'none',
+    // 旧浏览器兜底：整个脚本包在兼容性检查里（见 guard.mjs）
+    banner: { js: GUARD_JS },
+    footer: { js: FALLBACK_JS },
     define: {
       __SFF_WEB_URL__: JSON.stringify(WEB_URL),
       __SFF_WEB_PREFIXES__: JSON.stringify(WEB_PREFIXES),

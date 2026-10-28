@@ -178,13 +178,19 @@ jobs:
           key: http-cache-v2-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: http-cache-v2-
 
-      - name: 站点规则的版本号用最后一次提交的时间
+      - name: 站点规则和用户脚本的版本号用最后一次提交的时间
         run: |
           stamp="$(git log -1 --format=%cI -- packages/core/src/rules/default-site-rules.json)"
           # 取不到时不能悄悄退回文件里的旧 version：已安装的插件/脚本会把之后的新规则都当成旧的拒收
           [ -n "$stamp" ] || { echo "::error title=取不到站点规则的提交时间::检查这一步里的文件路径和 checkout 的 fetch-depth: 0"; exit 1; }
           echo "SFF_RULES_STAMP=$stamp" >> "$GITHUB_ENV"
           echo "站点规则最后提交于 $stamp"
+          # 用户脚本的 @version 加第 4 段（脚本和 core 最后一次改动的提交时间）：脚本管理器只在版本号变大时才更新已安装的脚本，
+          # 否则每天重新部署的脚本（含识别规则的修复）永远到不了用户那里。打 v* 标签发布（release.yml）不加，仍是 x.y.z
+          script_stamp="$(git log -1 --format=%ct -- apps/userscript packages/core/src)"
+          [ -n "$script_stamp" ] || { echo "::error title=取不到用户脚本的提交时间::检查这一步里的路径和 checkout 的 fetch-depth: 0"; exit 1; }
+          echo "SFF_BUILD_STAMP=$script_stamp" >> "$GITHUB_ENV"
+          echo "用户脚本最后提交于 $(date -u -d "@$script_stamp" +%FT%TZ)，@version 第 4 段为 $script_stamp"
 
       - name: 运行数据管线（公开数据含防泄露检查，不通过则不部署）
         run: pnpm data:build

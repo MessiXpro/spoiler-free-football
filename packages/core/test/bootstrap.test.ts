@@ -4,6 +4,7 @@ import {
   applyWebWatched,
   bootShield,
   currentMatchFor,
+  DEFAULT_SHIELD_PREFS,
   defaultRules,
   defaultShieldSettings,
   fetchScoreFrom,
@@ -37,6 +38,18 @@ describe('插件/脚本启动逻辑', () => {
     expect(inSchedule(night, new Date(2026, 9, 18, 9, 0))).toBe(false);
     expect(inSchedule({ ...g, enabled: false }, new Date(2026, 9, 17, 8, 0))).toBe(false);
     expect(inSchedule({ ...g, days: [1] }, new Date(2026, 9, 17, 8, 0))).toBe(false); // 周六
+  });
+
+  it('没有 structuredClone 的旧 WebView / Safari（Chrome < 98、Safari < 15.4）：默认设置照常生成，改它不影响默认值', () => {
+    vi.stubGlobal('structuredClone', undefined);
+    try {
+      const s = normalizeSettings(undefined, BASE);
+      expect(s.prefs).toEqual(DEFAULT_SHIELD_PREFS);
+      s.prefs.hide.comments = !s.prefs.hide.comments;
+      expect(DEFAULT_SHIELD_PREFS.hide.comments).not.toBe(s.prefs.hide.comments);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('域名匹配', () => {

@@ -71,6 +71,22 @@ describe('版本号', () => {
     const release = read('.github', 'workflows', 'release.yml');
     for (const f of files) expect(release).toContain(`'${f}'`);
   });
+
+  it('部署出来的用户脚本 @version 带上最后一次改动的提交时间：脚本管理器只在版本号变大时才更新', () => {
+    const yml = read('.github', 'workflows', 'deploy.yml');
+    expect(yml).toContain('SFF_BUILD_STAMP=');
+    // 路径写错时 git log 输出为空：路径必须真的存在，取不到时这一步要失败
+    const paths = /git log -1 --format=%ct -- ([^)"]+)\)"/.exec(yml)?.[1]?.split(' ') ?? [];
+    expect(paths).toContain('apps/userscript');
+    expect(paths).toContain('packages/core/src');
+    for (const p of paths) expect(existsSync(join(ROOT, p)), p).toBe(true);
+    expect(yml).toMatch(/\[ -n "\$script_stamp" \] \|\| \{[^}]*exit 1; \}/);
+    const build = read('apps', 'userscript', 'build.mjs');
+    expect(build).toContain('SFF_BUILD_STAMP');
+    expect(build).toContain("${pkg.version}${stamp ? '.' + stamp : ''}");
+    // 打 v* 标签发布时仍是 x.y.z：发布工作流不设这个变量
+    expect(read('.github', 'workflows', 'release.yml')).not.toContain('SFF_BUILD_STAMP');
+  });
 });
 
 describe('README', () => {

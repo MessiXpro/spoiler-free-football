@@ -386,7 +386,8 @@ function InstallGuide() {
             Userscripts
           </a>
           （免费），在 Safari 的扩展设置里打开它，然后点{' '}
-          <a href="./userscript/spoiler-free-football.user.js">用户脚本</a> 安装。
+          <a href="./userscript/spoiler-free-football.user.js">用户脚本</a> 安装。需要 iOS 16.4
+          或更新（iOS 15 的旧设备会在页面底部提示浏览器太旧）。
         </>
       ),
     },
@@ -396,8 +397,9 @@ function InstallGuide() {
       body: (
         <>
           Android（Via、X 浏览器、狐猴等支持脚本的浏览器）：安装{' '}
-          <a href="./userscript/spoiler-free-football.user.js">用户脚本</a>；想在所有网站生效可以装{' '}
-          <a href="./userscript/spoiler-free-football-global.user.js">全网版</a>。
+          <a href="./userscript/spoiler-free-football.user.js">用户脚本</a>；想在所有网站生效就改装{' '}
+          <a href="./userscript/spoiler-free-football-global.user.js">全网版</a>
+          （全网版已包含普通版的全部功能，二者只装一个）。
         </>
       ),
     },

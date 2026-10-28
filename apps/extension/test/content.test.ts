@@ -56,6 +56,30 @@ describe('全网模式的内容脚本', () => {
   });
 });
 
+describe('页面上已有用户脚本在防剧透', () => {
+  it('插件不再启动第二份（两份会互相把对方「临时显示」的内容遮回去）；弹窗问状态时说明原因', async () => {
+    vi.resetModules();
+    const { mock } = installChromeMock({ global: ALL_DAY });
+    g.__SFF_WEB_MATCHES__ = ['https://football.example.cn/*'];
+    g.__sffGlobal = true;
+    freshDocument();
+    // 用户脚本先到，已经在这个页面上接管
+    document.documentElement.dataset.sffActive = 'userscript-sites';
+    await import('../src/content.ts');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(document.getElementById('score')!.textContent).toBe('曼联 2 - 1 利物浦');
+    expect(document.documentElement.dataset.sffActive).toBe('userscript-sites');
+    const reply = vi.fn();
+    for (const fn of mock.runtime.onMessage.listeners) {
+      (fn as (...a: unknown[]) => unknown)({ type: 'status' }, {}, reply);
+    }
+    expect(reply).toHaveBeenCalledTimes(1);
+    expect(reply).toHaveBeenCalledWith(
+      expect.objectContaining({ active: false, reason: expect.stringContaining('用户脚本') }),
+    );
+  });
+});
+
 describe('match pattern', () => {
   it('和浏览器一样忽略端口，按路径前缀匹配', () => {
     expect(matchesPattern('http://localhost:5173/#/match/x', 'http://localhost/*')).toBe(true);

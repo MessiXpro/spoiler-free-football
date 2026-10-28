@@ -30,6 +30,7 @@ async function boot(
   variant: 'sites' | 'global',
   stored?: unknown,
   fetchImpl: (url: string) => unknown = () => ({ status: 404, text: async () => '' }),
+  opts: { changeListener?: boolean } = {},
 ) {
   vi.resetModules();
   store = new Map();
@@ -42,8 +43,13 @@ async function boot(
   g.GM = {
     getValue: async (k: string, d?: unknown) => (store.has(k) ? structuredClone(store.get(k)) : d),
     setValue: async (k: string, v: unknown) => void store.set(k, structuredClone(v)),
-    addValueChangeListener: (_k: string, cb: (typeof changeListeners)[number]) =>
-      changeListeners.push(cb),
+    // Via、X浏览器、iOS Userscripts 没有 addValueChangeListener
+    ...(opts.changeListener === false
+      ? {}
+      : {
+          addValueChangeListener: (_k: string, cb: (typeof changeListeners)[number]) =>
+            changeListeners.push(cb),
+        }),
   };
   g.GM_registerMenuCommand = (name: string, fn: () => unknown) => void menus.set(name, fn);
   vi.stubGlobal(
@@ -400,6 +406,108 @@ describe('站点规则更新', () => {
     );
     await vi.waitFor(() => expect(store.get('settings')).toBeDefined());
     expect(storedSettings().rules).toBeUndefined();
+  });
+});
+
+describe('没有 addValueChangeListener 的脚本管理器（Via、X浏览器、iOS Userscripts）', () => {
+  const stored = () =>
+    store.get('settings') as {
+      watched?: Record<string, number>;
+      disabledHosts?: string[];
+      rulesCheckedAt?: number;
+    };
+  const ready = () => vi.waitFor(() => expect(stored().rulesCheckedAt).toBeDefined());
+
+  it('显示比分时不会把其他标签页记下的「已看」覆盖掉', async () => {
+    await boot(
+      'global',
+      {
+        global: { enabled: true, start: '06:00', end: '12:00', days: ALL_DAYS },
+        currentMatch: openedMatch('epl-y', 'Arsenal', 'Chelsea'),
+      },
+      undefined,
+      { changeListener: false },
+    );
+    await ready();
+    // 另一个标签页在这之后记下了 X 已看（没有监听器，这里内存里的设置不知道）
+    stored().watched = { 'epl-x': 1 };
+    const q = panel();
+    q('sff-fab').click();
+    q('sff-reveal').click();
+    q('sff-reveal-yes').click();
+    await vi.waitFor(() => expect(stored().watched).toHaveProperty('epl-y'));
+    expect(stored().watched).toHaveProperty('epl-x');
+  });
+
+  it('在此站点停用时不会把其他标签页停用的站点覆盖掉', async () => {
+    await boot(
+      'global',
+      { global: { enabled: true, start: '06:00', end: '12:00', days: ALL_DAYS } },
+      undefined,
+      { changeListener: false },
+    );
+    await ready();
+    stored().disabledHosts = ['example.com'];
+    const q = panel();
+    q('sff-fab').click();
+    q('sff-toggle-site').click();
+    await vi.waitFor(() => expect(stored().disabledHosts).toContain('localhost'));
+    expect(stored().disabledHosts).toContain('example.com');
+  });
+});
+
+describe('防剧透网页上的联动', () => {
+  /** 脚本管理器沙箱里的 unsafeWindow（Tampermonkey 里脚本看到的 window 是个包装，不是页面的 window） */
+  const unsafe = {};
+
+  async function bootBridge() {
+    vi.resetModules();
+    store = new Map();
+    menus = new Map();
+    changeListeners = [];
+    g.__SFF_WEB_URL__ = 'http://localhost:3000/';
+    g.__SFF_WEB_PREFIXES__ = ['http://localhost:3000/'];
+    g.__SFF_VARIANT__ = 'sites';
+    g.unsafeWindow = unsafe;
+    g.GM = {
+      getValue: async (k: string, d?: unknown) =>
+        store.has(k) ? structuredClone(store.get(k)) : d,
+      setValue: async (k: string, v: unknown) => void store.set(k, structuredClone(v)),
+    };
+    freshDocument();
+    await import('../src/main.ts');
+    await vi.waitFor(() => expect(document.documentElement.dataset.sffShield).toBe('userscript'));
+  }
+  const openMatch = (source: unknown, origin = location.origin) =>
+    new MessageEvent('message', {
+      data: {
+        source: 'sff-web',
+        type: 'open-match',
+        url: 'https://www.bilibili.com/video/BV1xx',
+        match: { ...openedMatch('epl-a', 'Arsenal', 'Chelsea'), url: undefined },
+      },
+      origin,
+      source: source as Window,
+    });
+  const storedMatch = () =>
+    (store.get('settings') as { currentMatch?: { id: string } } | undefined)?.currentMatch;
+
+  afterEach(() => {
+    delete g.unsafeWindow;
+  });
+
+  it('沙箱里页面发来的消息 source 是 unsafeWindow 而不是脚本的 window：也要处理', async () => {
+    await bootBridge();
+    window.dispatchEvent(openMatch(unsafe));
+    await vi.waitFor(() => expect(storedMatch()?.id).toBe('epl-a'));
+  });
+
+  it('来源不是本页面（别的 window 或别的源）的消息不处理', async () => {
+    await bootBridge();
+    window.dispatchEvent(openMatch({}));
+    window.dispatchEvent(openMatch(unsafe, 'https://evil.example'));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(storedMatch()).toBeUndefined();
   });
 });
 

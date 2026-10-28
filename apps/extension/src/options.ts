@@ -4,6 +4,13 @@ import { ext, loadSettings, saveSettings } from './api.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const DAYS = ['日', '一', '二', '三', '四', '五', '六'];
+/** <input type="time"> 的值是否完整（HH:MM），和用户脚本面板的检查一致 */
+const isTimeValue = (v: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+
+declare const __SFF_SITE_MATCHES__: string[];
+/** 构建时注入：这个版本的插件有权限的站点（manifest 的 content_scripts.matches / host_permissions） */
+const SITE_MATCHES: string[] | null =
+  typeof __SFF_SITE_MATCHES__ !== 'undefined' ? __SFF_SITE_MATCHES__ : null;
 
 /**
  * 每次修改都基于存储里最新的设置合并（并且一个接一个写）：render() 拿到的 s 只是打开页面时的快照，
@@ -68,8 +75,19 @@ async function render() {
   const end = $<HTMLInputElement>('global-end');
   start.value = s.global.start;
   end.value = s.global.end;
-  start.onchange = () => void saveGlobal({ start: start.value });
-  end.onchange = () => void saveGlobal({ end: end.value });
+  // <input type="time"> 清空后值是 ''，存进去会被当成 00:00（06:00 到 '' 变成遮到半夜）：没填完整就恢复原值
+  const onTime = (el: HTMLInputElement, key: 'start' | 'end') => () => {
+    if (isTimeValue(el.value)) {
+      void saveGlobal({ [key]: el.value });
+      return;
+    }
+    void queue.then(loadSettings).then((cur) => {
+      el.value = cur.global[key];
+      $('global-msg').textContent = '时间没有填完整，已恢复原来的值。';
+    });
+  };
+  start.onchange = onTime(start, 'start');
+  end.onchange = onTime(end, 'end');
   const days = $('global-days');
   days.innerHTML = '';
   DAYS.forEach((d, i) => {
@@ -91,8 +109,19 @@ async function render() {
   });
 
   const rules = s.rules ?? defaultRules();
+  // 下载来的规则里新增的站点（hosts）：这个版本的插件没有它们的权限、内容脚本不会注入，光改规则不起作用；
+  // 开了全网防剧透的话，全网脚本会按站点规则处理它们
+  const uncovered = SITE_MATCHES
+    ? [...new Set(rules.sites.flatMap((site) => site.hosts))].filter(
+        (h) => !SITE_MATCHES.includes(`*://*.${h}/*`),
+      )
+    : [];
   $('rules-info').textContent = `当前规则版本 ${rules.version}，覆盖 ${rules.sites.length} 个站点${
     s.rulesCheckedAt ? `；上次检查 ${new Date(s.rulesCheckedAt).toLocaleString('zh-CN')}` : ''
+  }${
+    uncovered.length && !s.global.enabled
+      ? `；规则里新增了 ${uncovered.join('、')}：这个版本的插件没有这些站点的权限，需要重新安装新版插件，或开启上面的全网防剧透`
+      : ''
   }`;
   $('update-rules').onclick = async () => {
     await ext.runtime.sendMessage({ type: 'update-rules' });
