@@ -239,6 +239,9 @@ function isEventsBody(body: string): boolean {
   }
 }
 
+/** 按数字编号的轮次：杯赛前几轮（联赛杯、足总杯、国王杯用 1～6）和欧战联赛阶段（1～8） */
+const NUMBERED_ROUNDS = [1, 2, 3, 4, 5, 6, 7, 8];
+
 /**
  * 根据最近一场/下一场推出需要拉取的轮次。
  * matchdayOnly：联赛/预选赛的 intRound 一直是轮次，第 16、32 轮不按杯赛编码扩展
@@ -259,6 +262,9 @@ export function roundsAround(rounds: number[], matchdayOnly = false): number[] {
     if (idx >= 0) {
       if (idx > 0) out.add(codes[idx - 1]!);
       if (idx < codes.length - 1) out.add(codes[idx + 1]!);
+      // 编码轮次之前按数字编号的轮次也一起拉：它们还在 60 天时间窗内时要靠它们锁住这一轮的对阵
+      // （上一轮不在数据里就锁不住，例如联赛杯第 4 轮一开踢、第 3 轮就从数据里消失）
+      for (const n of NUMBERED_ROUNDS) out.add(n);
     }
   }
   return [...out].filter((r) => r >= 0).sort((a, b) => a - b);
@@ -277,7 +283,9 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
       );
       const fixtures = new Map<string, RawFixture>();
       const notes: string[] = [];
+      /** 返回落在时间窗内的场数 */
       const add = (events: TsdbEvent[]) => {
+        let kept = 0;
         for (const e of events) {
           let f: RawFixture | null = null;
           try {
@@ -289,7 +297,9 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
           const t = Date.parse(f.kickoff);
           if (t < ctx.windowStart.getTime() || t > ctx.windowEnd.getTime()) continue;
           fixtures.set(f.sourceId, f);
+          kept++;
         }
+        return kept;
       };
       const get = (path: string) =>
         ctx.fetcher.getJson<EventsResponse>(`${BASE}/${key}/${path}`, {
@@ -336,7 +346,13 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
           const seasons = [
             ...new Set(seed.map((e) => e.strSeason).filter((s): s is string => Boolean(s))),
           ];
-          if (!seasons.length) continue;
+          if (!seasons.length) {
+            // 一场种子都没有的赛事（例如休赛期的欧预赛）以前日志里一行都没有，看不出它被拉过
+            ctx.log(
+              `thesportsdb ${comp}：种子为空（最近一场/下一场都没有），${fixtures.size - before} 场，${requests} 次请求`,
+            );
+            continue;
+          }
           if (premium) {
             for (const s of seasons) {
               try {
@@ -419,12 +435,13 @@ export function createTheSportsDbAdapter(): FixtureAdapter {
               requests++;
               // 单独一轮出错（偶发的报错体或请求失败）只记一笔，其他轮次照常拉（联赛每轮互不影响）
               try {
-                add(
-                  eventsOf(
-                    checked(
-                      await get(`eventsround.php?id=${id}&r=${r}&s=${encodeURIComponent(s)}`),
-                    ),
-                  ),
+                const got = eventsOf(
+                  checked(await get(`eventsround.php?id=${id}&r=${r}&s=${encodeURIComponent(s)}`)),
+                );
+                const kept = add(got);
+                // 每轮的原始条数和窗口内场数各记一笔：某项赛事几乎没拿到数据时，才分得清是数据源没给还是被时间窗滤掉了
+                ctx.log(
+                  `thesportsdb ${comp} ${s} 第 ${r} 轮：原始 ${got.length} 条，窗口内 ${kept} 场`,
                 );
               } catch (err) {
                 failedRounds.push(r);

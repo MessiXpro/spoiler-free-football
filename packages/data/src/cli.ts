@@ -4,7 +4,13 @@ import { buildData, CONFIG_DIR, loadConfig, writeOutput } from './build.ts';
 import { envValue } from './env.ts';
 import { createHttpFetcher } from './http.ts';
 import { SAMPLE_DIR, SAMPLE_ENV, SAMPLE_NOW, sampleFetcher } from './sample.ts';
-import { actionsAnnotations, emptyDataReason, sourceStatus, stepSummary } from './summary.ts';
+import {
+  actionsAnnotations,
+  competitionCounts,
+  emptyDataReason,
+  sourceStatus,
+  stepSummary,
+} from './summary.ts';
 
 /**
  * 用法：
@@ -72,6 +78,11 @@ async function main() {
   for (const s of output.meta.sources) {
     const mark = { ok: '✓', warn: '!', off: '·' }[sourceStatus(s)];
     console.log(`  ${mark} ${s.name}：${s.count} 场${s.note ? `（${s.note}）` : ''}`);
+  }
+  const perCompetition = competitionCounts(output.matches);
+  if (perCompetition.length) {
+    console.log('\n各赛事场数：');
+    for (const c of perCompetition) console.log(`  ${c.name}：${c.count} 场`);
   }
   for (const w of output.warnings) console.warn(`  ! ${w}`);
   const { unknownTeams, possibleDuplicates, hiddenKnockoutTeams } = output.diagnostics;

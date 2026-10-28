@@ -186,6 +186,40 @@ describe('Retry-After 等待有上限', () => {
   });
 });
 
+describe('限流日志里写明服务器要求等多久', () => {
+  const once429 = (headers?: Record<string, string>) => {
+    let n = 0;
+    return (async () =>
+      ++n === 1
+        ? new Response('slow down', { status: 429, headers })
+        : new Response('ok', { status: 200 })) as typeof fetch;
+  };
+
+  it('429 带 Retry-After：日志里写上秒数；没带的只写 HTTP 429', async () => {
+    const logs: string[] = [];
+    const f = createHttpFetcher({
+      fetchImpl: once429({ 'retry-after': '60' }),
+      defaultIntervalMs: 0,
+      log: (m) => logs.push(m),
+      sleep: async () => {},
+    });
+    await f.getText('https://api.example.com/a', { kind: 'api' });
+    expect(logs).toContain(
+      'api.example.com 限流（HTTP 429，Retry-After 60 秒），之后每次请求间隔 5 秒',
+    );
+
+    const plain: string[] = [];
+    const g = createHttpFetcher({
+      fetchImpl: once429(),
+      defaultIntervalMs: 0,
+      log: (m) => plain.push(m),
+      sleep: async () => {},
+    });
+    await g.getText('https://api.example.com/a', { kind: 'api' });
+    expect(plain).toContain('api.example.com 限流（HTTP 429），之后每次请求间隔 5 秒');
+  });
+});
+
 describe('被限流后主动放慢', () => {
   it('收到 429 后，同一域名之后的请求间隔至少 5 秒（其他域名不受影响）', async () => {
     const waits: Array<[string, number]> = [];

@@ -71,7 +71,10 @@ export interface BuildOptions {
   pastDays?: number;
   futureDays?: number;
   log?: (msg: string) => void;
-  /** 每个数据源的用时上限，默认 10 分钟（TheSportsDB 免费 Key 跑完全部赛事约 8～9 分钟） */
+  /**
+   * 每个数据源的用时上限，默认 15 分钟（TheSportsDB 免费 Key 本身约 2 分钟，
+   * 但每次被限流会按 Retry-After 等两次 60 秒，4～5 次限流就要 10 分钟以上）
+   */
   adapterBudgetMs?: number;
   /**
    * 所有数据源加起来的用时上限，默认 20 分钟：部署工作流的 build job 30 分钟超时，
@@ -107,7 +110,7 @@ export interface BuildDiagnostics {
 const revealsAdvancement = (stage: Stage | undefined) => !stage || isKnockoutStage(stage);
 
 const DUPLICATE_WINDOW_MS = 3 * 60 * 60 * 1000;
-const DEFAULT_ADAPTER_BUDGET_MS = 10 * 60 * 1000;
+const DEFAULT_ADAPTER_BUDGET_MS = 15 * 60 * 1000;
 const DEFAULT_TOTAL_BUDGET_MS = 20 * 60 * 1000;
 
 function collectDiagnostics(all: RawFixture[], matches: PublicMatch[]): BuildDiagnostics {

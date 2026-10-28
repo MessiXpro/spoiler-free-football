@@ -697,7 +697,7 @@ describe('#42 TheSportsDB 联赛第 16/32 轮', () => {
 
   it('联赛不按杯赛编码扩展轮次', () => {
     expect(roundsAround([16], true)).toEqual([15, 16, 17]);
-    expect(roundsAround([16])).toEqual([15, 16, 17, 32]);
+    expect(roundsAround([16])).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 15, 16, 17, 32]);
   });
 
   it('adapter 拉英超第 16 轮时不请求第 32 轮', async () => {
@@ -1251,6 +1251,90 @@ describe('TheSportsDB 免费 Key 少发请求', () => {
     // 两个赛季各 3 轮左右，而不是 2 × 6 轮
     expect(rounds.length).toBeLessThanOrEqual(6);
     expect(rounds.some((q) => q.includes('s=2026-2027') && q.includes('r=5&'))).toBe(false);
+  });
+
+  it('联赛杯第 4 轮一开踢（最近一场/下一场都是编码 16）：第 3 轮照样拉，不会从数据里消失', async () => {
+    // 第 3 轮（9 月 23 日）还在 60 天时间窗内：第 4 轮的对阵要靠它锁住，它不在数据里就锁不住
+    const r4 = (p: Partial<TsdbEvent> & { idEvent: string }) => ({
+      idLeague: '4570',
+      strSeason: '2026-2027',
+      intRound: '16',
+      strTime: '19:45:00',
+      strStatus: 'Not Started',
+      intHomeScore: null,
+      intAwayScore: null,
+      ...p,
+    });
+    const urls: string[] = [];
+    const res = await createTheSportsDbAdapter().fetch(
+      ctx({
+        now: new Date('2026-10-28T06:00:00Z'),
+        windowStart: new Date('2026-08-29T06:00:00Z'),
+        windowEnd: new Date('2026-11-27T06:00:00Z'),
+        env: { THESPORTSDB_LEAGUES: '4570' },
+        fetcher: createFixtureFetcher(
+          [
+            [
+              'eventsnextleague',
+              () =>
+                JSON.stringify({
+                  events: [
+                    r4({
+                      idEvent: 'r4-next',
+                      strHomeTeam: 'Arsenal',
+                      strAwayTeam: 'Brighton',
+                      dateEvent: '2026-10-28',
+                    }),
+                  ],
+                }),
+            ],
+            [
+              'eventspastleague',
+              () =>
+                JSON.stringify({
+                  events: [
+                    r4({
+                      idEvent: 'r4-past',
+                      strHomeTeam: 'Liverpool',
+                      strAwayTeam: 'Crystal Palace',
+                      dateEvent: '2026-10-27',
+                      strStatus: 'Match Finished',
+                      intHomeScore: '2',
+                      intAwayScore: '1',
+                    }),
+                  ],
+                }),
+            ],
+            [
+              /eventsround\.php\?id=4570&r=3&/,
+              () =>
+                JSON.stringify({
+                  events: [
+                    r4({
+                      idEvent: 'r3',
+                      intRound: '3',
+                      strHomeTeam: 'Liverpool',
+                      strAwayTeam: 'Southampton',
+                      dateEvent: '2026-09-23',
+                      strStatus: 'Match Finished',
+                      intHomeScore: '1',
+                      intAwayScore: '0',
+                    }),
+                  ],
+                }),
+            ],
+            [/eventsround\.php/, () => JSON.stringify({ events: null })],
+          ],
+          (u) => urls.push(u),
+        ),
+      }),
+    );
+    expect(urls.some((u) => u.includes('eventsround.php?id=4570&r=3&'))).toBe(true);
+    expect(res.fixtures.map((f) => f.stage).sort()).toEqual([
+      'round-3',
+      'round-of-16',
+      'round-of-16',
+    ]);
   });
 });
 
@@ -1924,8 +2008,8 @@ describe('TheSportsDB 单独一轮出错不影响其他轮次', () => {
   });
 
   it('欧冠按阶段拉：编码 32 没拉到就超时时，编码 16（1/8 决赛）也不会先拉到', async () => {
-    // 顺序是 31、33（资格赛）、64、32、16：种子 2 次 + 3 轮 = 1 秒，拉编码 32 之前超时
-    const { res, urls } = await timed('4480', 900, [
+    // 顺序是 1～8（联赛阶段）、31、33（资格赛）、64、32、16：种子 2 次 + 11 轮 = 2.6 秒，拉编码 32 之前超时
+    const { res, urls } = await timed('4480', 2500, [
       ['eventsnextleague', () => JSON.stringify({ events: null })],
       [
         'eventspastleague',
@@ -2072,8 +2156,8 @@ describe('TheSportsDB 单独一轮出错不影响其他轮次', () => {
   ];
 
   it('联赛杯 1/4 决赛拉完、半决赛编码没拉到就超时：已经拉完的轮次照常发布', async () => {
-    // 顺序是 160（附加赛）、64、125、150：拉编码 150 之前超时
-    const { res } = await timed('4570', 900, eflCup);
+    // 顺序是 160（附加赛）、1～8（前几轮）、64、125、150：拉编码 150 之前超时
+    const { res } = await timed('4570', 2500, eflCup);
     expect(res.fixtures.map((f) => f.sourceId).sort()).toEqual(['qf-seed', 'qf2', 'sf-seed']);
     // 只有总的「超过用时上限」，没有删掉对阵的说明
     expect(res.notes[0]).toMatch(/^超过用时上限.*联赛杯/);
@@ -2081,7 +2165,7 @@ describe('TheSportsDB 单独一轮出错不影响其他轮次', () => {
   });
 
   it('联赛杯 1/4 决赛没拉到就超时：半决赛对阵不发布，说明里写明', async () => {
-    const { res, urls } = await timed('4570', 700, eflCup);
+    const { res, urls } = await timed('4570', 2300, eflCup);
     expect(urls.some((u) => u.includes('r=125&'))).toBe(false);
     expect(res.fixtures.map((f) => f.sourceId)).toEqual(['qf-seed']);
     expect(res.fixtures.map((f) => f.stage)).not.toContain('semi-final');
@@ -2258,6 +2342,29 @@ describe('所有数据源共用一个总用时上限', () => {
     });
     // a：自己的 10 分钟上限；b：总共 15 分钟里只剩 6 分钟
     expect(deadlines).toEqual([10 * 60_000, 15 * 60_000]);
+  });
+
+  it('每个数据源默认 15 分钟：免费 Key 被限流几次就要按 Retry-After 等好几分钟，10 分钟不够', async () => {
+    const deadlines: number[] = [];
+    await buildData({
+      now: new Date('2026-10-16T12:00:00Z'),
+      fetcher: createFixtureFetcher([]),
+      env: {},
+      config: await loadConfig(),
+      clock: () => 0,
+      adapters: [
+        {
+          id: 'a',
+          name: 'a',
+          priority: 1,
+          fetch: async (c) => {
+            deadlines.push(c.deadline ?? -1);
+            return { fixtures: [], notes: [] };
+          },
+        },
+      ],
+    });
+    expect(deadlines).toEqual([15 * 60_000]);
   });
 });
 

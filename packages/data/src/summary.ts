@@ -1,3 +1,4 @@
+import { competitionName, type PublicMatch } from '@sff/core';
 import type { BuildOutput } from './build.ts';
 
 /**
@@ -19,6 +20,17 @@ export function sourceStatus(s: {
   return 'ok';
 }
 
+/** 各赛事的公开比赛场数，按场数从多到少（只有赛事名和数字：哪项赛事几乎没拿到数据，一眼就能看出来） */
+export function competitionCounts(
+  matches: Array<Pick<PublicMatch, 'competition'>>,
+): Array<{ id: string; name: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const m of matches) counts.set(m.competition, (counts.get(m.competition) ?? 0) + 1);
+  return [...counts]
+    .map(([id, count]) => ({ id, name: competitionName(id), count }))
+    .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+}
+
 /** GitHub Actions 运行页上的中文小结（只有场数和队名，淘汰赛队名隐藏，没有比分） */
 export function stepSummary(output: BuildOutput, scores: number): string {
   const cell = (v: string) => v.replace(/\|/g, '／').replace(/\n/g, ' ');
@@ -35,6 +47,18 @@ export function stepSummary(output: BuildOutput, scores: number): string {
     ),
     '',
   ];
+  // 每项赛事一行：数据源总数正常、某项赛事却只有一两场时（数据源没给、或者我们问错了轮次），在这里能看出来
+  const perCompetition = competitionCounts(output.matches);
+  if (perCompetition.length) {
+    lines.push(
+      '### 各赛事场数',
+      '',
+      '| 赛事 | 场数 |',
+      '|---|---|',
+      ...perCompetition.map((c) => `| ${cell(c.name)} | ${c.count} |`),
+      '',
+    );
+  }
   const { unknownTeams, possibleDuplicates, hiddenKnockoutTeams } = output.diagnostics;
   if (possibleDuplicates.length) {
     lines.push(`### ⚠️ 可能重复的比赛（${possibleDuplicates.length} 组）`, '');

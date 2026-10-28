@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  competitionName,
   findSpoilers,
   matchesInWindow,
   defaultUserState,
@@ -16,6 +17,7 @@ import { findPublicDataLeaks, assertNoLeaks } from '../src/privacy.ts';
 import { buildLinks, isOfficialUrl } from '../src/links.ts';
 import { scheduledEpisodes } from '../src/programs.ts';
 import { SAMPLE_DIR, SAMPLE_ENV, SAMPLE_NOW, sampleFetcher } from '../src/sample.ts';
+import { stepSummary } from '../src/summary.ts';
 import type { RawFixture } from '../src/types.ts';
 
 async function sampleBuild() {
@@ -135,6 +137,28 @@ describe('完整管线（示例数据）', () => {
     expect(byId.openfootball!.ok).toBe(true);
     expect(byId['api-football']!.ok).toBe(false);
     expect(byId['api-football']!.note).toMatch(/APIFOOTBALL_KEY/);
+  });
+
+  it('运行页小结按赛事列出场数：每项赛事一行，按场数从多到少，只有赛事名和数字', async () => {
+    const out = await sampleBuild();
+    const summary = stepSummary(out, 0);
+    expect(summary).toContain('### 各赛事场数');
+    const section = summary.split('\n### ').find((s) => s.startsWith('各赛事场数'))!;
+    expect(section).toContain('| 赛事 | 场数 |');
+    const competitions = [...new Set(out.matches.map((m) => m.competition))];
+    expect(competitions.length).toBeGreaterThan(1);
+    for (const id of competitions) {
+      const n = out.matches.filter((m) => m.competition === id).length;
+      expect(section).toContain(`| ${competitionName(id)} | ${n} |`);
+    }
+    const counts = [...section.matchAll(/^\| .+ \| (\d+) \|$/gm)].map((m) => Number(m[1]));
+    expect(counts).toHaveLength(competitions.length);
+    expect(counts).toEqual([...counts].sort((a, b) => b - a));
+    // 没有队名，也没有结果词
+    for (const m of out.matches)
+      for (const t of [m.home, m.away]) expect(section).not.toContain(t.name);
+    expect(findSpoilers(section)).toEqual([]);
+    expect(findSpoilers(section, { football: true })).toEqual([]);
   });
 });
 

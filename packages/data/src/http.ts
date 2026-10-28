@@ -159,14 +159,16 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
    * 限流常常只持续一两分钟（共用 Key 被别人用满了）：之后连续几次没再被限流就把间隔减半（见 recover），
    * 不然一次限流会让整次运行都按最慢的速度走，用完时间上限、后面的赛事都拉不到
    */
-  function slowDown(host: string) {
+  function slowDown(host: string, retryAfterSec: number) {
     okStreak.set(host, 0);
     const current =
       slowedInterval.get(host) ?? config.minIntervalMs?.[host] ?? config.defaultIntervalMs ?? 1000;
     const next = Math.min(MAX_SLOWED_INTERVAL_MS, Math.max(MIN_SLOWED_INTERVAL_MS, current * 2));
     if (next === slowedInterval.get(host)) return;
     slowedInterval.set(host, next);
-    log(`${host} 限流（HTTP 429），之后每次请求间隔 ${Math.round(next / 1000)} 秒`);
+    // 服务器要求等的秒数也写进日志：限流窗口到底多长，看日志就知道（不然只看得到两次各等了 60 秒）
+    const retryAfter = retryAfterSec > 0 ? `，Retry-After ${retryAfterSec} 秒` : '';
+    log(`${host} 限流（HTTP 429${retryAfter}），之后每次请求间隔 ${Math.round(next / 1000)} 秒`);
   }
 
   function recover(host: string) {
@@ -265,10 +267,10 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
         await writeCache(url, { ...cached, fetchedAt: Date.now() });
         return { status: cached.status, body: cached.body, fromCache: true };
       }
-      if (res.status === 429) slowDown(u.host);
+      const retryAfter = Number(res.headers.get('retry-after'));
+      if (res.status === 429) slowDown(u.host, retryAfter);
       else recover(u.host);
       if ((res.status === 429 || res.status >= 500) && attempt < retries) {
-        const retryAfter = Number(res.headers.get('retry-after'));
         // Retry-After 可能很长（比如一小时）：最多等 1 分钟，再不行就用旧缓存或报错
         await sleep(
           Math.min(
