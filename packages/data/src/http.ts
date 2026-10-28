@@ -76,7 +76,8 @@ interface CacheEntry {
  * 旧版（没有前缀）用带密钥的完整 URL 算文件名、文件里也存了完整 URL，启动时清掉。
  */
 const CACHE_PREFIX = 'v2-';
-const MAX_RETRY_WAIT_MS = 60_000;
+// TheSportsDB 被限流时要求等 120 秒：不等够就重试一定还是 429，白白多等一次。最多等 3 分钟
+const MAX_RETRY_WAIT_MS = 180_000;
 const MIN_SLOWED_INTERVAL_MS = 5_000;
 const MAX_SLOWED_INTERVAL_MS = 20_000;
 /** 放慢之后连续这么多次请求没再被限流，就把间隔减半，一路减回原来的间隔 */
@@ -271,7 +272,7 @@ export function createHttpFetcher(config: HttpFetcherConfig = {}): Fetcher {
       if (res.status === 429) slowDown(u.host, retryAfter);
       else recover(u.host);
       if ((res.status === 429 || res.status >= 500) && attempt < retries) {
-        // Retry-After 可能很长（比如一小时）：最多等 1 分钟，再不行就用旧缓存或报错
+        // Retry-After 可能很长（比如一小时）：最多等 3 分钟，再不行就用旧缓存或报错
         await sleep(
           Math.min(
             MAX_RETRY_WAIT_MS,

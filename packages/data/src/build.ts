@@ -73,7 +73,7 @@ export interface BuildOptions {
   log?: (msg: string) => void;
   /**
    * 每个数据源的用时上限，默认 15 分钟（TheSportsDB 免费 Key 本身约 2 分钟，
-   * 但每次被限流会按 Retry-After 等两次 60 秒，4～5 次限流就要 10 分钟以上）
+   * 但每次被限流会按服务器要求的 Retry-After 等 1～2 分钟，4～5 次限流就要 10 分钟以上）
    */
   adapterBudgetMs?: number;
   /**

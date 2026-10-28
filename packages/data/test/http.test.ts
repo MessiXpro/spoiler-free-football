@@ -169,7 +169,7 @@ describe('请求超时', () => {
 });
 
 describe('Retry-After 等待有上限', () => {
-  it('服务器让等一小时：最多等 1 分钟', async () => {
+  it('服务器让等一小时：最多等 3 分钟', async () => {
     const waits: number[] = [];
     let n = 0;
     const impl = (async () =>
@@ -182,7 +182,24 @@ describe('Retry-After 等待有上限', () => {
       sleep: async (ms) => void waits.push(ms),
     });
     expect((await f.getText('https://api.example.com/a', { kind: 'api' })).body).toBe('ok');
-    expect(Math.max(...waits)).toBe(60_000);
+    expect(Math.max(...waits)).toBe(180_000);
+  });
+
+  it('服务器让等 120 秒（TheSportsDB 的实际值）：等够 120 秒再试，一次就成', async () => {
+    const waits: number[] = [];
+    let n = 0;
+    const impl = (async () =>
+      ++n === 1
+        ? new Response('slow down', { status: 429, headers: { 'retry-after': '120' } })
+        : new Response('ok', { status: 200 })) as typeof fetch;
+    const f = createHttpFetcher({
+      fetchImpl: impl,
+      defaultIntervalMs: 0,
+      sleep: async (ms) => void waits.push(ms),
+    });
+    expect((await f.getText('https://api.example.com/a', { kind: 'api' })).body).toBe('ok');
+    expect(waits).toContain(120_000);
+    expect(n).toBe(2);
   });
 });
 
