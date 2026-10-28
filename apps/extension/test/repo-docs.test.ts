@@ -97,6 +97,29 @@ describe('README', () => {
     expect(pkg.scripts.ci).toBeDefined();
   });
 
+  it('别处链接到的标题都在：网页设置页的「各平台安装」、商店隐私政策、运行小结里的「补充球队中文名」', () => {
+    expect(readme).toMatch(/^## 各平台安装$/m);
+    expect(readme).toMatch(/^## 隐私说明$/m);
+    expect(readme).toContain('- [隐私说明](#隐私说明)');
+    expect(readme).toMatch(/^### 补充球队中文名/m);
+    expect(read('packages', 'data', 'src', 'summary.ts')).toContain('补充球队中文名');
+    expect(read('packages', 'data', 'src', 'cli.ts')).toContain('补充球队中文名');
+    // 商店要的独立隐私政策页：和 README 那一节一起部署在网页根目录
+    expect(existsSync(join(ROOT, 'apps', 'web', 'public', 'privacy.html'))).toBe(true);
+    expect(readme).toContain('privacy.html');
+  });
+
+  it('淘汰赛锁定的说明写的是「更早阶段」，不是只看上一轮', () => {
+    expect(readme).toContain('更早阶段');
+    expect(readme).not.toContain('还没看完上一轮订阅比赛');
+  });
+
+  it('国内镜像说明让用户下载的 site 产物，部署工作流真的有上传', () => {
+    const yml = read('.github', 'workflows', 'deploy.yml');
+    expect(yml).toMatch(/name: site\n\s+path: apps\/web\/dist/);
+    expect(readme).toContain('下载 `site`');
+  });
+
   it('改站点规则不用手动改 version（部署时自动盖上提交时间）', () => {
     const row = readme.split('\n').find((l) => l.includes('default-site-rules.json')) ?? '';
     expect(row).toContain('不用改 `version`');
@@ -132,5 +155,38 @@ describe('Cloudflare Pages 部署', () => {
     expect(read('packages', 'data', 'src', 'cloudflare-cli.ts')).toContain(
       "?? 'spoiler-free-football'",
     );
+  });
+});
+
+describe('发布工作流', () => {
+  const yml = read('.github', 'workflows', 'release.yml');
+
+  it('第三方 action 钉死到提交 sha 并注明版本；发布前先过 lint / 类型检查 / 单元测试；附件带校验和', () => {
+    const uses = [...yml.matchAll(/uses: ([^\s@]+)@(\S+)(.*)/g)];
+    expect(uses.length).toBeGreaterThan(0);
+    for (const [, name, ref, rest] of uses) {
+      // GitHub 官方和 pnpm 自己的 action 按大版本引用即可
+      if (name!.startsWith('actions/') || name!.startsWith('pnpm/')) continue;
+      expect(ref, name).toMatch(/^[0-9a-f]{40}$/);
+      expect(rest, name).toMatch(/# v\d/);
+    }
+    const release = /\n {2}release:\n([\s\S]*?)(?=\n {2}\S|\n?$)/.exec(yml)?.[1] ?? '';
+    expect(release).toMatch(/needs: test/);
+    const test = /\n {2}test:\n([\s\S]*?)(?=\n {2}\S|\n?$)/.exec(yml)?.[1] ?? '';
+    for (const cmd of ['pnpm lint', 'pnpm typecheck', 'pnpm test']) expect(test).toContain(cmd);
+    expect(release).toContain('SHA256SUMS');
+    // 写权限只给发布那个 job，整个工作流默认只读
+    expect(yml).toMatch(/\npermissions:\n {2}contents: read\n/);
+    expect(release).toMatch(/permissions:\n\s+contents: write/);
+  });
+});
+
+describe('许可', () => {
+  it('用户脚本头部写的 @license MIT 有 LICENSE 文件和 package.json 的 license 字段撑着', () => {
+    expect(read('apps', 'userscript', 'build.mjs')).toContain('@license      MIT');
+    const license = read('LICENSE');
+    expect(license).toContain('MIT License');
+    expect(license).toMatch(/Copyright \(c\) \d{4} MessiXpro/);
+    expect((JSON.parse(read('package.json')) as { license?: string }).license).toBe('MIT');
   });
 });

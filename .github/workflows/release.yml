@@ -1,17 +1,40 @@
 name: 发布插件和用户脚本
 
-# 打 v* 标签时把插件 zip 和 .user.js 附到 GitHub Release
+# 打 v* 标签时把插件 zip 和 .user.js 附到 GitHub Release。
+# CI 只在推送分支时跑，推标签不会触发它，所以这里先自己跑一遍 lint / 类型检查 / 单元测试，红的就不发
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
 
+# 整个工作流默认只读；只有发布那个 job 需要写 Release
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  test:
+    name: 测试
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  release:
+    name: 构建并发布
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -51,9 +74,17 @@ jobs:
           export SFF_WEB_URL="${SFF_WEB_URL%/}/"
           pnpm --filter @sff/extension build
           pnpm --filter @sff/userscript build
-      - uses: softprops/action-gh-release@v2
+      - name: 生成校验和（下载后在同一目录运行 sha256sum -c SHA256SUMS 核对）
+        run: |
+          for f in apps/extension/dist/*.zip apps/userscript/dist/*.user.js; do
+            (cd "$(dirname "$f")" && sha256sum "$(basename "$f")")
+          done > SHA256SUMS
+          cat SHA256SUMS
+      # 第三方 action 钉死到提交 sha：标签可以被改指向，sha 不能。升级时把 sha 和后面的版本注释一起换
+      - uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
             apps/extension/dist/*.zip
             apps/userscript/dist/*.user.js
+            SHA256SUMS

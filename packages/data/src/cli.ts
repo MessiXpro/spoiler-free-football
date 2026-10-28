@@ -87,7 +87,9 @@ async function main() {
   for (const w of output.warnings) console.warn(`  ! ${w}`);
   const { unknownTeams, possibleDuplicates, hiddenKnockoutTeams } = output.diagnostics;
   if (unknownTeams.length) {
-    console.log(`\n目录里没有的球队 ${unknownTeams.length} 个（显示英文原名）：`);
+    console.log(
+      `\n目录里没有的球队 ${unknownTeams.length} 个（显示英文原名；在 packages/core/src/catalog/teams.ts 补中文名或别名，见 README「补充球队中文名」）：`,
+    );
     for (const t of unknownTeams) console.log(`  - [${t.competition}] ${t.name}（${t.source}）`);
   }
   if (hiddenKnockoutTeams) {

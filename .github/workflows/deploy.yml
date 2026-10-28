@@ -217,6 +217,17 @@ jobs:
           pnpm --filter @sff/userscript build
           node scripts/assemble-site.mjs
 
+      # 网页构建产物另存一份：README「国内访问慢怎么办」让用户下载它上传到国内对象存储。
+      # github-pages 那个产物是打包过的 tar、只留 1 天，而且 Cloudflare 模式下根本不生成
+      - name: 上传网页构建产物（国内镜像用）
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: apps/web/dist
+          include-hidden-files: true # 保留 .nojekyll
+          retention-days: 7
+
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'pull_request' && needs.hosting.outputs.pages == 'true'
         with:

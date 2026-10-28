@@ -68,7 +68,7 @@ export function stepSummary(output: BuildOutput, scores: number): string {
   }
   if (unknownTeams.length) {
     lines.push(
-      `### 目录里没有的球队（${unknownTeams.length} 个，网页上显示英文原名）`,
+      `### 目录里没有的球队（${unknownTeams.length} 个，网页上显示英文原名；在 packages/core/src/catalog/teams.ts 补中文名或别名，见 README「补充球队中文名」）`,
       '',
       ...unknownTeams.slice(0, 80).map((t) => `- [${t.competition}] ${t.name}（${t.source}）`),
       ...(unknownTeams.length > 80 ? [`- ……另外 ${unknownTeams.length - 80} 个见运行日志`] : []),

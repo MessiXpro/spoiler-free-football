@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# 只读：这个工作流只上传产物，不改仓库
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

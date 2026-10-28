@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>隐私说明 · 防剧透看球</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        background: #0f1f17;
+        color: #e6efe9;
+        margin: 0;
+        line-height: 1.7;
+      }
+      main {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+      li {
+        margin-bottom: 0.6em;
+      }
+      a {
+        color: #7ee2a0;
+      }
+      .muted {
+        color: #a9bbb1;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>隐私说明</h1>
+      <p>适用于「防剧透看球」的网页、浏览器插件和用户脚本。</p>
+      <ul>
+        <li>
+          订阅的球队/赛事、已看记录、设置都只存在你自己的设备上（网页存浏览器本地存储，插件存浏览器的扩展存储，用户脚本存脚本管理器）。没有账号，没有统计代码，不收集、不上传任何数据。
+        </li>
+        <li>
+          网页、插件、脚本只会访问网页的数据地址：打开时下载不含比分的赛程，你点「显示比分」时才下载那一场的比分文件（文件名是哈希，不含队名），插件/脚本每
+          12 小时下载一次站点规则。
+        </li>
+        <li>
+          插件/脚本在视频网站上读取页面文字只是为了在本机遮住比分和结果词，读到的内容不会离开你的浏览器。
+        </li>
+        <li>
+          「同步码」是你自己复制粘贴的；可选的同步服务器只在你点「上传到服务器」时才发送数据，按随机密钥存放
+          180 天后自动删除，不与任何第三方共享。
+        </li>
+      </ul>
+      <p class="muted">
+        这份说明和项目 README 里的「隐私说明」一节内容相同。<a href="./">回到防剧透看球首页</a>
+      </p>
+    </main>
+  </body>
+</html>
