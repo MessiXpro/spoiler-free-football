@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReactNode } from 'react';
+import { act, type ReactNode } from 'react';
 import {
   defaultUserState,
   findSpoilers,
@@ -11,11 +11,13 @@ import {
   type MatchLink,
   type Program,
   type PublicMatch,
+  type ScoreRecord,
   type UserState,
 } from '@sff/core';
 import { Embed } from '../src/components/Embed.tsx';
 import { MatchCard } from '../src/components/MatchCard.tsx';
-import { getState, setState, useUserState } from '../src/lib/store.ts';
+import { RevealScore } from '../src/components/RevealScore.tsx';
+import { cacheScore, getState, setState, useUserState } from '../src/lib/store.ts';
 import { MatchDetailView, TonightView, UnwatchedView } from '../src/views/MatchViews.tsx';
 import { ProgramsView } from '../src/views/ProgramsView.tsx';
 import {
@@ -107,7 +109,7 @@ describe('节目折叠原因不暴露锁定的对阵', () => {
     noSpoilers(el);
 
     // 看完 1/8 决赛后 1/4 决赛不再锁定：节目仍因 1/4 决赛没看折叠，但不需要这句提示
-    const watched = { ...getState(), watched: { [r16.id]: 1 } };
+    const watched = { ...getState(), watched: { [r16.id]: 4_000_000_000 } };
     const other = await render(<ProgramsView data={data} state={watched} now={now} />);
     expect(q(other.el, 'program-locked')).not.toBeNull();
     expect(q(other.el, 'program-locked-hint')).toBeNull();
@@ -509,7 +511,7 @@ describe('次回合的两回合总比分', () => {
     await unmount();
 
     // 首回合看过之后（次回合已记为已看，「没看完」里不再有它，去详情页看）
-    setState({ ...getState(), watched: { ...getState().watched, [first.id]: 1 } });
+    setState({ ...getState(), watched: { ...getState().watched, [first.id]: 4_000_000_000 } });
     const again = await render(
       <WithStore>
         {(s) => <MatchDetailView data={data} state={s} now={now} id={second.id} />}
@@ -523,5 +525,209 @@ describe('次回合的两回合总比分', () => {
     expect(c3.textContent).toContain('点球大战 4 - 3');
     expect(c3.textContent).toContain('经过加时');
     expect(c3.textContent).toContain('点球大战决出胜负（数据源未提供点球比分）');
+  });
+});
+
+describe('显示比分时网络优先', () => {
+  const m = match({
+    id: 'ucl-2026-27-semi-final-arsenal-chelsea',
+    competition: 'ucl',
+    stage: 'semi-final',
+    matchday: undefined,
+    kickoff: '2026-10-14T19:00:00Z',
+  });
+  const cached: ScoreRecord = { id: m.id, home: 1, away: 1, source: 'test', updatedAt: '' };
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+
+  it('管线后来补上的点球比分能看到，不再被本机缓存挡住', async () => {
+    cacheScore(cached);
+    const fetchMock = vi.fn(async () => json({ ...cached, extraTime: true, penalties: [4, 3] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { el } = await render(<RevealScore match={m} watched />);
+    await click(q(el, 'reveal-button'));
+    await settle();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(q(el, 'score-display')?.textContent).toContain('点球大战 4 - 3');
+  });
+
+  it('请求失败、或比分文件暂时不在时，退回上次显示过的缓存（离线也能再看）', async () => {
+    cacheScore(cached);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    );
+    const offline = await render(<RevealScore match={m} watched />);
+    await click(q(offline.el, 'reveal-button'));
+    await settle();
+    expect(q(offline.el, 'score-display')?.textContent).toContain('1 - 1');
+    expect(offline.el.querySelector('.error')).toBeNull();
+    await offline.unmount();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 404 })),
+    );
+    const gone = await render(<RevealScore match={m} watched />);
+    await click(q(gone.el, 'reveal-button'));
+    await settle();
+    expect(q(gone.el, 'score-display')?.textContent).toContain('1 - 1');
+    expect(q(gone.el, 'score-missing')).toBeNull();
+  });
+});
+
+describe('「时间待定」的比赛', () => {
+  // openfootball 没给开球时间时按当地 20:00 占位
+  const tbd = match({
+    id: 'fa-cup-2026-27-round-1-arsenal-chelsea',
+    competition: 'fa-cup',
+    stage: 'round-1',
+    matchday: undefined,
+    kickoff: '2026-11-07T19:00:00Z',
+    timeTbd: true,
+  });
+
+  it('占位时间过后不按它推算出「进行中/已结束」，状态也写「时间待定」', async () => {
+    const { el } = await render(
+      <MatchCard
+        match={tbd}
+        all={[tbd]}
+        state={getState()}
+        now={new Date('2026-11-07T22:30:00Z')}
+      />,
+    );
+    expect(q(el, 'match-status')?.textContent).toBe('时间待定');
+    expect(textNodes(el)).not.toContain('已结束');
+    noSpoilers(el);
+    const early = await render(
+      <MatchCard
+        match={tbd}
+        all={[tbd]}
+        state={getState()}
+        now={new Date('2026-11-06T22:30:00Z')}
+      />,
+    );
+    expect(q(early.el, 'match-status')?.textContent).toBe('未开始');
+  });
+});
+
+describe('误标为「已看」后能改回没看', () => {
+  const r3 = match({
+    id: 'fa-cup-2026-27-round-3-arsenal-chelsea',
+    competition: 'fa-cup',
+    stage: 'round-3',
+    matchday: undefined,
+    kickoff: '2027-01-09T15:00:00Z',
+  });
+  const now = new Date('2027-01-09T19:00:00Z');
+
+  beforeEach(() => {
+    // 已看时间取自页面时钟，要晚于开球时间才算这一场的
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('比分缺失被记为已看后，不用看比分就能改回没看', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 404 })),
+    );
+    const { el } = await render(
+      <WithStore>{(s) => <MatchCard match={r3} all={[r3]} state={s} now={now} />}</WithStore>,
+    );
+    await click(q(el, 'reveal-button'));
+    await click(q(document.body, 'confirm-ok'));
+    await settle();
+    expect(q(el, 'score-missing')).not.toBeNull();
+    expect(getState().watched[r3.id]).toBeTruthy();
+    expect(q(el, 'watched-badge')).not.toBeNull();
+    noSpoilers(el);
+    await click(q(el, 'unmark-watched'));
+    expect(getState().watched[r3.id]).toBeUndefined();
+    expect(q(el, 'score-missing')).toBeNull();
+    expect(q(el, 'watched-badge')).toBeNull();
+    expect(q(el, 'reveal-button')?.textContent).toBe('看完了，显示比分');
+  });
+});
+
+describe('北京时间中午之后开球、午夜前就结束的比赛', () => {
+  // 北京 20:00 开球（12:00Z），23:00 结束；午夜前还不在"昨夜今晨"的时间窗里
+  const early = match({ id: 'epl-2026-27-arsenal-chelsea', kickoff: '2026-10-17T12:00:00Z' });
+  const data = appData([early]);
+
+  it('午夜前列在「今晚已结束」，不再说这一晚没有比赛', async () => {
+    const { el } = await render(
+      <TonightView
+        data={data}
+        state={getState()}
+        now={new Date('2026-10-17T15:30:00Z')}
+        offset={0}
+      />,
+    );
+    expect(q(el, 'empty-night')).toBeNull();
+    const section = q(el, 'tonight-finished')!;
+    expect(section).not.toBeNull();
+    expect(cardOf(section, early.id)).not.toBeNull();
+    expect([...el.querySelectorAll('.section-title')].map((h) => h.textContent)).toEqual([
+      '今晚已结束',
+    ]);
+    noSpoilers(el);
+  });
+
+  it('过了午夜回到主列表', async () => {
+    const { el } = await render(
+      <TonightView
+        data={data}
+        state={getState()}
+        now={new Date('2026-10-17T16:30:00Z')}
+        offset={0}
+      />,
+    );
+    expect(q(el, 'tonight-finished')).toBeNull();
+    expect(q(el, 'empty-night')).toBeNull();
+    expect(el.querySelector('.section-title')).toBeNull();
+    expect(cardOf(el, early.id)).not.toBeNull();
+  });
+});
+
+describe('直播模式面板的键盘操作', () => {
+  const m = match({ id: 'epl-2026-27-arsenal-chelsea', kickoff: '2026-10-10T14:00:00Z' });
+
+  it('打开后焦点进面板，Esc 关闭，焦点回到「直播模式」按钮', async () => {
+    const { el } = await render(
+      <MatchCard match={m} all={[m]} state={getState()} now={new Date('2026-10-11T02:00:00Z')} />,
+    );
+    const btn = q(el, 'live-mode') as HTMLButtonElement;
+    btn.focus();
+    await click(btn);
+    const panel = q(document.body, 'live-mode-panel')!;
+    expect(panel.getAttribute('aria-labelledby')).toBe('modal-title');
+    expect(panel.querySelector('#modal-title')?.textContent).toBe('直播模式');
+    expect(panel.contains(document.activeElement)).toBe(true);
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(q(document.body, 'live-mode-panel')).toBeNull();
+    expect(document.activeElement).toBe(btn);
+  });
+});
+
+describe('设置页的安装说明', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('「项目 README」链接到仓库 README 的「各平台安装」', async () => {
+    vi.stubEnv('VITE_SFF_REPO_URL', 'https://github.com/o/r');
+    // 仓库地址在模块加载时读取：重新加载设置页
+    vi.resetModules();
+    const { SettingsView } = await import('../src/views/SettingsView.tsx');
+    const { el } = await render(<SettingsView state={getState()} />);
+    const link = el.querySelector(
+      '[data-testid="install-block"] a[href="https://github.com/o/r#各平台安装"]',
+    );
+    expect(link?.textContent).toContain('项目 README');
+    expect(link?.getAttribute('rel')).toBe('noreferrer');
   });
 });

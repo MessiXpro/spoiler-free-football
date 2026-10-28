@@ -18,6 +18,9 @@ import { detectShield } from '../lib/bridge.ts';
 import { actions, getState, importState, mergeState } from '../lib/store.ts';
 import { pullFromServer, randomSyncKey, uploadToServer } from '../lib/sync-server.ts';
 
+/** 部署时由工作流传入（GitHub 仓库地址），本地开发时为空 */
+const REPO_URL = (import.meta.env.VITE_SFF_REPO_URL as string | undefined) || '';
+
 const GROUPS: TeamGroup[] = [
   'epl',
   'laliga',
@@ -441,7 +444,17 @@ function InstallGuide() {
           </li>
         ))}
       </ul>
-      <p className="muted small">每一步的详细说明见项目 README。</p>
+      <p className="muted small">
+        每一步的详细说明见
+        {REPO_URL ? (
+          <a href={`${REPO_URL}#各平台安装`} target="_blank" rel="noreferrer">
+            项目 README 的「各平台安装」
+          </a>
+        ) : (
+          '项目 README 的「各平台安装」'
+        )}
+        。
+      </p>
     </div>
   );
 }
@@ -488,7 +501,8 @@ export function SettingsView({ state }: { state: UserState }) {
             onChange={(e) => actions.updateSettings({ lockKnockoutOpponents: e.target.checked })}
             data-testid="toggle-lock"
           />
-          淘汰赛：上一轮订阅比赛没看完时，先藏起下一轮的对阵（「只看订阅球队」的赛事，这一轮所有比赛都先显示为「对阵待揭晓」，从卡片看不出你的球队在不在下一轮）
+          淘汰赛：同一赛事更早阶段（不只上一轮，60
+          天内）的订阅比赛没看完时，先藏起这一轮的对阵（「只看订阅球队」的赛事，这一轮所有比赛都先显示为「对阵待揭晓」，从卡片看不出你的球队在不在下一轮）
         </label>
         <label className="toggle">
           <input

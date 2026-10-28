@@ -1,6 +1,6 @@
 import { neutralTitle, type PublicMatch } from '@sff/core';
 import { dataUrl } from './data.ts';
-import { getState, mergeWatched, removedWatched, subscribe } from './store.ts';
+import { getState, mergeWatched, shieldRemoved, subscribe } from './store.ts';
 
 /**
  * 网页 ↔ 防剧透插件/用户脚本 的联动（window.postMessage）：
@@ -46,7 +46,7 @@ export function initBridge(): () => void {
     type: 'hello',
     dataBase: dataUrl(''),
     watched: getState().watched,
-    unwatched: removedWatched(),
+    unwatched: shieldRemoved(),
   });
   let lastWatched = getState().watched;
   let last = JSON.stringify(lastWatched);

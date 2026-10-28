@@ -9,15 +9,21 @@ import {
   type Settings,
   type UserState,
 } from '@sff/core';
+import { getNow } from './clock.ts';
 
 const KEY = 'sff:state:v1';
 const SCORES_KEY = 'sff:scores:v1';
 /**
- * 本机"藏起比分并标记为没看"或清空过的已看记录：id → 时间（秒）。
+ * 本机"藏起比分并标记为没看"的已看记录：id → 时间（秒）。
  * 插件/用户脚本、同步码和同步服务器只会追加已看记录，没有这份记录的话，
  * 它们带回来的旧记录会把刚删掉的又加回来。
  */
 const REMOVED_KEY = 'sff:unwatched:v1';
+/**
+ * 「清空本机数据」时清掉的已看记录：id → 时间（秒）。只用来挡插件/用户脚本发回来的旧记录；
+ * 用户明确导入同步码备份或从服务器合并时照常带回来（清空后等于新设备，以对方为准）。
+ */
+const RESET_KEY = 'sff:reset-watched:v1';
 
 function safeGet(key: string): string | null {
   try {
@@ -75,10 +81,9 @@ function setPrefs(fn: (prev: UserState) => UserState) {
   setState((s) => ({ ...fn(s), prefsUpdatedAt: Date.now() }));
 }
 
-/** 本机删掉过的已看记录（见 REMOVED_KEY） */
-export function removedWatched(): Record<string, number> {
+function readTimes(key: string): Record<string, number> {
   try {
-    const raw = JSON.parse(safeGet(REMOVED_KEY) ?? '{}') as unknown;
+    const raw = JSON.parse(safeGet(key) ?? '{}') as unknown;
     if (!raw || typeof raw !== 'object') return {};
     return Object.fromEntries(
       Object.entries(raw as Record<string, unknown>).filter(
@@ -90,34 +95,62 @@ export function removedWatched(): Record<string, number> {
   }
 }
 
-function rememberRemoved(ids: string[]) {
+/** 本机"藏起比分并标记为没看"的已看记录（见 REMOVED_KEY） */
+export function removedWatched(): Record<string, number> {
+  return readTimes(REMOVED_KEY);
+}
+
+/** 插件/脚本发回的旧记录要挡掉的：用户删掉的 + 清空本机数据时清掉的（同一场取较晚的时间） */
+export function shieldRemoved(): Record<string, number> {
+  const out = readTimes(RESET_KEY);
+  for (const [id, t] of Object.entries(removedWatched())) out[id] = Math.max(out[id] ?? 0, t);
+  return out;
+}
+
+function rememberRemoved(ids: string[], key = REMOVED_KEY) {
   if (!ids.length) return;
   const t = Math.floor(Date.now() / 1000);
   // 只留最近 90 天的（数据本身只保留最近 60 天和未来一个月的比赛）
   const keepSince = t - 90 * 24 * 3600;
   const next = Object.fromEntries(
-    Object.entries(removedWatched()).filter(([, at]) => at >= keepSince),
+    Object.entries(readTimes(key)).filter(([, at]) => at >= keepSince),
   );
   for (const id of ids) next[id] = t;
-  safeSet(REMOVED_KEY, JSON.stringify(next));
+  safeSet(key, JSON.stringify(next));
 }
 
 /** 去掉本机删除之前就有的已看记录（删除之后在别处重新看过的照常保留） */
-function dropRemoved(watched: Record<string, number>): Record<string, number> {
-  const removed = removedWatched();
+function dropRemoved(
+  watched: Record<string, number>,
+  removed: Record<string, number> = removedWatched(),
+): Record<string, number> {
   return Object.fromEntries(
     Object.entries(watched).filter(([id, t]) => !(removed[id] !== undefined && t <= removed[id])),
   );
 }
 
+/** 导入/合并明确带回来的记录不再算"清空过的"，否则下次打开页面插件会按 hello 里的删除记录把它们删掉 */
+function forgetReset(ids: string[]) {
+  const back = new Set(ids);
+  const reset = readTimes(RESET_KEY);
+  const next = Object.fromEntries(Object.entries(reset).filter(([id]) => !back.has(id)));
+  if (Object.keys(next).length !== Object.keys(reset).length) {
+    safeSet(RESET_KEY, JSON.stringify(next));
+  }
+}
+
 /** 合并外部状态（同步服务器）；已看记录取并集，订阅和设置以较新的一份为准 */
 export function mergeState(incoming: UserState) {
-  setState(mergeUserState(state, { ...incoming, watched: dropRemoved(incoming.watched) }));
+  const watched = dropRemoved(incoming.watched);
+  forgetReset(Object.keys(watched));
+  setState(mergeUserState(state, { ...incoming, watched }));
 }
 
 /** 用户确认导入同步码：订阅、赛事和设置改用同步码里的，已看记录合并 */
 export function importState(incoming: UserState) {
-  const merged = mergeUserState(state, { ...incoming, watched: dropRemoved(incoming.watched) });
+  const watched = dropRemoved(incoming.watched);
+  forgetReset(Object.keys(watched));
+  const merged = mergeUserState(state, { ...incoming, watched });
   setState({
     ...merged,
     teams: [...incoming.teams],
@@ -132,7 +165,9 @@ export function mergeWatched(watched: Record<string, number>) {
   const valid = Object.fromEntries(
     Object.entries(watched).filter(([, t]) => typeof t === 'number'),
   );
-  const missing = Object.entries(dropRemoved(valid)).filter(([id]) => !state.watched[id]);
+  const missing = Object.entries(dropRemoved(valid, shieldRemoved())).filter(
+    ([id]) => !state.watched[id],
+  );
   if (!missing.length) return;
   setState((s) => ({ ...s, watched: { ...s.watched, ...Object.fromEntries(missing) } }));
 }
@@ -160,7 +195,9 @@ window.addEventListener('storage', (e) => {
 
 export const actions = {
   markWatched(id: string) {
-    setState((s) => ({ ...s, watched: { ...s.watched, [id]: Math.floor(Date.now() / 1000) } }));
+    // 用页面的时钟（带 ?now= 时也一致）：已看时间要晚于开球时间才算这一场的（见 core 的 isWatched）
+    const t = Math.floor(getNow().getTime() / 1000);
+    setState((s) => ({ ...s, watched: { ...s.watched, [id]: t } }));
   },
   unmarkWatched(id: string) {
     rememberRemoved([id]);
@@ -199,8 +236,8 @@ export const actions = {
     setPrefs((s) => ({ ...s, settings: { ...s.settings, ...patch } }));
   },
   reset() {
-    // 记下清空前的已看记录，插件/脚本再发回来时不会恢复
-    rememberRemoved(Object.keys(state.watched));
+    // 记下清空前的已看记录，插件/脚本再发回来时不会恢复（导入同步码备份、从服务器合并则照常带回来）
+    rememberRemoved(Object.keys(state.watched), RESET_KEY);
     // 清空后等于新设备：之后导入同步码或从服务器合并时以对方为准
     setState(fresh());
     safeSet(SCORES_KEY, '{}');

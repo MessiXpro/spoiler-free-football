@@ -38,7 +38,7 @@ function useKeepRevealed(list: PublicMatch[], all: PublicMatch[], state: UserSta
   for (const m of list) seen.add(m.id);
   const ids = new Set(list.map((m) => m.id));
   return all
-    .filter((m) => ids.has(m.id) || (seen.has(m.id) && isWatched(state, m.id)))
+    .filter((m) => ids.has(m.id) || (seen.has(m.id) && isWatched(state, m)))
     .sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff) || a.id.localeCompare(b.id));
 }
 
@@ -78,13 +78,30 @@ export function TonightView({ data, state, now, offset }: ViewProps & { offset: 
           )
           .sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff))
       : [];
+  // 同样是中午之后开球、午夜前就已结束的（北京 19:30/20:00 开球的早场）：午夜前先列为"今晚已结束"，
+  // 不然它只能出现在下面的"更早还没看完的"里，上面却写着"这一晚没有你订阅的比赛"
+  const tonight =
+    offset === 0
+      ? data.matches
+          .filter(
+            (m) =>
+              !inWindow.has(m.id) &&
+              Date.parse(m.kickoff) >= w.end &&
+              liveStatus(m, now) === 'finished' &&
+              isShown(m, data.matches, state, now),
+          )
+          .sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff))
+      : [];
+  const tonightIds = new Set(tonight.map((m) => m.id));
   const older = useKeepRevealed(
     offset === 0
-      ? unwatchedRecent(data.matches, state, now, 7).filter((m) => !inWindow.has(m.id))
+      ? unwatchedRecent(data.matches, state, now, 7).filter(
+          (m) => !inWindow.has(m.id) && !tonightIds.has(m.id),
+        )
       : [],
     data.matches,
     state,
-  ).filter((m) => !inWindow.has(m.id));
+  ).filter((m) => !inWindow.has(m.id) && !tonightIds.has(m.id));
   const title = offset === 0 ? '昨夜今晨' : `往前第 ${-offset} 晚`;
   return (
     <section className="view" data-testid="view-today">
@@ -120,9 +137,15 @@ export function TonightView({ data, state, now, offset }: ViewProps & { offset: 
           <MatchGrid matches={live} all={data.matches} state={state} now={now} />
         </div>
       )}
+      {tonight.length > 0 && (
+        <div data-testid="tonight-finished">
+          <h2 className="section-title">今晚已结束</h2>
+          <MatchGrid matches={tonight} all={data.matches} state={state} now={now} />
+        </div>
+      )}
       {list.length ? (
         <MatchGrid matches={list} all={data.matches} state={state} now={now} />
-      ) : (
+      ) : live.length + tonight.length > 0 ? null : (
         <p className="empty" data-testid="empty-night">
           这一晚没有你订阅的比赛。可以在
           <a href={href({ name: 'settings' })}>设置</a>里增减订阅的球队和赛事。
@@ -145,7 +168,7 @@ export function UnwatchedView({ data, state, now }: ViewProps) {
       <div className="view-head">
         <h2>还没看完</h2>
         <p className="muted">
-          最近三周已结束、还没点「显示比分」的订阅比赛。上一轮没看完时，下一轮的淘汰赛会以「对阵待揭晓」出现。
+          最近三周已结束、还没点「显示比分」的订阅比赛。同一赛事更早阶段的订阅比赛没看完时，之后的淘汰赛会以「对阵待揭晓」出现。
         </p>
       </div>
       {list.length ? (
@@ -170,7 +193,7 @@ export function UpcomingView({ data, state, now }: ViewProps) {
         <h2>即将开始</h2>
         <p className="muted">
           未来 {state.settings.upcomingDays} 天 ·
-          不显示积分榜；淘汰赛对阵在你看完上一轮之前会先藏起来
+          不显示积分榜；淘汰赛对阵在你看完更早阶段之前会先藏起来
         </p>
       </div>
       {list.length === 0 && (

@@ -158,7 +158,7 @@ describe('订阅与视图', () => {
     expect(
       unwatchedRecent(matches, state, new Date('2026-10-17T20:00:00Z')).map((m) => m.id),
     ).toEqual(['evt-che']);
-    const watched = { ...state, watched: { 'evt-che': 1, 'ars-bou': 1 } };
+    const watched = { ...state, watched: { 'evt-che': 4_000_000_000, 'ars-bou': 4_000_000_000 } };
     expect(unwatchedRecent(matches, watched, now)).toEqual([]);
     expect(upcomingMatches(matches, state, now, 10).map((m) => m.id)).toEqual(['rma-bar']);
   });
@@ -186,7 +186,9 @@ describe('订阅与视图', () => {
     const all = [r16, qf, qf2];
     const now = new Date('2027-03-20T00:00:00Z');
     expect(isFixtureLocked(qf, all, state, now)).toBe(true);
-    expect(isFixtureLocked(qf, all, { ...state, watched: { r16: 1 } }, now)).toBe(false);
+    expect(isFixtureLocked(qf, all, { ...state, watched: { r16: 4_000_000_000 } }, now)).toBe(
+      false,
+    );
     expect(isFixtureLocked(qf, all, { ...state, unlocked: { 'fixture:qf': 1 } }, now)).toBe(false);
     expect(
       isFixtureLocked(
@@ -197,7 +199,9 @@ describe('订阅与视图', () => {
       ),
     ).toBe(false);
     // 次回合只依赖更早阶段，不因首回合没看而锁定（首回合本身也在 r16 之后）
-    expect(isFixtureLocked(qf2, all, { ...state, watched: { r16: 1 } }, now)).toBe(false);
+    expect(isFixtureLocked(qf2, all, { ...state, watched: { r16: 4_000_000_000 } }, now)).toBe(
+      false,
+    );
     // 联赛不锁
     expect(isFixtureLocked(matches[0]!, matches, state, now)).toBe(false);
   });
@@ -220,7 +224,7 @@ describe('订阅与视图', () => {
       'evt-che',
       'ars-bou',
     ]);
-    const all = { ...state, watched: { 'evt-che': 1, 'ars-bou': 1 } };
+    const all = { ...state, watched: { 'evt-che': 4_000_000_000, 'ars-bou': 4_000_000_000 } };
     expect(programLockReasons(program, matches, all, now)).toEqual([]);
     expect(programLockReasons({ ...program, spoilerRisk: 'low' }, matches, state, now)).toEqual([]);
   });
@@ -295,11 +299,14 @@ describe('两回合总比分只在首回合已看时显示', () => {
   it('首回合没看、或首回合不在数据里：不显示总比分；首回合已看才显示', () => {
     const fresh = defaultUserState(0);
     expect(canShowAggregate(second, [first, second], fresh)).toBe(false);
-    expect(canShowAggregate(second, [second], { ...fresh, watched: { [first.id]: 1 } })).toBe(
-      false,
-    );
     expect(
-      canShowAggregate(second, [first, second], { ...fresh, watched: { [first.id]: 1 } }),
+      canShowAggregate(second, [second], { ...fresh, watched: { [first.id]: 4_000_000_000 } }),
+    ).toBe(false);
+    expect(
+      canShowAggregate(second, [first, second], {
+        ...fresh,
+        watched: { [first.id]: 4_000_000_000 },
+      }),
     ).toBe(true);
     // 首回合本身、单场淘汰赛：照常
     expect(canShowAggregate(first, [first, second], fresh)).toBe(true);
@@ -341,11 +348,13 @@ describe('只看订阅球队：淘汰赛占位卡不泄露上一轮结果', () =
 
   it('锁定卡能列出是哪场上一轮比赛没看', () => {
     expect(lockBlockers(qfB, [r16, qfB], base, now).map((m) => m.id)).toEqual([r16.id]);
-    expect(lockBlockers(qfB, [r16, qfB], { ...base, watched: { [r16.id]: 1 } }, now)).toEqual([]);
+    expect(
+      lockBlockers(qfB, [r16, qfB], { ...base, watched: { [r16.id]: 4_000_000_000 } }, now),
+    ).toEqual([]);
   });
 
   it('看完上一轮后：不是订阅球队的占位卡消失，自己球队的正常显示', () => {
-    const watched = { ...base, watched: { [r16.id]: 1 } };
+    const watched = { ...base, watched: { [r16.id]: 4_000_000_000 } };
     expect(isShown(qfA, [r16, qfA], watched, now)).toBe(true);
     expect(isFixtureLocked(qfA, [r16, qfA], watched, now)).toBe(false);
     expect(isShown(qfB, [r16, qfB], watched, now)).toBe(false);

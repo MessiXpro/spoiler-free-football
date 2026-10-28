@@ -29,7 +29,14 @@ export function RevealScore({
     // 用户已经确认"看完了"，先记为已看（即使比分加载失败）
     actions.markWatched(match.id);
     try {
-      const s = cachedScore(match.id) ?? (await fetchScore(match.id));
+      // 网络优先：管线后来补正的比分（例如补上点球比分）要能看到；拿不到时才用上次显示过的缓存
+      let s: ScoreRecord | null;
+      try {
+        s = (await fetchScore(match.id)) ?? cachedScore(match.id);
+      } catch (err) {
+        s = cachedScore(match.id);
+        if (!s) throw err;
+      }
       if (s) {
         cacheScore(s);
         setScore(s);
@@ -75,6 +82,20 @@ export function RevealScore({
           onClick={() => (watched ? void load() : setPhase('asking'))}
         >
           {phase === 'loading' ? '加载中…' : watched ? '查看比分' : '看完了，显示比分'}
+        </button>
+      )}
+      {/* 点错了（或比分缺失）也能不看比分就改回没看 */}
+      {watched && (phase === 'idle' || phase === 'missing') && (
+        <button
+          type="button"
+          className="btn btn-small"
+          data-testid="unmark-watched"
+          onClick={() => {
+            actions.unmarkWatched(match.id);
+            setPhase('idle');
+          }}
+        >
+          改回没看
         </button>
       )}
       {phase === 'asking' && (

@@ -20,7 +20,7 @@ import {
 import { detectShield } from '../lib/bridge.ts';
 import { href } from '../lib/router.ts';
 import { actions } from '../lib/store.ts';
-import { ConfirmDialog } from './Dialog.tsx';
+import { ConfirmDialog, Modal } from './Dialog.tsx';
 import { Embed } from './Embed.tsx';
 import { ExternalLink, LinkList } from './Links.tsx';
 import { RevealScore } from './RevealScore.tsx';
@@ -36,7 +36,7 @@ interface Props {
 
 export function MatchCard({ match, all, state, now, expanded = false }: Props) {
   const status = liveStatus(match, now);
-  const watched = isWatched(state, match.id);
+  const watched = isWatched(state, match);
   // 延期/取消的比赛手动标记过（按原定开球时间记，改期后的那场不算）
   const cleared = isPostponedCleared(state, match);
   const locked = isFixtureLocked(match, all, state, now);
@@ -74,7 +74,10 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
         <span className="comp">{competitionName(match.competition)}</span>
         {stage && <span className="stage">{stage}</span>}
         <span className={`status status-${status}`} data-testid="match-status">
-          {LIVE_STATUS_LABELS[status]}
+          {/* 开球时间只是占位（当地 20:00）时，推算出的"进行中/已结束"不可靠，不和"时间待定"打架 */}
+          {match.timeTbd && (status === 'live' || status === 'finished')
+            ? '时间待定'
+            : LIVE_STATUS_LABELS[status]}
         </span>
         {(watched || cleared) && (
           <span className="tag tag-watched" data-testid="watched-badge">
@@ -254,60 +257,51 @@ export function MatchCard({ match, all, state, now, expanded = false }: Props) {
         </ConfirmDialog>
       )}
       {liveOpen && (
-        <div className="dialog-backdrop" onClick={() => setLiveOpen(false)}>
-          <div
-            className="dialog"
-            role="dialog"
-            aria-modal="true"
-            data-testid="live-mode-panel"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2>直播模式</h2>
-            <p>
-              从开球前开始看全场录像，像看直播一样。总时长和进度条会被遮住，看不出这场比赛一共打了多久。
-            </p>
-            <ul className="tips">
-              <li>
-                页内播放：遮挡条盖住播放器底部的时间和进度条，点画面暂停/继续；装了插件/脚本还会遮住播放器里的标题和播完后的推荐。
-              </li>
-              <li>
-                跳转到平台播放：需要已安装防剧透插件或脚本，它会隐藏平台播放器的时长、进度条预览、弹幕和评论。
-              </li>
-              <li>拖进度条前想一想：进度条的位置也会暴露总时长。</li>
-            </ul>
-            <div className="link-list">
-              {embeddableReplay && (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => {
-                    setLiveOpen(false);
-                    startPlayer('live');
-                  }}
-                >
-                  ▶ 页内从头播放
-                </button>
-              )}
-              {replays.map((l, i) => (
-                <ExternalLink
-                  key={`${l.url}-${i}`}
-                  match={match}
-                  link={l}
-                  liveMode
-                  hideExtras={hideExtras}
-                />
-              ))}
-              {!replays.length && !embeddableReplay && (
-                <p className="muted">这场暂无全场录像入口。</p>
-              )}
-            </div>
-            <div className="dialog-actions">
-              <button type="button" className="btn" onClick={() => setLiveOpen(false)}>
-                关闭
+        <Modal title="直播模式" testId="live-mode-panel" onClose={() => setLiveOpen(false)}>
+          <p>
+            从开球前开始看全场录像，像看直播一样。总时长和进度条会被遮住，看不出这场比赛一共打了多久。
+          </p>
+          <ul className="tips">
+            <li>
+              页内播放：遮挡条盖住播放器底部的时间和进度条，点画面暂停/继续；装了插件/脚本还会遮住播放器里的标题和播完后的推荐。
+            </li>
+            <li>
+              跳转到平台播放：需要已安装防剧透插件或脚本，它会隐藏平台播放器的时长、进度条预览、弹幕和评论。
+            </li>
+            <li>拖进度条前想一想：进度条的位置也会暴露总时长。</li>
+          </ul>
+          <div className="link-list">
+            {embeddableReplay && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setLiveOpen(false);
+                  startPlayer('live');
+                }}
+              >
+                ▶ 页内从头播放
               </button>
-            </div>
+            )}
+            {replays.map((l, i) => (
+              <ExternalLink
+                key={`${l.url}-${i}`}
+                match={match}
+                link={l}
+                liveMode
+                hideExtras={hideExtras}
+              />
+            ))}
+            {!replays.length && !embeddableReplay && (
+              <p className="muted">这场暂无全场录像入口。</p>
+            )}
           </div>
-        </div>
+          <div className="dialog-actions">
+            <button type="button" className="btn" onClick={() => setLiveOpen(false)}>
+              关闭
+            </button>
+          </div>
+        </Modal>
       )}
 
       {askMark && (

@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canShowAggregate,
   decodeSyncCode,
   defaultUserState,
   encodeSyncCode,
   isFixtureLocked,
   isPostponedCleared,
+  isWatched,
   mergeUserState,
   postponedClearKey,
   prefsTime,
   programLockReasons,
   sanitizeUserState,
+  unwatchedRecent,
   type Program,
   type PublicMatch,
 } from '../src/index.ts';
@@ -76,7 +79,7 @@ describe('延期/取消的比赛', () => {
       programLockReasons(
         plOfficial,
         [postponed],
-        { ...state, watched: { [postponed.id]: 1 } },
+        { ...state, watched: { [postponed.id]: 4_000_000_000 } },
         new Date('2026-10-25T02:00:00Z'),
       ),
     ).toEqual([]);
@@ -196,16 +199,16 @@ describe('欧冠淘汰附加赛', () => {
   it('联赛阶段没看完时，附加赛对阵也藏起来', () => {
     expect(isFixtureLocked(playoff1, all, state, now)).toBe(true);
     expect(isFixtureLocked(r16, all, state, now)).toBe(true);
-    expect(isFixtureLocked(playoff1, all, { ...state, watched: { 'ucl-md8': 1 } }, now)).toBe(
-      false,
-    );
+    expect(
+      isFixtureLocked(playoff1, all, { ...state, watched: { 'ucl-md8': 4_000_000_000 } }, now),
+    ).toBe(false);
   });
 
   it('附加赛次回合不因首回合没看而锁定', () => {
     const later = new Date('2027-02-20T00:00:00Z');
-    expect(isFixtureLocked(playoff2, all, { ...state, watched: { 'ucl-md8': 1 } }, later)).toBe(
-      false,
-    );
+    expect(
+      isFixtureLocked(playoff2, all, { ...state, watched: { 'ucl-md8': 4_000_000_000 } }, later),
+    ).toBe(false);
   });
 
   it('资格赛仍然锁附加赛', () => {
@@ -214,7 +217,7 @@ describe('欧冠淘汰附加赛', () => {
       isFixtureLocked(
         playoff1,
         [q, playoff1],
-        { ...state, watched: { 'ucl-md8': 1 } },
+        { ...state, watched: { 'ucl-md8': 4_000_000_000 } },
         new Date('2027-02-10T00:00:00Z'),
       ),
     ).toBe(true);
@@ -273,5 +276,75 @@ describe('合并：订阅和设置按自己的修改时间', () => {
     expect(sanitizeUserState({ v: 1, updatedAt: 9, prefsUpdatedAt: 'x' }).prefsUpdatedAt).toBe(
       undefined,
     );
+  });
+});
+
+describe('已看记录只对这一次安排的比赛有效（比赛 id 不含日期）', () => {
+  const faCupShow: Program = { ...plOfficial, id: 'fa-cup-show', relatedCompetitions: ['fa-cup'] };
+  const r3 = match({
+    id: 'fa-cup-2026-27-round-3-arsenal-chelsea',
+    competition: 'fa-cup',
+    stage: 'round-3',
+    matchday: undefined,
+    kickoff: '2027-01-09T15:00:00Z',
+  });
+  const r4 = match({
+    id: 'fa-cup-2026-27-round-4-arsenal-everton',
+    competition: 'fa-cup',
+    stage: 'round-4',
+    matchday: undefined,
+    kickoff: '2027-01-30T15:00:00Z',
+    away: { id: 'everton', name: 'Everton' },
+  });
+  // 开球 4 小时后点了「显示比分」但比分缺失（当天其实延期了，数据还没更新），记录照样写进 watched
+  const state = {
+    ...defaultUserState(0),
+    teams: ['arsenal'],
+    watched: { [r3.id]: Math.floor(Date.parse('2027-01-09T19:00:00Z') / 1000) },
+  };
+
+  it('按原定时间踢的那场算已看', () => {
+    expect(isWatched(state, r3)).toBe(true);
+    expect(unwatchedRecent([r3, r4], state, new Date('2027-01-10T02:00:00Z'))).toEqual([]);
+    expect(isFixtureLocked(r4, [r3, r4], state, new Date('2027-01-25T02:00:00Z'))).toBe(false);
+  });
+
+  it('改期重赛（同一 id、开球变晚）的那场照常算没看：下一轮对阵和节目都照常锁', () => {
+    const replayed = { ...r3, kickoff: '2027-01-23T19:45:00Z' };
+    const after = new Date('2027-01-24T02:00:00Z');
+    expect(isWatched(state, replayed)).toBe(false);
+    expect(unwatchedRecent([replayed, r4], state, after).map((m) => m.id)).toEqual([replayed.id]);
+    expect(isFixtureLocked(r4, [replayed, r4], state, after)).toBe(true);
+    expect(programLockReasons(faCupShow, [replayed, r4], state, after).map((m) => m.id)).toEqual([
+      replayed.id,
+    ]);
+  });
+
+  it('两回合：首回合改期后旧记录失效，次回合不再显示总比分', () => {
+    const first = match({
+      id: 'ucl-2026-27-semi-final-chelsea-arsenal',
+      competition: 'ucl',
+      stage: 'semi-final',
+      matchday: undefined,
+      leg: 1,
+      kickoff: '2027-04-28T19:00:00Z',
+      home: { id: 'chelsea', name: 'Chelsea' },
+      away: { id: 'arsenal', name: 'Arsenal' },
+    });
+    const second = match({
+      id: 'ucl-2026-27-semi-final-arsenal-chelsea',
+      competition: 'ucl',
+      stage: 'semi-final',
+      matchday: undefined,
+      leg: 2,
+      kickoff: '2027-05-05T19:00:00Z',
+    });
+    const s = {
+      ...state,
+      watched: { [first.id]: Math.floor(Date.parse('2027-04-28T23:00:00Z') / 1000) },
+    };
+    expect(canShowAggregate(second, [first, second], s)).toBe(true);
+    const firstMoved = { ...first, kickoff: '2027-05-01T19:00:00Z' };
+    expect(canShowAggregate(second, [firstMoved, second], s)).toBe(false);
   });
 });

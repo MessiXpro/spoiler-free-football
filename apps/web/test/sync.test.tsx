@@ -9,7 +9,8 @@ async function freshApp() {
   const store = await import('../src/lib/store.ts');
   const bridge = await import('../src/lib/bridge.ts');
   const settings = await import('../src/views/SettingsView.tsx');
-  return { store, bridge, settings };
+  const sync = await import('../src/lib/sync-server.ts');
+  return { store, bridge, settings, sync };
 }
 
 const T0 = Date.parse('2026-10-16T01:00:00Z');
@@ -181,5 +182,53 @@ describe('同步服务器', () => {
     await settle();
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true);
     expect(Object.keys((JSON.parse(server) as UserState).watched).sort()).toEqual(['m-A', 'm-B']);
+  });
+});
+
+describe('「清空本机数据」后仍能从备份恢复已看记录', () => {
+  it('导入同步码备份：已看记录和订阅一起回来；插件发回的旧记录仍然不恢复', async () => {
+    const { store } = await freshApp();
+    store.actions.toggleTeam('leeds');
+    store.actions.markWatched('X');
+    store.actions.markWatched('Y');
+    const backup = sanitizeUserState(JSON.parse(JSON.stringify(store.getState())));
+    vi.setSystemTime(T0 + 60_000);
+    store.actions.reset();
+    // 插件/脚本发回清空前的整份记录：照旧不恢复
+    store.mergeWatched(backup.watched);
+    expect(store.getState().watched).toEqual({});
+    // 用户明确导入备份：已看记录回来，之后 hello 里也不再把它们当成删掉的
+    store.importState(backup);
+    expect(store.getState().watched).toEqual(backup.watched);
+    expect(store.getState().teams).toContain('leeds');
+    expect(store.shieldRemoved()).toEqual({});
+  });
+
+  it('清空后上传到服务器：服务器上的记录保留，自己「藏起比分并标记为没看」的仍然不回来', async () => {
+    const { store, sync } = await freshApp();
+    store.actions.markWatched('A');
+    store.actions.markWatched('B');
+    const backup = sanitizeUserState(JSON.parse(JSON.stringify(store.getState())));
+    vi.setSystemTime(T0 + 60_000);
+    store.actions.unmarkWatched('B');
+    vi.setSystemTime(T0 + 120_000);
+    store.actions.reset();
+    let server = JSON.stringify({
+      ...backup,
+      watched: { ...backup.watched, C: Math.floor(T0 / 1000) },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          server = String(init.body);
+          return new Response('{"ok":true}', { status: 200 });
+        }
+        return new Response(server, { status: 200 });
+      }),
+    );
+    await sync.uploadToServer('https://sync.example.workers.dev', 'abcdefghijklmnopqrstuv');
+    expect(Object.keys((JSON.parse(server) as UserState).watched).sort()).toEqual(['A', 'C']);
+    expect(Object.keys(store.getState().watched).sort()).toEqual(['A', 'C']);
   });
 });

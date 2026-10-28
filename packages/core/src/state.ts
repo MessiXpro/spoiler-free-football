@@ -150,8 +150,14 @@ export function isSubscribed(match: PublicMatch, state: UserState): boolean {
   return state.teams.includes(match.home.id) || state.teams.includes(match.away.id);
 }
 
-export function isWatched(state: UserState, matchId: string): boolean {
-  return Boolean(state.watched[matchId]);
+/**
+ * 这场（这一次安排的）比赛是否已看。
+ * 比赛 id 里没有日期，改期重赛的那场还是同一个 id；而合法的「看完」一定发生在开球之后，
+ * 所以已看时间早于开球时间的记录（比分缺失时记下、之后比赛改期）不算：改期后的那场照常算没看。
+ */
+export function isWatched(state: UserState, match: Pick<PublicMatch, 'id' | 'kickoff'>): boolean {
+  const t = state.watched[match.id];
+  return typeof t === 'number' && t * 1000 >= Date.parse(match.kickoff);
 }
 
 /**
@@ -223,7 +229,7 @@ export function unwatchedRecent(
         Date.parse(m.kickoff) >= since &&
         liveStatus(m, now) === 'finished' &&
         isShown(m, matches, state, now) &&
-        !isWatched(state, m.id),
+        !isWatched(state, m),
     )
     .sort(byKickoff);
 }
@@ -259,7 +265,7 @@ export function isFixtureLocked(
   if (!state.settings.lockKnockoutOpponents) return false;
   if (!isKnockoutStage(match.stage)) return false;
   if (state.unlocked[`fixture:${match.id}`]) return false;
-  if (isWatched(state, match.id)) return false;
+  if (isWatched(state, match)) return false;
   // 「只看订阅球队」时按阶段锁（见 isShown），否则按球队锁
   const sameTeamOnly = competitionMode(state, match.competition) !== 'teams';
   return stageLockActive(match, all, state, now, sameTeamOnly);
@@ -318,7 +324,7 @@ function stageLockBlockers(
     // 还没到开球时间的不算（包括提前宣布延期/取消的比赛）
     if (t > now.getTime() || liveStatus(prev, now) === 'upcoming') return false;
     if (isPostponedCleared(state, prev)) return false;
-    return isSubscribed(prev, state) && !isWatched(state, prev.id);
+    return isSubscribed(prev, state) && !isWatched(state, prev);
   });
 }
 
@@ -366,7 +372,7 @@ export function canShowAggregate(
 ): boolean {
   if (match.leg !== 2) return true;
   const first = firstLegOf(match, all);
-  return Boolean(first && isWatched(state, first.id));
+  return Boolean(first && isWatched(state, first));
 }
 
 /** 节目是否锁定：关联赛事最近 coverageDays 天内有没看完的订阅比赛 */
@@ -390,7 +396,7 @@ export function programLockReasons(
       !isPostponedCleared(state, m) &&
       // 和列表一样用 isShown：「只看订阅球队」时淘汰赛的占位卡也算，否则节目是否折叠会泄露订阅球队有没有晋级
       isShown(m, matches, state, now) &&
-      !isWatched(state, m.id),
+      !isWatched(state, m),
   );
 }
 

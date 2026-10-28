@@ -158,6 +158,7 @@ export function App() {
             key={n.label}
             href={href(n.route)}
             className={n.match.includes(route.name) ? 'active' : ''}
+            aria-current={n.match.includes(route.name) ? 'page' : undefined}
           >
             <span aria-hidden="true">{n.icon}</span>
             <span>{n.label}</span>
