@@ -83,7 +83,7 @@ const RATIO_PRECEDE = /(?:比例|画幅|宽高比|长宽比|aspect ratio|ratio)\
  * 页码/年龄/集数/天数/月份缩写（"pages 3-5" "Ages 3-5" "Day 1-2" "Nov 2-3"）也算，但 "Boxing Day 2-1 win" 是比分。
  */
 const RANGE_PRECEDE =
-  /(?:第|(?:(?<=[榜名排位])|(?<![\u4e00-\u9fff\dA-Za-z■]))[前后]|共|约|(?<![最接附])近|每|(?<![A-Za-z])(?:vol\.?|ep\.?|no\.?|chapter|part|episode|season|md|gw|mw|matchday|gameweek|matchweek|top(?!\s)|ages?|pages?|pp\.|chapters?|episodes?|(?<![A-Za-z][\s-])(?:days?|rounds?|levels?)|tiers?|grades?|gen|serves|jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december))\s*$/i;
+  /(?:第|(?:(?<=[榜名排位])|(?<![\u4e00-\u9fff\dA-Za-z■]))[前后]|共|约|(?<![最接附])近|每|(?<![A-Za-z])(?:vol\.?|ep\.?|no\.?|chapter|part|episode|season|md|gw|mw|matchday|gameweek|matchweek|top(?!\s)|ages?|pages?|pp\.|chapters?|episodes?|(?<![A-Za-z\u00C0-\u024F][\s-])(?:days?|rounds?|levels?)|tiers?|grades?|gen|serves|jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december))\s*$/i;
 /** 双位数比分（10-0 这种）需要的语境 */
 const SCORE_CONTEXT = /(?:比分|总比分|score|agg|ft|全场|半场|ht|最终)\s*[:：]?\s*$/i;
 
@@ -140,8 +140,12 @@ function validateZhScorer(m: RegExpExecArray, norm: string): boolean {
     const after = norm.slice(m.index + text.length, m.index + text.length + 4);
     const prevChar = text.at(-3) ?? '';
     if (/^(?:集锦|合集|盘点|回顾|瞬间|TOP|top|大全|数据|榜|锦集|视角)/.test(after)) return false;
-    // "A组进球" "B站进球" 不是人名
-    if (/[轮场赛周季杯部有佳彩组站]/.test(prevChar)) return false;
+    // "A组进球" "B站进球" 不是人名；但并列进球者的 "萨卡、哈弗茨均有进球" 是（"两队均有进球" "大小球/两队均有进球" 这类盘口说法不算）
+    const listBoth =
+      text.endsWith('均有进球') &&
+      /[、/]/.test(text) &&
+      !/(?:两队|双方|主队|客队)均有进球$/.test(text);
+    if (/[轮场赛周季杯部有佳彩组站]/.test(prevChar) && !listBoth) return false;
   }
   return true;
 }

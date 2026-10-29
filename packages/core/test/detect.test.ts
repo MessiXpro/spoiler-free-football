@@ -1142,6 +1142,12 @@ describe('回归：真实页面标题里的漏网（第八轮审计）', () => {
   it('DET-5 并列的进球者整体遮住，不只遮最后一个', () => {
     expect(redact('萨卡、哈弗茨先后破门')).toBe(`${M}${M}${M}`);
     expect(redact('阿森纳3-0 萨卡、哈弗茨、赖斯建功')).toBe(`阿森纳${M}-${M} ${M}${M}${M}`);
+    // 「均有进球」：并列的进球者遮住，盘口里的「两队均有进球」不遮
+    expect(redact('萨卡、哈弗茨均有进球')).toBe(`${M}${M}${M}`);
+    expect(redact('阿森纳主场击败切尔西，C罗/B费均有进球')).toContain(`，${M}${M}${M}`);
+    for (const text of ['两队均有进球', '竞彩：主胜/两队均有进球', '大小球/两队均有进球']) {
+      expect(redact(text), text).toBe(text);
+    }
     for (const text of track([
       '#英超# 阿森纳主场2-1击败切尔西，萨卡、哈弗茨各入一球',
       'Saka, Havertz score as Arsenal beat Chelsea',
@@ -1388,6 +1394,10 @@ describe('回归：真实页面标题里的漏网（第八轮审计）', () => {
       'a final-day 2-1 win over Everton',
       'Saka levels 1-1',
       'Havertz levels 2-2 for Arsenal',
+      // 名字最后一个字母带重音
+      'Mbappé levels 1-1',
+      'Mitrović levels 1-1 for Fulham',
+      'Mbappé levels 2-2',
       '阿森纳2-1 点击观看',
       '阿森纳2-1点亮主场',
       '阿森纳2-1点杀',
