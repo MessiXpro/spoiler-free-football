@@ -1382,9 +1382,35 @@ describe('回归：真实页面标题里的漏网（第八轮审计）', () => {
       'Arsenal 2-1 Chelsea FA Cup',
       'Arsenal 2-1 Cup final',
       'Boxing Day 2-1 win over Chelsea',
+      // 第九轮复核：前面另有一个词的 day/round/level 是比赛说法；点击/点亮/点杀 不是钟点
+      "Arsenal's opening-day 2-1 win over Wolves",
+      'their third-round 2-1 win at Brentford',
+      'a final-day 2-1 win over Everton',
+      'Saka levels 1-1',
+      'Havertz levels 2-2 for Arsenal',
+      '阿森纳2-1 点击观看',
+      '阿森纳2-1点亮主场',
+      '阿森纳2-1点杀',
     ])) {
       expect(redact(text), text).toContain(`${M}-${M}`);
+      expect(redact(text, FB), text).toContain(`${M}-${M}`);
     }
+    expectNeutral('今晚8-9点开始直播');
+  });
+
+  it('并列进球者的列表规则：很长的顿号/逗号列表也不会卡住页面', () => {
+    for (const [text, opts] of [
+      ['北京、上海、广州、深圳、'.repeat(8400), {}],
+      ['萨卡、哈弗茨、赖斯、厄德高、'.repeat(7200), {}],
+      ['Alice, Bob, Carol, Dave, '.repeat(4000), FB],
+    ] as const) {
+      const t = performance.now();
+      findSpoilers(text, opts);
+      // 修正前要 10～25 秒；现在约 0.15 秒
+      expect(performance.now() - t, text.slice(0, 8)).toBeLessThan(1500);
+    }
+    expect(redact('萨卡、哈弗茨先后破门')).toBe(`${M}${M}${M}`);
+    expect(redact('阿森纳3-0 萨卡、哈弗茨、赖斯建功')).toBe(`阿森纳${M}-${M} ${M}${M}${M}`);
   });
 
   it('DET-13 带走1分 / 拿到3分 / 3分到手 / Three points!', () => {

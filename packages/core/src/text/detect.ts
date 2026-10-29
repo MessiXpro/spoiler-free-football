@@ -62,7 +62,7 @@ const RANGE_UNIT = new RegExp(
     '米(?![\\u4e00-\\u9fff])|米(?=[高长宽远深处的外左以开范距射之]|内(?!罗))|公里|公斤|斤|码|%|‰|' +
     // 日常量词："8-9点""2-3杯""2-3页""2-3 cups"。排除 点球/点射/点评/点赞、杯赛、片山、线上，
     // 不收 分（"2-1分析"）、张/本（"2-1张伯伦""2-1本泽马"）、单数 cup（"2-1 Cup final"）
-    '点(?![球射评赞燃])|杯(?!赛)|颗|勺|瓶|盒|页|碗|室|班|片(?!山|冈|桐|段)|线(?![上下])|' +
+    '点(?![球射评赞燃击亮杀])|杯(?!赛)|颗|勺|瓶|盒|页|碗|室|班|片(?!山|冈|桐|段)|线(?![上下])|' +
     'cups\\b|tbsp\\b|tsp\\b|servings?\\b|million\\b|billion\\b|percent\\b|business\\s+days\\b|' +
     'weeks?\\b|days?\\b|months?\\b|years?\\b|yrs?\\b|mins?\\b|minutes?\\b|hours?\\b|hrs?\\b|seconds?\\b|games?\\b|matches\\b|points?\\b|pts\\b|players?\\b(?!\\s+rat)|times\\b|' +
     '度(?!过)|℃|°|km\\b|kg\\b|cm\\b|mm\\b|阵型|阵容|体系|站位|打法|formation)',
@@ -83,7 +83,7 @@ const RATIO_PRECEDE = /(?:比例|画幅|宽高比|长宽比|aspect ratio|ratio)\
  * 页码/年龄/集数/天数/月份缩写（"pages 3-5" "Ages 3-5" "Day 1-2" "Nov 2-3"）也算，但 "Boxing Day 2-1 win" 是比分。
  */
 const RANGE_PRECEDE =
-  /(?:第|(?:(?<=[榜名排位])|(?<![\u4e00-\u9fff\dA-Za-z■]))[前后]|共|约|(?<![最接附])近|每|(?<![A-Za-z])(?:vol\.?|ep\.?|no\.?|chapter|part|episode|season|md|gw|mw|matchday|gameweek|matchweek|top(?!\s)|ages?|pages?|pp\.|chapters?|episodes?|(?<!boxing\s)days?|rounds?|tiers?|grades?|levels?|gen|serves|jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december))\s*$/i;
+  /(?:第|(?:(?<=[榜名排位])|(?<![\u4e00-\u9fff\dA-Za-z■]))[前后]|共|约|(?<![最接附])近|每|(?<![A-Za-z])(?:vol\.?|ep\.?|no\.?|chapter|part|episode|season|md|gw|mw|matchday|gameweek|matchweek|top(?!\s)|ages?|pages?|pp\.|chapters?|episodes?|(?<![A-Za-z][\s-])(?:days?|rounds?|levels?)|tiers?|grades?|gen|serves|jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december))\s*$/i;
 /** 双位数比分（10-0 这种）需要的语境 */
 const SCORE_CONTEXT = /(?:比分|总比分|score|agg|ft|全场|半场|ht|最终)\s*[:：]?\s*$/i;
 
@@ -476,7 +476,7 @@ function buildRules(): Rule[] {
     // （只认顿号/斜杠，逗号是分句："迎战阿森纳，萨卡破门" 的对阵保留）
     {
       re: new RegExp(
-        `(?:(?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6})[、/]\\s*)+(?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6})(?:${alt(ZH_SCORER_SUFFIX)}|各入一球|各进一球|各下一城|均有进球|均有建功|各有斩获)`,
+        `(?:(?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6})[、/]\\s*){1,8}(?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6})(?:${alt(ZH_SCORER_SUFFIX)}|各入一球|各进一球|各下一城|均有进球|均有建功|各有斩获)`,
         'g',
       ),
       kind: 'scorer',
@@ -559,7 +559,7 @@ function buildRules(): Rule[] {
       contextual: true,
     },
     {
-      re: /(?<![A-Za-z])[A-Z][\w'-]+(?:(?:\s*,\s*[A-Z][\w'-]+)+(?:\s+(?:and|&)\s+[A-Z][\w'-]+)?|\s+(?:and|&)\s+[A-Z][\w'-]+)\s+(?:on target|scores?|scored|nets?|netted|strike|struck)(?![A-Za-z])/g,
+      re: /(?<![A-Za-z])[A-Z][\w'-]+(?:(?:\s*,\s*[A-Z][\w'-]+){1,8}(?:\s+(?:and|&)\s+[A-Z][\w'-]+)?|\s+(?:and|&)\s+[A-Z][\w'-]+)\s+(?:on target|scores?|scored|nets?|netted|strike|struck)(?![A-Za-z])/g,
       kind: 'scorer',
       contextual: true,
     },
