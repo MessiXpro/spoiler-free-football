@@ -4,6 +4,7 @@ export * from './catalog/index.ts';
 export * from './match/types.ts';
 export * from './match/format.ts';
 export * from './match/score-file.ts';
+export * from './match/watched.ts';
 export * from './state.ts';
 export * from './sync.ts';
 export * from './rules/schema.ts';

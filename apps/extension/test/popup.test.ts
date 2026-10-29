@@ -31,9 +31,9 @@ const status = (patch: Partial<TabStatus>): TabStatus => ({
 });
 
 /** 打开弹窗：当前标签页的内容脚本按 reply 回复状态 */
-async function openPopup(reply: (msg: { type: string }) => TabStatus) {
+async function openPopup(reply: (msg: { type: string }) => TabStatus, initialSettings?: unknown) {
   vi.resetModules();
-  const chromeMock = installChromeMock();
+  const chromeMock = installChromeMock(initialSettings);
   const sendMessage = vi.fn(async (_id: number, msg: { type: string }) => reply(msg));
   (chromeMock.mock as unknown as { tabs: unknown }).tabs = {
     query: async () => [{ id: 7, url: 'https://news.example.com/a' }],
@@ -84,6 +84,21 @@ describe('插件弹窗', () => {
     expect($('site-status').textContent).toBe('news.example.com：全网模式已关闭');
     expect($('pause').hidden).toBe(true);
     expect($('resume').hidden).toBe(true);
+  });
+
+  it('比分缺失时记下的「已看」早于改期后的开球时间：重赛那场要重新确认（和网页一致）', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ id: MATCH.id, home: 2, away: 1 }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const old = Math.floor(Date.parse('2026-10-03T13:00:00Z') / 1000); // 早于 MATCH.kickoff
+    await openPopup(() => status({ currentMatch: MATCH }), { watched: { [MATCH.id]: old } });
+    expect($('reveal').textContent).toBe('看完了，显示比分');
+    $('reveal').click();
+    expect($('reveal-confirm').hidden).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    $('reveal-yes').click();
+    await vi.waitFor(() => expect($('match-score').textContent).toBe('曼联 2 - 1 利物浦'));
   });
 
   it('比分加载失败后点「再试一次」直接重新下载，不再问「会记为已看」', async () => {

@@ -101,6 +101,18 @@ describe('「藏起比分并标记为没看」和清空本机数据不会被插�
     expect(store.getState().watched.X).toBe(markedAt + 3600);
   });
 
+  it('同一场以较晚的时间为准：比分缺失时记下的旧记录，被改期重赛后在插件里看完的新记录盖掉', async () => {
+    const { store } = await freshApp();
+    store.actions.markWatched('X');
+    const markedAt = store.getState().watched.X!;
+    // 插件发回更早的记录：不动
+    store.mergeWatched({ X: markedAt - 3600 });
+    expect(store.getState().watched.X).toBe(markedAt);
+    // 两周后在插件里看完重赛：取新时间（否则 isWatched 对重赛的那场永远是 false）
+    store.mergeWatched({ X: markedAt + 14 * 86_400 });
+    expect(store.getState().watched.X).toBe(markedAt + 14 * 86_400);
+  });
+
   it('清空本机数据后，插件发回的整份已看记录不会恢复', async () => {
     const { store } = await freshApp();
     store.actions.markWatched('X');

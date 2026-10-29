@@ -1,4 +1,9 @@
-import { currentMatchFor, fetchScoreFrom, hostDisabledBy } from '@sff/core/dom';
+import {
+  currentMatchFor,
+  fetchScoreFrom,
+  hostDisabledBy,
+  watchedAfterKickoff,
+} from '@sff/core/dom';
 import {
   DEFAULT_WEB_URL,
   ext,
@@ -118,9 +123,11 @@ async function main() {
     $('match-title').textContent = match.title;
     const reveal = $<HTMLButtonElement>('reveal');
     const confirmRow = $('reveal-confirm');
-    if (settings.watched[match.id]) reveal.textContent = '查看比分';
+    // 已看绑定开球时间（和网页一致）：比分缺失时记下、之后改期重赛的旧记录不算，要重新确认
+    const seen = () => watchedAfterKickoff(settings.watched[match.id], match.kickoff);
+    if (seen()) reveal.textContent = '查看比分';
     reveal.addEventListener('click', () => {
-      if (settings.watched[match.id]) void showScore();
+      if (seen()) void showScore();
       else {
         reveal.hidden = true;
         confirmRow.hidden = false;

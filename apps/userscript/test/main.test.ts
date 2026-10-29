@@ -376,6 +376,42 @@ describe('悬浮面板', () => {
   });
 });
 
+describe('已看绑定开球时间（和网页一致）', () => {
+  const replay = (watchedAt: number) => ({
+    global: { enabled: true, start: '06:00', end: '12:00', days: ALL_DAYS },
+    watched: { 'epl-x': watchedAt },
+    currentMatch: {
+      ...openedMatch('epl-x', 'Arsenal', 'Chelsea'),
+      kickoff: '2026-09-20T19:45:00Z',
+    },
+  });
+  const scoreFetch = (url: string) =>
+    url.includes('/scores/')
+      ? { status: 200, text: async () => JSON.stringify({ id: 'epl-x', home: 2, away: 1 }) }
+      : { status: 404, text: async () => '' };
+
+  it('比分缺失时记下的「已看」早于改期后的开球时间：重赛那场要重新确认，不直接显示比分', async () => {
+    await boot('global', replay(Math.floor(Date.parse('2026-09-06T19:00:00Z') / 1000)), scoreFetch);
+    const q = panel();
+    q('sff-fab').click();
+    expect(q('sff-reveal').textContent).toBe('看完了，显示比分');
+    q('sff-reveal').click();
+    expect(q('sff-reveal-yes').hidden).toBe(false);
+    expect(q('sff-score').textContent).toBe('');
+    expect(vi.mocked(fetch).mock.calls.some(([u]) => String(u).includes('/scores/'))).toBe(false);
+  });
+
+  it('开球之后记下的「已看」照常：「查看比分」一键显示', async () => {
+    await boot('global', replay(Math.floor(Date.parse('2026-09-20T22:00:00Z') / 1000)), scoreFetch);
+    const q = panel();
+    q('sff-fab').click();
+    expect(q('sff-reveal').textContent).toBe('查看比分');
+    q('sff-reveal').click();
+    expect(q('sff-reveal-yes').hidden).toBe(true);
+    await vi.waitFor(() => expect(q('sff-score').textContent).toBe('Arsenal 2 - 1 Chelsea'));
+  });
+});
+
 describe('站点规则更新', () => {
   it('远程规则内容变了但 version 没改大：也会采用', async () => {
     const remote = structuredClone(DEFAULT_SITE_RULES_JSON) as typeof DEFAULT_SITE_RULES_JSON;

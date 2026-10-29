@@ -160,16 +160,20 @@ export function importState(incoming: UserState) {
   });
 }
 
-/** 只合并已看记录（来自插件/用户脚本） */
+/**
+ * 只合并已看记录（来自插件/用户脚本）。同一场以较晚的时间为准（和 mergeUserState 一样）：
+ * 已看绑定开球时间（见 core 的 isWatched），比分缺失时记下的旧记录在比赛改期后不算，
+ * 用户在插件/脚本里看完重赛后发回来的新时间要能盖掉它。
+ */
 export function mergeWatched(watched: Record<string, number>) {
   const valid = Object.fromEntries(
     Object.entries(watched).filter(([, t]) => typeof t === 'number'),
   );
-  const missing = Object.entries(dropRemoved(valid, shieldRemoved())).filter(
-    ([id]) => !state.watched[id],
+  const newer = Object.entries(dropRemoved(valid, shieldRemoved())).filter(
+    ([id, t]) => (state.watched[id] ?? 0) < t,
   );
-  if (!missing.length) return;
-  setState((s) => ({ ...s, watched: { ...s.watched, ...Object.fromEntries(missing) } }));
+  if (!newer.length) return;
+  setState((s) => ({ ...s, watched: { ...s.watched, ...Object.fromEntries(newer) } }));
 }
 
 export function subscribe(listener: () => void) {

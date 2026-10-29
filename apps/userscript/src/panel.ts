@@ -9,7 +9,8 @@ import { ATTR_UI, type CurrentMatch, type ShieldController } from '@sff/core/dom
 export interface PanelActions {
   controller: () => ShieldController;
   currentMatch: () => CurrentMatch | null;
-  isWatched: (id: string) => boolean;
+  /** 这一次安排的比赛是否已看（已看时间早于开球时间的旧记录不算，和网页一致） */
+  isWatched: (match: CurrentMatch) => boolean;
   revealScore: (match: CurrentMatch) => Promise<string>;
   disableSite: () => Promise<void>;
   /** 停用后在面板里重新启用（手机上的脚本管理器大多没有脚本菜单） */
@@ -108,7 +109,7 @@ export function mountPanel(actions: PanelActions) {
     $('match').hidden = !m;
     if (m) {
       $('title').textContent = m.title;
-      ($('reveal') as HTMLButtonElement).textContent = actions.isWatched(m.id)
+      ($('reveal') as HTMLButtonElement).textContent = actions.isWatched(m)
         ? '查看比分'
         : '看完了，显示比分';
     }
@@ -179,7 +180,7 @@ export function mountPanel(actions: PanelActions) {
   $('reveal').addEventListener('click', () => {
     const m = shownMatch();
     if (!m) return;
-    if (actions.isWatched(m.id)) void show();
+    if (actions.isWatched(m)) void show();
     else {
       $('reveal').hidden = true;
       $('confirm').hidden = false;

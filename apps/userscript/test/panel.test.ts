@@ -78,7 +78,7 @@ describe('面板按钮按显示的状态做事', () => {
     });
     const { q, title } = mount({
       currentMatch: () => current,
-      isWatched: (id) => watched.has(id),
+      isWatched: (m) => watched.has(m.id),
       revealScore,
     });
     q('sff-reveal').click();

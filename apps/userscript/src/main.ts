@@ -12,6 +12,7 @@ import {
   type CurrentMatch,
   type ShieldController,
   type ShieldSettings,
+  watchedAfterKickoff,
 } from '@sff/core/dom';
 import { mountPanel } from './panel.ts';
 import { isTimeValue, parseTimeWindow } from './schedule.ts';
@@ -245,7 +246,7 @@ async function runShield() {
     const panel = mountPanel({
       controller: withFrames,
       currentMatch: () => currentMatchFor(settings, location.hostname),
-      isWatched: (id) => Boolean(settings.watched[id]),
+      isWatched: (m) => watchedAfterKickoff(settings.watched[m.id], m.kickoff),
       webUrl: () => settings.dataBase.replace(/data\/?$/, '') || WEB_URL,
       globalWindow:
         __SFF_VARIANT__ === 'global'

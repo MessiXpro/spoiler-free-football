@@ -1,6 +1,7 @@
 import { COMPETITIONS, DEFAULT_TEAMS } from './catalog/index.ts';
 import { beijingDate, isKnockoutStage, liveStatus, stageOrder } from './match/format.ts';
 import type { Program, PublicMatch } from './match/types.ts';
+import { watchedAfterKickoff } from './match/watched.ts';
 
 /** off：不显示；teams：只显示订阅球队的比赛；all：显示全部比赛 */
 export type CompetitionMode = 'off' | 'teams' | 'all';
@@ -150,14 +151,9 @@ export function isSubscribed(match: PublicMatch, state: UserState): boolean {
   return state.teams.includes(match.home.id) || state.teams.includes(match.away.id);
 }
 
-/**
- * 这场（这一次安排的）比赛是否已看。
- * 比赛 id 里没有日期，改期重赛的那场还是同一个 id；而合法的「看完」一定发生在开球之后，
- * 所以已看时间早于开球时间的记录（比分缺失时记下、之后比赛改期）不算：改期后的那场照常算没看。
- */
+/** 这场（这一次安排的）比赛是否已看（规则见 match/watched.ts） */
 export function isWatched(state: UserState, match: Pick<PublicMatch, 'id' | 'kickoff'>): boolean {
-  const t = state.watched[match.id];
-  return typeof t === 'number' && t * 1000 >= Date.parse(match.kickoff);
+  return watchedAfterKickoff(state.watched[match.id], match.kickoff);
 }
 
 /**
