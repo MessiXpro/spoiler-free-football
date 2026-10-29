@@ -140,11 +140,11 @@ function validateZhScorer(m: RegExpExecArray, norm: string): boolean {
     const after = norm.slice(m.index + text.length, m.index + text.length + 4);
     const prevChar = text.at(-3) ?? '';
     if (/^(?:集锦|合集|盘点|回顾|瞬间|TOP|top|大全|数据|榜|锦集|视角)/.test(after)) return false;
-    // "A组进球" "B站进球" 不是人名；但并列进球者的 "萨卡、哈弗茨均有进球" 是（"两队均有进球" "大小球/两队均有进球" 这类盘口说法不算）
+    // "A组进球" "B站进球" 不是人名；但并列进球者的 "萨卡、哈弗茨均有进球/都有进球" 是（"两队都有进球" "大小球/两队均有进球" 这类盘口说法不算）
     const listBoth =
-      text.endsWith('均有进球') &&
+      /(?:均|都|也|各|皆|亦|分别)有进球$/.test(text) &&
       /[、/]/.test(text) &&
-      !/(?:两队|双方|主队|客队)均有进球$/.test(text);
+      !/(?:两队|双方|主队|客队)(?:均|都|也|各|皆|亦|分别)有进球$/.test(text);
     if (/[轮场赛周季杯部有佳彩组站]/.test(prevChar) && !listBoth) return false;
   }
   return true;
@@ -480,7 +480,7 @@ function buildRules(): Rule[] {
     // （只认顿号/斜杠，逗号是分句："迎战阿森纳，萨卡破门" 的对阵保留）
     {
       re: new RegExp(
-        `(?:(?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6})[、/]\\s*){1,8}(?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6})(?:${alt(ZH_SCORER_SUFFIX)}|各入一球|各进一球|各下一城|均有进球|均有建功|各有斩获)`,
+        `(?:(?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6})[、/]\\s*){1,8}(?:(?<![A-Za-z])[A-Z][\\u4e00-\\u9fff]|[\\u4e00-\\u9fff·・]{2,6})(?:${alt(ZH_SCORER_SUFFIX)}|各入一球|各进一球|各下一城|(?:均|都|也|各|皆|亦|分别)有进球|均有建功|各有斩获)`,
         'g',
       ),
       kind: 'scorer',

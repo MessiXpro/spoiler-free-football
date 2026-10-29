@@ -1145,7 +1145,18 @@ describe('回归：真实页面标题里的漏网（第八轮审计）', () => {
     // 「均有进球」：并列的进球者遮住，盘口里的「两队均有进球」不遮
     expect(redact('萨卡、哈弗茨均有进球')).toBe(`${M}${M}${M}`);
     expect(redact('阿森纳主场击败切尔西，C罗/B费均有进球')).toContain(`，${M}${M}${M}`);
-    for (const text of ['两队均有进球', '竞彩：主胜/两队均有进球', '大小球/两队均有进球']) {
+    // 口语的「都有进球」「也有进球」同样遮住
+    expect(redact('萨卡、哈弗茨都有进球')).toBe(`${M}${M}${M}`);
+    expect(redact('阿森纳击败切尔西，萨卡、哈弗茨也有进球')).toContain(`，${M}${M}${M}`);
+    expect(redact('阿森纳主场击败切尔西，C罗/B费都有进球')).toContain(`，${M}${M}${M}`);
+    for (const text of [
+      '两队均有进球',
+      '竞彩：主胜/两队均有进球',
+      '大小球/两队均有进球',
+      '主胜/两队都有进球',
+      '大小球/双方都有进球',
+      '主队/客队都有进球',
+    ]) {
       expect(redact(text), text).toBe(text);
     }
     for (const text of track([
