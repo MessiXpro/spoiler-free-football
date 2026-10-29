@@ -178,8 +178,13 @@ async function runShield() {
     console.info('[防剧透看球] 页面上已有另一份在防剧透，这份不再启动：', root.dataset.sffActive);
     return;
   }
-  root.dataset.sffActive = `userscript-${__SFF_VARIANT__}`;
   const controller: ShieldController = bootShield(document, settings, { siteMode });
+  // 只有真的在遮挡时才占用页面：此站点停用 / 不在全网时段时让给同时装着的另一份
+  const claim = () => {
+    if (controller.active && !root.dataset.sffActive)
+      root.dataset.sffActive = `userscript-${__SFF_VARIANT__}`;
+  };
+  claim();
   const isTop = window === window.top;
 
   // 临时显示/恢复也传给页面里的 iframe（播放器、评论区常放在 iframe 里，每个 frame 各跑一份脚本）
@@ -320,6 +325,7 @@ async function runShield() {
   // 此站点已停用时也挂（面板里可以重新启用）
   let uiMounted = false;
   const ensureUi = () => {
+    claim();
     if (uiMounted || !isTop || !(controller.active || siteDisabled())) return;
     uiMounted = true;
     activateUi();

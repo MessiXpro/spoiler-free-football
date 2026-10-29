@@ -65,11 +65,18 @@ async function main() {
     });
     return;
   }
-  root.dataset.sffActive = 'extension';
   const controller: ShieldController = bootShield(document, settings, { siteMode, onStats });
+  // 只有真的在遮挡时才占用页面：插件关了 / 此站点停用 / 不在全网时段时让给同时装着的用户脚本
+  const claim = () => {
+    if (controller.active && !root.dataset.sffActive) root.dataset.sffActive = 'extension';
+  };
+  claim();
 
   // 控制器自己会在设置从关闭变为开启、或进入全网时段时重新启动
-  onSettingsChanged((next) => controller.update(next));
+  onSettingsChanged((next) => {
+    controller.update(next);
+    claim();
+  });
 
   ext.runtime.onMessage.addListener((msg: TabMessage, _sender, sendResponse) => {
     // 临时显示/恢复对所有 frame 生效（B 站等把播放器、评论放在 iframe 里）；状态只由顶层页面回复

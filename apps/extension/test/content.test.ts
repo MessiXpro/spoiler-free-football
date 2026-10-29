@@ -80,6 +80,22 @@ describe('页面上已有用户脚本在防剧透', () => {
   });
 });
 
+describe('插件关着 / 此站点停用', () => {
+  for (const settings of [{ enabled: false }, { disabledHosts: ['localhost'] }]) {
+    it(`不占用页面，同时装着的用户脚本照常接手：${JSON.stringify(settings)}`, async () => {
+      vi.resetModules();
+      installChromeMock(settings);
+      g.__SFF_WEB_MATCHES__ = ['https://football.example.cn/*'];
+      freshDocument();
+      await import('../src/content.ts');
+      await vi.waitFor(() =>
+        expect(document.documentElement.classList.contains('sff-ready')).toBe(true),
+      );
+      expect(document.documentElement.dataset.sffActive).toBeUndefined();
+    });
+  }
+});
+
 describe('match pattern', () => {
   it('和浏览器一样忽略端口，按路径前缀匹配', () => {
     expect(matchesPattern('http://localhost:5173/#/match/x', 'http://localhost/*')).toBe(true);

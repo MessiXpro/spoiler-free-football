@@ -68,4 +68,25 @@ describe('同一页面只跑一份', () => {
     expect(document.getElementById('t')!.textContent).toBe('Arsenal 2-1 Chelsea');
     expect(root.querySelector('[data-id="status"]')!.textContent).toBe('已临时显示');
   });
+
+  it('先到的那份在此站点停用：不占用页面，另一份照常遮挡', async () => {
+    const html = document.createElement('html');
+    html.innerHTML = '<head></head><body><h1 id="t">Arsenal 2-1 Chelsea</h1></body>';
+    document.replaceChild(html, document.documentElement);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ status: 404, text: async () => '' })),
+    );
+    // 两版脚本的存储各自独立：普通版里停用了这个站点，全网版没有
+    store.set('settings', { rules, disabledHosts: ['video.example.net'] });
+    await run('sites');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(document.documentElement.dataset.sffActive).toBeUndefined();
+    store.set('settings', { rules });
+    await run('global');
+    await vi.waitFor(() =>
+      expect(document.getElementById('t')!.textContent).toBe('Arsenal ■-■ Chelsea'),
+    );
+    expect(document.documentElement.dataset.sffActive).toBe('userscript-global');
+  });
 });

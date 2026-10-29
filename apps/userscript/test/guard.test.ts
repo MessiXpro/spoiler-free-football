@@ -38,12 +38,24 @@ describe('旧浏览器兜底', () => {
     expect(warn).toHaveBeenCalled();
   });
 
-  it('缺少 structuredClone（旧 WebView）：同样提示', () => {
-    vi.stubGlobal('structuredClone', undefined);
+  it('缺少 String.prototype.at（WebView < 92）：同样提示', () => {
+    const at = Object.getOwnPropertyDescriptor(String.prototype, 'at')!;
+    delete (String.prototype as { at?: unknown }).at;
     vi.spyOn(console, 'warn').mockImplementation(() => {});
-    run();
+    try {
+      run();
+    } finally {
+      Object.defineProperty(String.prototype, 'at', at);
+    }
     expect(g.__ran).toBeUndefined();
     expect(document.querySelector('div[data-sff-ui]')?.textContent).toContain('浏览器版本太旧');
+  });
+
+  it('只缺 structuredClone（WebView 92–97）：脚本照常运行（脚本里已经不用它）', () => {
+    vi.stubGlobal('structuredClone', undefined);
+    run();
+    expect(g.__ran).toBe(1);
+    expect(document.querySelector('div[data-sff-ui]')).toBeNull();
   });
 
   it('正常浏览器：脚本本体照常运行，没有提示', () => {
