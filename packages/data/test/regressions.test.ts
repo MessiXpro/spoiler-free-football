@@ -698,7 +698,7 @@ describe('#42 TheSportsDB 联赛第 16/32 轮', () => {
   it('联赛不按杯赛编码扩展轮次', () => {
     expect(roundsAround([16], true)).toEqual([15, 16, 17]);
     expect(roundsAround([16])).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 15, 16, 17, 32, 64, 125, 150, 160, 200,
+      1, 2, 3, 4, 5, 6, 7, 8, 15, 16, 17, 32, 64, 125, 150, 160, 170, 200,
     ]);
   });
 
@@ -1429,6 +1429,17 @@ describe('TheSportsDB 免费 Key 少发请求', () => {
     );
     expect(urls.some((u) => u.includes('eventsround.php?id=4480&r=150&'))).toBe(true);
     expect(res.fixtures.map((f) => f.sourceId)).toContain('sf');
+  });
+
+  it('欧国联决赛踢完：前一天的季军赛（编码 170）照样拉', async () => {
+    const { res, urls } = await coded(
+      '4490',
+      '2027-06-10T06:00:00Z',
+      { past: ['200', '2027-06-09'] },
+      { round: '170', date: '2027-06-08', id: 'third' },
+    );
+    expect(urls.some((u) => u.includes('eventsround.php?id=4490&r=170&'))).toBe(true);
+    expect(res.fixtures.map((f) => f.sourceId)).toContain('third');
   });
 
   it('欧冠 1/8 决赛开踢：附加赛（编码 160）照样拉', async () => {

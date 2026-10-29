@@ -256,7 +256,7 @@ export function roundsAround(rounds: number[], matchdayOnly = false): number[] {
     }
   }
   // 杯赛淘汰阶段编码：附近的阶段一起拉
-  const codes = [16, 32, 64, 125, 150, 160, 200];
+  const codes = [16, 32, 64, 125, 150, 160, 170, 200];
   for (const r of matchdayOnly ? [] : rounds) {
     const idx = codes.indexOf(r);
     if (idx >= 0) {
