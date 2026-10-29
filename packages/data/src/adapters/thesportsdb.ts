@@ -260,8 +260,9 @@ export function roundsAround(rounds: number[], matchdayOnly = false): number[] {
   for (const r of matchdayOnly ? [] : rounds) {
     const idx = codes.indexOf(r);
     if (idx >= 0) {
-      if (idx > 0) out.add(codes[idx - 1]!);
-      if (idx < codes.length - 1) out.add(codes[idx + 1]!);
+      // 编码顺序和真实阶段顺序不一致（附加赛 160 在 1/8 决赛 16 之前）：一律拉全部编码，
+      // 不然 1/4 决赛一开踢、还在 60 天时间窗内的 1/8 决赛就从数据里消失，锁不住 1/4 决赛的对阵
+      for (const c of codes) out.add(c);
       // 编码轮次之前按数字编号的轮次也一起拉：它们还在 60 天时间窗内时要靠它们锁住这一轮的对阵
       // （上一轮不在数据里就锁不住，例如联赛杯第 4 轮一开踢、第 3 轮就从数据里消失）
       for (const n of NUMBERED_ROUNDS) out.add(n);

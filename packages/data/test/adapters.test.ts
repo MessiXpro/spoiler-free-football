@@ -297,7 +297,7 @@ describe('TheSportsDB adapter（真实免费 Key 响应）', () => {
     expect(urls.some((u) => u.includes('/json/123/eventsround.php?id=4328'))).toBe(true);
     expect(res.fixtures.length).toBeGreaterThanOrEqual(10);
     expect(roundsAround([7])).toEqual([6, 7, 8]);
-    expect(roundsAround([150])).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 125, 150, 160]);
+    expect(roundsAround([150])).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 16, 32, 64, 125, 150, 160, 200]);
   });
 
   it('付费 Key 用 eventsseason', async () => {
