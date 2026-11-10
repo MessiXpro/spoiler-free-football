@@ -4,7 +4,7 @@
   "platforms": {
     "migu": {
       "name": "咪咕视频",
-      "url": "https://www.miguvideo.com/",
+      "url": "https://www.miguvideo.com/p/schedule/?competitionId=all",
       "note": "以 App 为主，多数体育内容需要手机号登录，很多需要会员"
     },
     "iqiyi": {
@@ -37,7 +37,7 @@
           "kinds": ["replay", "highlights", "live"],
           "vip": true,
           "confidence": "high",
-          "url": "https://www.miguvideo.com/p/home/0c40bbc85fa345bbba20f8e5fd11a922",
+          "url": "https://www.miguvideo.com/p/schedule/?competitionId=all",
           "note": "2025/26–2027/28 中国大陆独家新媒体版权，全部 380 场；部分场次免费"
         },
         {

@@ -1,7 +1,27 @@
 import { useState } from 'react';
-import type { MatchLink, PublicMatch } from '@sff/core';
+import { teamName, type MatchLink, type PublicMatch } from '@sff/core';
 import { detectShield, notifyOpenMatch } from '../lib/bridge.ts';
 import { ConfirmDialog } from './Dialog.tsx';
+
+/** 北京时间的「11月2日」 */
+function beijingMonthDay(iso: string): string {
+  const [, m, d] = new Date(Date.parse(iso) + 8 * 3600_000)
+    .toISOString()
+    .match(/^\d+-(\d+)-(\d+)/)!;
+  return `${Number(m)}月${Number(d)}日`;
+}
+
+/**
+ * 入口页不是单场直达（直达地址要用平台内部编号，只能手工填进 links.json）：告诉用户进去后找哪一场。
+ * 只在没锁定的卡片上出现，所以可以写队名
+ */
+export function findHint(match: PublicMatch, link: MatchLink): string | null {
+  if (link.deep !== false) return null;
+  const day = beijingMonthDay(match.kickoff);
+  const pair = `「${teamName(match.home)} vs ${teamName(match.away)}」`;
+  if (link.platform === 'migu') return `进去后在上方日期里选 ${day}（左右箭头翻页），找${pair}`;
+  return `进去后找 ${day} 的${pair}`;
+}
 
 const KIND_TEXT: Record<MatchLink['kind'], string> = {
   replay: '全场录像',
@@ -46,6 +66,11 @@ export function ExternalLink({
         <span className="link-label">{link.label}</span>
         {link.vip && <span className="tag tag-vip">会员</span>}
         {link.deep === false && <span className="tag">入口页</span>}
+        {findHint(match, link) && (
+          <span className="link-hint" data-testid="link-hint">
+            {findHint(match, link)}
+          </span>
+        )}
         {(link.confidence === 'unverified' || link.confidence === 'low') && (
           <span className="tag tag-warn">待核实</span>
         )}
