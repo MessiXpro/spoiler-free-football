@@ -1550,11 +1550,13 @@ describe('真实数据试跑里目录外的球队名（2026-10）', () => {
 });
 
 describe('TheSportsDB 默认赛事顺序', () => {
-  it('覆盖除英超、西甲外的全部赛事，重要的排在前面', () => {
-    expect(new Set(DEFAULT_THESPORTSDB_LEAGUES)).toEqual(
-      new Set(Object.keys(THESPORTSDB_LEAGUES).filter((id) => id !== '4328' && id !== '4335')),
+  it('覆盖全部赛事（英超、西甲也拉：openfootball 的比分常常几周不更新），重要的排在前面', () => {
+    expect(new Set(DEFAULT_THESPORTSDB_LEAGUES)).toEqual(new Set(Object.keys(THESPORTSDB_LEAGUES)));
+    expect(DEFAULT_THESPORTSDB_LEAGUES.length).toBe(Object.keys(THESPORTSDB_LEAGUES).length);
+    // 每周都有比赛的联赛排在休赛期赛事前面
+    expect(DEFAULT_THESPORTSDB_LEAGUES.indexOf('4328')).toBeLessThan(
+      DEFAULT_THESPORTSDB_LEAGUES.indexOf('4490'),
     );
-    expect(DEFAULT_THESPORTSDB_LEAGUES.length).toBe(Object.keys(THESPORTSDB_LEAGUES).length - 2);
     expect(DEFAULT_THESPORTSDB_LEAGUES.slice(0, 2)).toEqual(['4480', '4481']);
     expect(DEFAULT_THESPORTSDB_LEAGUES.indexOf('4429')).toBeGreaterThan(
       DEFAULT_THESPORTSDB_LEAGUES.indexOf('4570'),
