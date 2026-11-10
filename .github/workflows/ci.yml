@@ -16,7 +16,8 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # 固定 24.04：ubuntu-latest 已换成 26.04，Playwright 1.56 还不支持在上面装 Chromium（直接报错）
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
