@@ -9,6 +9,8 @@ import {
   EN_SAFE_PATTERNS,
   EN_SCORER_VERBS,
   EN_STRONG,
+  FOOTBALL_ONLY_PATTERNS,
+  SHARED_SPORT_WORDS,
   ZH_CONTEXTUAL,
   ZH_FOOTBALL_HINTS,
   ZH_PAIR_VERBS,
@@ -237,12 +239,14 @@ function teamNames(withZhAliases = false): string[] {
   return [...names];
 }
 
-function contextPattern(): RegExp {
-  const zh = new Set<string>(ZH_FOOTBALL_HINTS);
-  const en = new Set<string>(EN_FOOTBALL_HINTS);
-  const guarded = new Set<string>();
+/** strict：认准足球（namesFootball），别的运动也常用的词、赛事名不算，另外认目录外的足球赛事简称 */
+function contextPattern(strict = false): RegExp {
+  const shared = new Set<string>(strict ? SHARED_SPORT_WORDS : []);
+  const zh = new Set<string>(ZH_FOOTBALL_HINTS.filter((w) => !shared.has(w)));
+  const en = new Set<string>(EN_FOOTBALL_HINTS.filter((w) => !shared.has(w)));
+  const guarded = new Set<string>(strict ? FOOTBALL_ONLY_PATTERNS : []);
   const add = (name: string | undefined) => {
-    if (!name || CONTEXT_NAME_DENY.has(name)) return;
+    if (!name || CONTEXT_NAME_DENY.has(name) || shared.has(name)) return;
     const guard = CONTEXT_NAME_GUARDED.get(name);
     if (guard) {
       guarded.add(guard);
@@ -662,6 +666,19 @@ function getCache(): Cache {
 export function isFootballText(text: string): boolean {
   if (!text) return false;
   return getCache().contextRe.test(normalizeText(text));
+}
+
+let strictContextRe: RegExp | null = null;
+
+/**
+ * 这段文字是否点名了足球：比 isFootballText 严，替用户动手之前用（回放页换节目，dom/playback.ts）。
+ * 只认足球专用的词、目录里的球队名和赛事名、目录外的足球赛事简称（湘超、英女超）；别的运动也常用的词
+ * （联赛、比赛、德比、预选赛、友谊赛……）不算，前面写了别的项目的「世界杯」（速度滑冰世界杯、男篮世界杯）也不算
+ */
+export function namesFootball(text: string): boolean {
+  if (!text) return false;
+  strictContextRe ??= contextPattern(true);
+  return strictContextRe.test(normalizeText(text));
 }
 
 function protectedRanges(norm: string, extraSafe: string[]): Array<[number, number]> {

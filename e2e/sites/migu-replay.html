@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>英超联赛-咪咕视频</title>
+  </head>
+  <body>
+    <!--
+      咪咕 /p/live/ 回放页：下方「本场回放」条和播放器挂载点的结构照抄线上页面（节目 id、解说名是假的）。
+      和线上冷启动一样：回放条先渲染出来、默认选中「全场集锦」；播放器晚一些才挂载好（#sport-live 里出现 <video>）。
+      点条目：高亮和「正在播放」马上换（地址不变）；但播放器挂载好之前点的切换会丢——线上播放器初始化时记下的节目
+      已经不是当前节目，就什么都不放（一直转圈），再点高亮着的那个也没反应。挂载好之后点才真的换节目（「播放器在放」）
+    -->
+    <div id="app">
+      <div class="sport-live-page">
+        <main class="sport-live-main">
+          <section class="sport-live-layout">
+            <div class="live-player-area">
+              <div id="sport-live" class="live-player-mount"></div>
+            </div>
+            <p class="now-playing">正在播放：<span data-testid="now-playing">全场集锦</span></p>
+            <p class="player-state">播放器在放：<span data-testid="player-program">加载中</span></p>
+            <div class="tapIfame has-content" id="strip-slot"></div>
+            <p><a id="elsewhere" href="https://www.example.com/">别的网站</a></p>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script>
+      // 页面收到的每一次点击（可信的是用户点的，不可信的是脚本点的）
+      window.__clicks = [];
+      document.addEventListener(
+        'click',
+        function (e) {
+          var el = e.target instanceof Element ? e.target : null;
+          var item = el && (el.closest('.match-review__slide') || el.closest('a, button'));
+          window.__clicks.push({
+            text: item ? item.textContent.trim() : String(el && el.tagName),
+            trusted: e.isTrusted,
+            at: performance.now(),
+          });
+        },
+        true,
+      );
+
+      var PROGRAMS = ['全场集锦', '全场回放（解说甲、解说乙）', '全场回放（解说丙）', '全场回放（智能解说）'];
+      /** 当前节目（高亮、「正在播放」跟着它） */
+      var current = 0;
+      /** 播放器开始初始化时记下的节目（线上：挂载好以后只在它还是当前节目时才放） */
+      var startedWith = current;
+      var mounted = false;
+      function play(i) {
+        document.querySelector('[data-testid="player-program"]').textContent = PROGRAMS[i];
+      }
+      function select(i) {
+        // 线上：点当前节目什么都不做
+        if (i === current) return;
+        current = i;
+        document.querySelectorAll('.match-review__slide').forEach(function (s, j) {
+          s.classList.toggle('is-active', j === i);
+        });
+        document.querySelector('[data-testid="now-playing"]').textContent = PROGRAMS[i];
+        if (mounted) play(i);
+      }
+
+      setTimeout(function () {
+        var section = document.createElement('section');
+        section.className = 'match-review';
+        section.innerHTML =
+          '<div class="match-review__label" aria-label="本场回顾"></div><div class="match-review__list">' +
+          PROGRAMS.map(function (name, i) {
+            return (
+              '<button type="button" class="match-review__slide' +
+              (i === 0 ? ' is-active' : '') +
+              '" data-program-id="p' +
+              (i + 1) +
+              '"><img alt="' +
+              name +
+              '" src="/poster-' +
+              (i + 1) +
+              '.webp"><span class="match-review__mask"></span><span class="match-review__title"><span class="match-review__title-text">' +
+              name +
+              '</span></span></button>'
+            );
+          }).join('') +
+          '</div>';
+        section.addEventListener('click', function (e) {
+          var slide = e.target.closest('.match-review__slide');
+          if (slide) select(Array.prototype.indexOf.call(slide.parentElement.children, slide));
+        });
+        document.getElementById('strip-slot').appendChild(section);
+      }, 300);
+
+      setTimeout(function () {
+        var wrap = document.createElement('div');
+        wrap.className = 'mg_player_wrapper';
+        var video = document.createElement('video');
+        video.id = 'm-player';
+        video.className = 'm-player';
+        wrap.appendChild(video);
+        document.getElementById('sport-live').appendChild(wrap);
+        window.__playerAt = performance.now();
+        mounted = true;
+        if (startedWith === current) play(current);
+      }, 1500);
+    </script>
+  </body>
+</html>

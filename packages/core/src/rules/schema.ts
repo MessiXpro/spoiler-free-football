@@ -46,8 +46,25 @@ export interface SiteRule {
   /** 封面图（图片、背景图、预览视频） */
   coverSelectors?: string[];
   hide?: Partial<Record<HideCategory, string[]>>;
+  /**
+   * 回放页的节目列表（咪咕「本场回放」条：全场集锦、全场回放……）。只给出怎么找到条目、哪个是当前播放的；
+   * 什么算集锦、什么算全场回放写在代码里（dom/playback.ts），规则改不了要点哪个
+   */
+  playback?: PlaybackRule;
   /** 规则可信度：high 已对照真实页面结构；low 为推测，需要本地验证 */
   confidence?: 'high' | 'medium' | 'low';
+}
+
+export interface PlaybackRule {
+  /** 每个节目条目 */
+  items: string;
+  /** 条目是当前播放的节目时能匹配上的选择器（作用在条目元素自己身上），例如 ".is-active" */
+  active: string;
+  /**
+   * 播放器挂载好之后才有的元素（咪咕：播放器的 <video>）。给了就等它出现才点：咪咕播放器挂载前点的切换会丢，
+   * 只换了高亮和标题，播放器照样放集锦
+   */
+  ready?: string;
 }
 
 export interface SiteRulesDoc {
@@ -80,6 +97,18 @@ function cleanList(v: unknown): string[] | undefined {
   if (!Array.isArray(v)) return undefined;
   const out = v.filter(isSafeSelector).slice(0, MAX_LIST);
   return out.length ? out : undefined;
+}
+
+/**
+ * 选择器都安全才保留（ready 可以不写，写了就要安全：不能因为它被丢掉就在播放器好之前点）；
+ * 其他字段（比如夹带的词表）一律丢掉
+ */
+function cleanPlayback(v: unknown): PlaybackRule | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const { items, active, ready } = v as Record<string, unknown>;
+  if (!isSafeSelector(items) || !isSafeSelector(active)) return undefined;
+  if (ready === undefined) return { items, active };
+  return isSafeSelector(ready) ? { items, active, ready } : undefined;
 }
 
 function cleanWords(v: unknown): string[] | undefined {
@@ -132,6 +161,7 @@ export function validateSiteRules(input: unknown): SiteRulesDoc | null {
       cardSelectors: cleanList(site.cardSelectors),
       coverSelectors: cleanList(site.coverSelectors),
       footballUrlParts: footballUrlParts?.length ? footballUrlParts : undefined,
+      playback: cleanPlayback(site.playback),
     };
     for (const [k, v] of Object.entries(optional)) {
       if (v) (rule as unknown as Record<string, unknown>)[k] = v;

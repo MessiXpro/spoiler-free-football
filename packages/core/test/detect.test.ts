@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { findSpoilers, hasSpoiler, isFootballText, redact, MASK_CHAR } from '../src/index.ts';
+import {
+  findSpoilers,
+  hasSpoiler,
+  isFootballText,
+  namesFootball,
+  redact,
+  MASK_CHAR,
+} from '../src/index.ts';
 
 /** 遮挡后不应再残留任何比分写法和结果词 */
 function expectClean(masked: string) {
@@ -279,6 +286,57 @@ describe('语境词只在足球语境中遮挡', () => {
     expect(isFootballText('英超联赛')).toBe(true);
     expect(isFootballText('今天吃什么')).toBe(false);
     expect(isFootballText('This is a nice lens')).toBe(false);
+  });
+
+  it('namesFootball：替用户动手之前认准足球，别的运动也常用的词不算', () => {
+    for (const s of [
+      '英超联赛',
+      '西甲联赛',
+      '足总杯第一轮',
+      '中超',
+      '女足亚洲杯',
+      '国足',
+      '曼城vs利物浦',
+      'Arsenal training',
+      // 目录里没有的足球赛事简称
+      '英女超联赛',
+      '湘超1/4决赛第一回合',
+      '琼超',
+      '苏超第10轮',
+      '中国足协杯决赛',
+      // 前面没写别的项目的「世界杯」
+      '世界杯小组赛',
+      '2026年美加墨世界杯',
+      '2030世界杯亚洲区预选赛',
+      '世预赛',
+      '国际足联世界杯',
+      'FIFA World Cup',
+    ]) {
+      expect(namesFootball(s), s).toBe(true);
+    }
+    for (const s of [
+      '东亚超级联赛B组常规赛',
+      '国际滑联速度滑冰世界杯北京站Day1',
+      '男篮世界杯',
+      '跳水世界杯',
+      '王者荣耀职业联赛',
+      '拿下德比战',
+      '比赛回放',
+      '主场 客场 上半场 前锋 后卫',
+      '国际友谊赛',
+      '热身赛',
+      '预选赛',
+      'World Cup',
+      'match highlights',
+      '江苏超市',
+      '今天吃什么',
+    ]) {
+      expect(namesFootball(s), s).toBe(false);
+    }
+    // 遮挡比分用的 isFootballText 照旧宽：这些仍算足球语境（多遮一点没关系）
+    for (const s of ['东亚超级联赛', '速度滑冰世界杯', '德比战']) {
+      expect(isFootballText(s), s).toBe(true);
+    }
   });
 });
 

@@ -136,6 +136,11 @@
         "[class*='pic' i]",
         "[class*='match-review' i] img"
       ],
+      "playback": {
+        "items": ".match-review__slide",
+        "active": ".is-active",
+        "ready": "#sport-live video"
+      },
       "hide": {
         "duration": [
           "[class*='duration' i]",

@@ -16,6 +16,7 @@ import {
   type ShieldStats,
 } from './shield.ts';
 import { CLASS_READY } from './css.ts';
+import { PlaybackPicker } from './playback.ts';
 
 /** 插件和用户脚本共用的设置（插件存在 chrome.storage，用户脚本存在 GM 存储） */
 export interface ShieldSettings {
@@ -223,6 +224,14 @@ export interface ShieldController {
   pause(ms?: number): void;
   resume(): void;
   update(settings: ShieldSettings): void;
+  /** 停止并清理（遮挡、监听、计时器），之后的设置更新不再启动；页面关掉时浏览器自己会清理，主要给测试用 */
+  stop(): void;
+}
+
+/** startShield 的结果，多一个回放条切换要看的状态 */
+interface StartedShield extends ShieldController {
+  /** 遮挡正在工作：没停用、没临时显示 */
+  readonly working: boolean;
 }
 
 /**
@@ -238,7 +247,21 @@ export function bootShield(
 ): ShieldController {
   let latest = settings;
   let inner = startShield(doc, latest, options);
+  let stopped = false;
   const host = doc.location?.hostname ?? '';
+  // 回放页默认播集锦时切到全场回放（见 playback.ts）：只在有站点规则的页面上，遮挡工作中才动手；
+  // 是不是足球比赛它自己判断（回放条本身的「集锦」「全场回放」不算）；停用、没有规则时暂停。
+  // 正在看的比赛（同一平台 6 小时内）只告诉它链接地址：入口页链接进去以后看的不一定是这场，也不一定是足球
+  const picker = options.siteMode
+    ? new PlaybackPicker(doc, {
+        working: () => inner.working,
+        matchUrl: () => inner.currentMatch?.url,
+      })
+    : null;
+  const syncPicker = () =>
+    picker?.update(
+      inner.active && !userDisabled() ? matchSite(latest.rules ?? defaultRules(), host) : null,
+    );
   const wanted = () =>
     latest.enabled &&
     !latest.disabledHosts.some((h) => hostDisabledBy(host, h)) &&
@@ -274,11 +297,11 @@ export function bootShield(
     }
     inner.update(latest);
   };
-  if (!options.siteMode) {
-    // 全网模式：时段边界是按分钟定义的，每分钟检查一次就够
-    const win = doc.defaultView ?? globalThis;
-    win.setInterval(sync, 60 * 1000);
-  }
+  // 全网模式：时段边界是按分钟定义的，每分钟检查一次就够
+  const interval = options.siteMode
+    ? null
+    : (doc.defaultView ?? globalThis).setInterval(sync, 60 * 1000);
+  syncPicker();
   return {
     get shield() {
       return inner.shield;
@@ -287,10 +310,10 @@ export function bootShield(
       return inner.site;
     },
     get active() {
-      return inner.active && !heldBySchedule && !userDisabled();
+      return !stopped && inner.active && !heldBySchedule && !userDisabled();
     },
     get holding() {
-      return inner.active && heldBySchedule && !userDisabled();
+      return !stopped && inner.active && heldBySchedule && !userDisabled();
     },
     get reason() {
       // 全网页面的 inner 没启动又不是用户停用的：只可能是时段（不能用启动时的旧原因）
@@ -307,24 +330,28 @@ export function bootShield(
     pause: (ms) => inner.pause(ms),
     resume: () => inner.resume(),
     update(next) {
+      if (stopped) return;
       latest = next;
       sync();
+      syncPicker();
+    },
+    stop() {
+      stopped = true;
+      if (interval !== null) clearInterval(interval);
+      picker?.stop();
+      inner.stop();
     },
   };
 }
 
 /** 按当前设置启动一次（不管后续变化） */
-function startShield(
-  doc: Document,
-  settings: ShieldSettings,
-  options: BootOptions,
-): ShieldController {
+function startShield(doc: Document, settings: ShieldSettings, options: BootOptions): StartedShield {
   const host = doc.location?.hostname ?? '';
   const rules = settings.rules ?? defaultRules();
   const site = options.siteMode ? matchSite(rules, host) : null;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  const inactive = (reason: string): ShieldController => {
+  const inactive = (reason: string): StartedShield => {
     doc.documentElement?.classList.add(CLASS_READY);
     // 页面改写 <html class> 时别让整页遮罩重新出现
     keepRootClasses(doc);
@@ -332,11 +359,13 @@ function startShield(
       shield: null,
       site,
       active: false,
+      working: false,
       reason,
       currentMatch: null,
       pause() {},
       resume() {},
       update() {},
+      stop() {},
     };
   };
 
@@ -369,6 +398,9 @@ function startShield(
     shield,
     site,
     active: true,
+    get working() {
+      return !userPaused && !disabled;
+    },
     currentMatch,
     pause(ms = 5 * 60 * 1000) {
       userPaused = true;
@@ -403,6 +435,12 @@ function startShield(
       });
       // 无关的设置写入（已看记录、规则检查时间等）不能提前结束用户的临时显示
       if (!userPaused) shield.resume();
+    },
+    stop() {
+      // 临时显示的计时器到期后不能再把停掉的遮挡打开
+      clearTimer();
+      disabled = true;
+      shield.stop();
     },
   };
 }

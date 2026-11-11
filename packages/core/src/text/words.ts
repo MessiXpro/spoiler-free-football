@@ -876,6 +876,88 @@ export const EN_FOOTBALL_HINTS = [
   'friendly',
 ];
 
+/**
+ * 足球语境词、目录赛事名里别的运动也常用的：东亚超级联赛（篮球）也叫「联赛」，速度滑冰、跳水也有「世界杯」，
+ * 羽毛球也说「德比战」，篮球也有前锋、后卫、上下半场。遮挡比分时照样算足球语境（多遮一点没关系）；
+ * 替用户动手之前认准足球（namesFootball：回放页换节目）时不算
+ */
+export const SHARED_SPORT_WORDS = [
+  '比赛',
+  '球队',
+  '球员',
+  '球迷',
+  '前锋',
+  '中场',
+  '后卫',
+  '主帅',
+  '主教练',
+  '主场',
+  '客场',
+  '集锦',
+  '全场回放',
+  '全场录像',
+  '录像',
+  '半场',
+  '上半场',
+  '下半场',
+  '首发',
+  '赛后',
+  '赛前',
+  '联赛',
+  '杯赛',
+  '国家队',
+  '进球',
+  '轮次',
+  '德比',
+  '国家德比',
+  '友谊赛',
+  '热身赛',
+  '预选赛',
+  // 目录里的赛事名（前面没写别的项目的「世界杯」另外认，见 FOOTBALL_ONLY_PATTERNS）
+  '世界杯',
+  '国际友谊赛',
+  'match',
+  'fixture',
+  'fixtures',
+  'goal',
+  'goals',
+  'highlights',
+  'kick-off',
+  'kickoff',
+  'matchday',
+  'stadium',
+  'manager',
+  'striker',
+  'defender',
+  'derby',
+  'Championship',
+  'qualifier',
+  'qualifiers',
+  'friendly',
+  'World Cup',
+  'Friendlies',
+  'International Friendlies',
+  'International Friendly',
+  'Friendly International',
+  'Nations League',
+  'European Championship',
+];
+
+/**
+ * 认准足球时另外认的写法（正则源码）：目录里没有的足球赛事简称（咪咕回放页的标题就是赛事名：「湘超1/4决赛第一回合」
+ * 「英女超联赛」），和前面没写别的项目的「世界杯」——开头、年份、届数、主办国后面的才算
+ * （「2026世界杯」「2026年美加墨世界杯」算，「速度滑冰世界杯」「男篮世界杯」「跳水世界杯」不算）
+ */
+export const FOOTBALL_ONLY_PATTERNS = [
+  '足协',
+  '英女超',
+  '苏超(?!市)',
+  '湘超',
+  '琼超',
+  '中甲(?!状)',
+  '(?:(?<![一-鿿])|(?<=年|届|美加墨|北美|卡塔尔|俄罗斯|巴西|南非|德国|日韩))世界杯',
+];
+
 /** 不拿来判断足球语境的歧义名（城市名、NBA 球队名、日常词） */
 export const CONTEXT_NAME_DENY = new Set([
   '罗马',
