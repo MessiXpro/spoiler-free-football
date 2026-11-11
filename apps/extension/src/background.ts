@@ -13,7 +13,18 @@ const GLOBAL_SCRIPT_ID = 'sff-global';
 
 declare const __SFF_SITE_MATCHES__: string[];
 
-async function updateRules(force = false) {
+/**
+ * 检查规则更新。一次一次排队进行：安装时的检查还没结束，设置页又点了「检查更新」（update-rules 消息），
+ * 后一次等前一次写完再读设置，不会拿着旧设置覆盖前一次的结果；回复也在两次都结束之后
+ */
+let rulesQueue: Promise<void> = Promise.resolve();
+function updateRules(force = false): Promise<void> {
+  const run = rulesQueue.then(() => checkRules(force));
+  rulesQueue = run.catch(() => {});
+  return run;
+}
+
+async function checkRules(force: boolean) {
   const settings = await loadSettings();
   if (
     !force &&

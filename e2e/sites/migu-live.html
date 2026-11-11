@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>__TITLE__</title>
+<style>
+  /* 照着咪咕直播/回放页（/p/live/…）的播放器结构：外层 1440×756，视频 1032×756，尺寸都来自样式表 */
+  body { margin: 0; font: 14px/1.5 sans-serif; }
+  .live-player-cont { display: grid; grid-template-columns: 1032px 408px; width: 1440px; height: 756px; background: #111; }
+  .live-player-area, .live-player-mount, .mod-player, .video-wrapper, .mg_player_wrapper { position: relative; width: 100%; height: 100%; }
+  .m-player { width: 100%; height: 100%; background: #000; vertical-align: top; }
+  .barrage-layer { position: absolute; left: 0; right: 0; top: 0; height: 120px; color: #fff; }
+  .match-score { position: absolute; left: 16px; top: 140px; color: #fff; font-size: 20px; }
+  .live-player-right { color: #ddd; padding: 12px; box-sizing: border-box; }
+  .clip { width: 300px; height: 170px; background: #000; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="sport-live-page">
+    <main class="sport-live-main">
+      <h1>__H1__</h1>
+      <section class="sport-live-layout">
+        <section class="live-player-cont is-normal is-barrage-hidden" data-testid="wrapper">
+          <div class="live-player-area">
+            <div id="sport-live" class="live-player-mount">
+              <section id="mod-player" class="mod-player">
+                <div class="video-wrapper">
+                  <div class="mg_player_wrapper">
+                    <video id="m-player" class="m-player" muted playsinline></video>
+                    <div class="barrage-layer" data-testid="barrage"><span>前方高能，大家坐稳了</span><span>这脚传球真漂亮</span></div>
+                    <div class="match-score" data-testid="score">2-1</div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+          <aside class="live-player-right" data-testid="right">
+            <div class="card-item" data-testid="card">
+              <div class="cover-box"><video class="clip" muted playsinline data-testid="preview"></video></div>
+              <p class="card-title">英超 阿森纳 vs 切尔西 集锦</p>
+            </div>
+          </aside>
+        </section>
+      </section>
+    </main>
+  </div>
+</div>
+</body>
+</html>

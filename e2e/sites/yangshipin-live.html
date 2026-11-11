@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>__TITLE__</title>
+<style>
+  /*
+   * 照着央视频直播详情页（/live/detail）的 live-player：div.c-container.img 里是 div.video-con > video，
+   * 旁边的 div.con.poster 是 absolute、inset 0、z-index 99 的透明层，整块盖在视频上，里面是控制栏
+   */
+  body { margin: 0; font: 14px/1.5 sans-serif; }
+  .live-main-l-title { padding: 8px 30px; }
+  .live-main-l-title h1 { margin: 0; font-size: 18px; }
+  .play-div-div-content { position: relative; width: 978px; height: 550px; margin-left: 30px; }
+  .c-container { position: relative; width: 100%; height: 100%; background: #000; }
+  .video-con, .video-con video { display: block; width: 100%; height: 100%; }
+  .video-con video { object-fit: fill; }
+  .poster { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; }
+  .con { position: absolute; left: 0; top: 0; z-index: 99; }
+  .y-full-control { position: absolute; left: 0; right: 0; bottom: 0; height: 48px; }
+  .play2 { position: absolute; left: 16px; bottom: 8px; width: 32px; height: 32px; background: url("__ICON__") center/contain no-repeat; }
+  .player-progress { position: absolute; left: 60px; right: 16px; bottom: 20px; height: 4px; background: #fff; }
+  /* 播放结束时才显示的推荐面板（页面脚本改 style 显示出来）：里面是海报大小的缩略图 */
+  .end-panel { position: absolute; left: 100px; top: 100px; display: none; }
+  .end-panel img { display: block; width: 320px; height: 180px; }
+  .list { display: flex; padding: 12px 30px; }
+  .video-card-item { width: 300px; }
+  .card-poster { display: block; width: 300px; height: 170px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="live">
+    <div class="live-main maxWidth">
+      <div class="live-main-l maxWidth">
+        <div class="live-main-l-title"><h1>__H1__</h1></div>
+        <div class="play-div">
+          <div class="live-main-l-player play-div-div">
+            <div class="play-div-div-content">
+              <div id="vodbox2000203602" class="c-container img" data-testid="box">
+                <div class="video-con">
+                  <video id="main" class="video-js vjs-default-skin vjs-big-play-centered" muted playsinline poster="__POSTER__"></video>
+                </div>
+                <div class="con poster" data-testid="layer">
+                  <div class="container">
+                    <div class="end-panel" data-testid="end-panel"><img data-testid="end-thumb" src="__THUMB__" alt=""></div>
+                    <div class="y-full">
+                      <div class="y-full-control">
+                        <span class="play play2" data-testid="icon"></span>
+                        <div class="player-progress" data-testid="progress"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="list">
+          <div class="video-card-item">
+            <img class="card-poster" data-testid="thumb" src="__THUMB__" alt="">
+            <p>英超 阿森纳 vs 切尔西 集锦</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  // 页面加载完一会儿后显示推荐面板（像播放结束时那样）
+  setTimeout(() => { document.querySelector('[data-testid=end-panel]').style.display = 'block'; }, 300);
+</script>
+</body>
+</html>

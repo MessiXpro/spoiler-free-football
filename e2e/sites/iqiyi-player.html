@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>__TITLE__</title>
+<style>
+  /*
+   * 照着爱奇艺 PC 播放页：视频在骨架里的静态节点（#areaLeftContainer 里），
+   * XPlayer 的 React 层（#video 里的默认封面层、控制层，都是透明的 absolute inset:0）整块盖在视频上面
+   */
+  body { margin: 0; background: #232426; color: #ddd; font: 14px/1.5 sans-serif; }
+  #areaContainer { display: flex; width: 1440px; height: 836px; }
+  #areaLeftContainer { position: relative; width: 1100px; height: 836px; flex: none; }
+  .player-slot { position: absolute; inset: 0; }
+  .player-slot video { display: block; width: 100%; height: 100%; object-fit: fill; background: #000; }
+  .XPlayer_root__eWzab { position: absolute; inset: 0; pointer-events: none; }
+  .XPlayer_content__qYA-c, #video, #videoContent, .Video_container__jfBSy { position: relative; width: 100%; height: 100%; }
+  .XPlayer_defaultCover__JY37H { position: absolute; inset: 0; pointer-events: none; }
+  .XPlayer_cover__nATh2 { position: absolute; inset: 0; isolation: isolate; pointer-events: none; }
+  .XPlayer_bottom__xzRnb { position: absolute; left: 0; right: 0; bottom: 0; height: 56px; }
+  .ctrl-icon { position: absolute; left: 16px; bottom: 12px; width: 32px; height: 32px; }
+  /* 播放结束时才显示的推荐面板（页面脚本改 style 显示出来）：里面是海报大小的缩略图 */
+  .XPlayer_endPanel { position: absolute; left: 100px; top: 100px; display: none; }
+  .XPlayer_endPanel img { display: block; width: 320px; height: 180px; }
+  .qy-barrage-layer { position: absolute; left: 0; right: 0; top: 20px; color: #fff; font-size: 20px; }
+  #tvg { width: 340px; flex: none; padding: 12px; box-sizing: border-box; }
+  .videoListItem_coverContainer__8ZmbJ { position: relative; width: 116px; height: 65px; }
+  .videoListItem_coverContainer__8ZmbJ img { display: block; width: 116px; height: 65px; }
+</style>
+</head>
+<body>
+<div id="areaContainer">
+  <div id="areaLeftContainer">
+    <div id="5fcma2g3wzdcvv2smpk4d3h3vq" class="player-slot">
+      <video id="main" class="fast-play" muted playsinline poster="__POSTER__"></video>
+    </div>
+    <div class="XPlayer_root__eWzab">
+      <div id="content" class="XPlayer_content__qYA-c">
+        <div id="video">
+          <div id="videoContent">
+            <div class="Video_container__jfBSy"></div>
+            <div id="videoCoverComp" class="XPlayer_defaultCover__JY37H" data-testid="layer"></div>
+            <div class="qy-barrage-layer" data-testid="barrage">前方高能，大家坐稳了</div>
+          </div>
+          <div class="XPlayer_defaultCover__JY37H" data-testid="layer">
+            <div id="xplayerCover" class="XPlayer_cover__nATh2" data-testid="layer">
+              <div class="XPlayer_bottom__xzRnb"><img class="ctrl-icon" data-testid="icon" src="__ICON__" alt=""></div>
+              <div class="XPlayer_endPanel" data-testid="end-panel"><img data-testid="end-thumb" src="__THUMB__" alt=""></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="tvg" class="XPlayer_tvg__OzdoS">
+    <h1>__H1__</h1>
+    <div class="videoListItem_coverContainer__8ZmbJ" data-testid="thumb-box"><img data-testid="thumb" src="__THUMB__" alt=""></div>
+  </div>
+</div>
+<script>
+  // 页面加载完一会儿后显示推荐面板（像播放结束时那样）
+  setTimeout(() => { document.querySelector('[data-testid=end-panel]').style.display = 'block'; }, 300);
+</script>
+</body>
+</html>

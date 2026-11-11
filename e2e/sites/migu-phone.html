@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  /* 手机宽度的回放页：主视频整宽在最上面，评论区里有一条同样整宽的视频，「猜你喜欢」里也有 */
+  body { margin: 0; font: 14px/1.5 sans-serif; }
+  .mod-player video, .comment-area video, .guess-you-like video { display: block; width: 100%; height: 219px; background: #000; }
+  .comment-area, .guess-you-like { padding: 8px 0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>__H1__</h1>
+  <section class="mod-player" data-testid="player">
+    <video id="m-player" class="m-player" muted playsinline></video>
+  </section>
+  <div class="comment-area" data-testid="comments">
+    <p>B费点射扳平，曼联绝境续命</p>
+    <div class="comment-video"><video muted playsinline data-testid="comment-video"></video></div>
+  </div>
+  <div class="guess-you-like" data-testid="guess">
+    <p>【进球】卡塞米罗头球破门</p>
+    <video muted playsinline></video>
+  </div>
+</div>
+</body>
+</html>

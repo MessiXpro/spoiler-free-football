@@ -103,6 +103,39 @@ describe('站点规则更新', () => {
     );
   });
 
+  it('安装时的检查还没结束、设置页又要求检查：排队进行，回复在两次都结束之后', async () => {
+    const doc = structuredClone(DEFAULT_SITE_RULES_JSON) as typeof DEFAULT_SITE_RULES_JSON;
+    doc.version = '9000-01-01';
+    const pending: Array<() => void> = [];
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          pending.push(() => resolve(new Response(JSON.stringify(doc), { status: 200 })));
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { mock, store } = installChromeMock();
+    await loadBackground();
+    await fire(mock.runtime.onInstalled);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    let replied = false;
+    const onMessage = mock.runtime.onMessage.listeners[0] as unknown as (
+      msg: unknown,
+      sender: unknown,
+      reply: () => void,
+    ) => unknown;
+    expect(onMessage({ type: 'update-rules' }, {}, () => (replied = true))).toBe(true);
+    await new Promise((r) => setTimeout(r, 20));
+    // 前一次还在下载：后一次不并行发请求
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    pending.shift()!();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(storedRules(store)).toBeDefined();
+    expect(replied).toBe(false);
+    pending.shift()!();
+    await vi.waitFor(() => expect(replied).toBe(true));
+  });
+
   it('比当前旧的规则不采用', async () => {
     remoteWith((doc) => {
       doc.version = '2000-01-01';

@@ -6,7 +6,23 @@ import {
   serveSite,
   sitePage,
 } from '../helpers/flash.ts';
-import { expect, test } from './fixtures.ts';
+import {
+  expectMiguPlayerGuarded,
+  expectPhoneCommentsHidden,
+  expectPictureThroughOverlays,
+  IQIYI_URL,
+  iqiyiPlayerPage,
+  MIGU_LIVE_URL,
+  miguLivePage,
+  miguPhonePage,
+  OLD_IQIYI_COVER,
+  OLD_YANGSHIPIN_COVER,
+  rulesWithOldCovers,
+  rulesWithOldMiguDanmaku,
+  YANGSHIPIN_URL,
+  yangshipinLivePage,
+} from '../helpers/player-guard.ts';
+import { expect, test, useRules } from './fixtures.ts';
 
 /** 测试页里埋下的剧透片段 */
 const PLANTED_VIDEO = [
@@ -134,6 +150,56 @@ test.describe('浏览器插件（Chrome MV3，加载已解压的扩展）', () =
       await expect(page.locator('#neutral')).toHaveText('2025-26 赛季 第 3 轮 U21 4-3-3 阵型');
     });
   }
+
+  test('咪咕直播/回放页：规则误伤播放器外层时主视频照样看得见，里面的弹幕、比分照样藏', async ({
+    context,
+    background,
+  }) => {
+    await blockExternal(context);
+    await serveSite(context, /^https:\/\/www\.miguvideo\.com\//, miguLivePage());
+    // 修正前的弹幕选择器（会命中外层的 is-barrage-hidden）：证明起作用的是代码里的主播放器保护
+    await useRules(context, background, rulesWithOldMiguDanmaku());
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(MIGU_LIVE_URL);
+    await expectMiguPlayerGuarded(page);
+  });
+
+  for (const [name, url, origin, html, cover] of [
+    ['爱奇艺播放页', IQIYI_URL, /^https:\/\/www\.iqiyi\.com\//, iqiyiPlayerPage, OLD_IQIYI_COVER],
+    [
+      '央视频直播页',
+      YANGSHIPIN_URL,
+      /^https:\/\/www\.yangshipin\.cn\//,
+      yangshipinLivePage,
+      OLD_YANGSHIPIN_COVER,
+    ],
+  ] as const) {
+    test(`${name}：封面规则误伤盖在视频上的透明层时画面照样看得见，别处的缩略图照样换掉`, async ({
+      context,
+      background,
+    }) => {
+      await blockExternal(context);
+      await serveSite(context, origin, html());
+      // 修正前的封面选择器（会命中播放器自己的透明层）：证明起作用的是代码里的透明层保护
+      await useRules(context, background, rulesWithOldCovers());
+      const page = await context.newPage();
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(url);
+      await expectPictureThroughOverlays(page, [...cover]);
+    });
+  }
+
+  test('手机宽度的咪咕回放页：只保护主视频，评论区里同样整宽的视频不会让评论区露出来', async ({
+    context,
+  }) => {
+    await blockExternal(context);
+    await serveSite(context, /^https:\/\/www\.miguvideo\.com\//, miguPhonePage());
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(MIGU_LIVE_URL);
+    await expectPhoneCommentsHidden(page);
+  });
 
   test('不在支持列表、也没开全网模式的网站：完全不处理', async ({ context }) => {
     await blockExternal(context);
