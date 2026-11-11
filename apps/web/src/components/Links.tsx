@@ -19,7 +19,13 @@ export function findHint(match: PublicMatch, link: MatchLink): string | null {
   if (link.deep !== false) return null;
   const day = beijingMonthDay(match.kickoff);
   const pair = `「${teamName(match.home)} vs ${teamName(match.away)}」`;
-  if (link.platform === 'migu') return `进去后在上方日期里选 ${day}（左右箭头翻页），找${pair}`;
+  if (link.platform === 'migu') {
+    const find = `进去后在上方日期里选 ${day}（左右箭头翻页），找${pair}`;
+    // 咪咕回放页默认放的是「全场集锦」（几分钟看完所有进球），完整比赛要在播放器下方另选
+    return link.kind === 'replay'
+      ? `${find}；看回放时在播放器下方选「全场回放」，别选「全场集锦」`
+      : find;
+  }
   return `进去后找 ${day} 的${pair}`;
 }
 
