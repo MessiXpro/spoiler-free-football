@@ -130,13 +130,20 @@
         "[class*='item-title' i]"
       ],
       "cardSelectors": ["[class*='card' i]", "[class*='item' i]"],
-      "coverSelectors": ["[class*='cover' i]", "[class*='poster' i]", "[class*='pic' i]"],
+      "coverSelectors": [
+        "[class*='cover' i]:not(.mg-cover)",
+        "[class*='poster' i]",
+        "[class*='pic' i]",
+        "[class*='match-review' i] img"
+      ],
       "hide": {
         "duration": [
           "[class*='duration' i]",
           "[class*='total-time' i]",
           "[class*='totalTime']",
-          "[class*='time-total' i]"
+          "[class*='time-total' i]",
+          ".time-txt .end-time",
+          "[class*='review-list' i] .timer"
         ],
         "progress": [
           "[class*='player' i] [class*='progress' i]",
@@ -150,7 +157,13 @@
           "[class*='bullet' i]"
         ],
         "comments": ["[class*='comment' i]", "[class*='chat-room' i]", "[class*='chatroom' i]"],
-        "recommend": ["[class*='recommend' i]", "[class*='related' i]", "[class*='guess' i]"],
+        "recommend": [
+          "[class*='recommend' i]",
+          "[class*='related' i]",
+          "[class*='guess' i]",
+          "[class*='live-review' i]",
+          "[class*='match-event' i]"
+        ],
         "scoreboard": ["[class*='score' i]", "[class*='bifen' i]", "[class*='scoreboard' i]"]
       }
     },
@@ -169,7 +182,7 @@
         "[class*='card-title' i]"
       ],
       "cardSelectors": ["[class*='card' i]", "[class*='item' i]"],
-      "coverSelectors": ["[class*='cover' i]", "[class*='poster' i]"],
+      "coverSelectors": ["[class*='cover' i]", "img[class*='poster' i]"],
       "hide": {
         "duration": ["[class*='duration' i]", ".txp_time_duration", "[class*='time_duration' i]"],
         "progress": [
@@ -256,7 +269,7 @@
       "coverSelectors": [
         "div[class^='video-list-item_'] [class*='img']",
         "div[class^='video-slide_'] [class*='img']",
-        "[class*='cover' i]",
+        "[class*='cover' i]:not(#video):not(#video *):not([class*='fullCover' i])",
         ".qy-mod-link-wrap"
       ],
       "hide": {
@@ -359,7 +372,11 @@
         "[class*='article' i] [class*='title' i]"
       ],
       "cardSelectors": ["[class*='news' i] li", "[class*='list' i] > li", "[class*='item' i]"],
-      "coverSelectors": ["[class*='news' i] img", "[class*='cover' i]", "[class*='pic' i]"],
+      "coverSelectors": [
+        "[class*='news' i] img",
+        "[class*='cover' i]",
+        "[class*='pic' i]:not([class*='topic' i])"
+      ],
       "hide": {
         "duration": ["[class*='duration' i]"],
         "comments": ["[class*='comment' i]", "[class*='reply' i]"],
