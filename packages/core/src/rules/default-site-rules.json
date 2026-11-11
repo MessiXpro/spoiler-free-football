@@ -146,7 +146,7 @@
         "danmaku": [
           "[class*='danmu' i]",
           "[class*='danmaku' i]",
-          "[class*='barrage' i]",
+          "[class*='barrage' i]:not([class*='is-barrage' i])",
           "[class*='bullet' i]"
         ],
         "comments": ["[class*='comment' i]", "[class*='chat-room' i]", "[class*='chatroom' i]"],
